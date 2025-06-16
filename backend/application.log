@@ -1,0 +1,13 @@
+[2025-06-15 13:38:14.111 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-15 13:41:14.872 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-15 13:41:14.928 UTC] [INFO] Application started
+[2025-06-15 13:44:01.817 UTC] [WARN] Error response: "Struct DB Error"
+[2025-06-15 13:44:58.753 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-15 13:45:41.097 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-15 13:45:41.147 UTC] [INFO] Application started
+[2025-06-15 13:50:03.261 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-15 13:50:03.283 UTC] [INFO] Application started
+[2025-06-15 13:52:07.637 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-15 13:52:07.686 UTC] [INFO] Application started
+[2025-06-15 14:03:20.723 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-15 14:03:20.773 UTC] [INFO] Application started
