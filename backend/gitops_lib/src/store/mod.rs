@@ -1,6 +1,10 @@
+use crate::store::filesystem::{FilesystemDatabaseProvider, FilesystemNamespacedDatabaseProvider, GenericNamespacedDatabaseProvider};
 use crate::GitopsResourceRoot;
 use anyhow::{anyhow, Context, Result};
+use dashmap::DashMap;
 use serde::{de::DeserializeOwned, Serialize};
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
 use std::future::Future;
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
@@ -10,12 +14,294 @@ use std::time::SystemTime;
 use tokio::fs;
 use tokio::io;
 
-/// A handler that is called after a successful database operation within a transaction.
+pub mod config;
+pub mod filesystem;
+use config::{BackendConfig, StoreConfig};
+
+/// A type-erased, dynamically-dispatchable database provider for a specific resource `T`.
 ///
-/// It receives the state of the object before the operation (`before`) and after (`after`).
-/// - Create: `before` is `None`, `after` is `Some`.
-/// - Delete: `before` is `Some`, `after` is `None`.
-/// - Update: `before` is `Some`, `after` is `Some`.
+/// This enum wraps concrete provider implementations, allowing the `Store` to
+/// return a single type that can represent any configured backend (Filesystem, Sqlite, etc.).
+/// It implements the `GenericDatabaseProvider` trait by dispatching calls to the wrapped variant.
+pub enum AnyProvider<T>
+where
+    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+{
+    Filesystem(FilesystemDatabaseProvider<T>),
+    // When you add a Sqlite provider, you would add a variant here:
+    // Sqlite(SqliteDatabaseProvider<T>),
+}
+
+impl<T> GenericDatabaseProvider<T> for AnyProvider<T>
+where
+    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+{
+    async fn list(&self) -> Result<Vec<T>> {
+        match self {
+            AnyProvider::Filesystem(p) => p.list().await,
+        }
+    }
+
+    async fn list_keys(&self) -> Result<Vec<String>> {
+        match self {
+            AnyProvider::Filesystem(p) => p.list_keys().await,
+        }
+    }
+
+    async fn get_by_key(&self, key: &str) -> Result<T> {
+        match self {
+            AnyProvider::Filesystem(p) => p.get_by_key(key).await,
+        }
+    }
+
+    async fn try_get_by_key(&self, key: &str) -> Result<Option<T>> {
+        match self {
+            AnyProvider::Filesystem(p) => p.try_get_by_key(key).await,
+        }
+    }
+
+    async fn delete(&self, key: &str) -> Result<()> {
+        match self {
+            AnyProvider::Filesystem(p) => p.delete(key).await,
+        }
+    }
+
+    async fn insert(&self, item: &T) -> Result<()> {
+        match self {
+            AnyProvider::Filesystem(p) => p.insert(item).await,
+        }
+    }
+
+    async fn upsert(&self, item: &T) -> Result<()> {
+        match self {
+            AnyProvider::Filesystem(p) => p.upsert(item).await,
+        }
+    }
+
+    async fn with_updates<F, Fut, R>(&self, key: &str, retries: u32, update_fn: F) -> Result<R>
+    where
+        F: Fn(Option<T>) -> Fut + Send + Sync,
+        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
+        R: Send,
+    {
+        match self {
+            AnyProvider::Filesystem(p) => p.with_updates(key, retries, update_fn).await,
+        }
+    }
+}
+
+pub enum AnyNsProvider<T>
+where
+    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+{
+    Filesystem(FilesystemNamespacedDatabaseProvider<T>),
+    // When you add a Sqlite provider, you would add a variant here:
+    // Sqlite(SqliteDatabaseProvider<T>),
+}
+
+impl<T> GenericNamespacedDatabaseProvider<T> for AnyNsProvider<T>
+where
+    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+{
+    async fn list(&self, ns: &str) -> Result<Vec<T>> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.list(ns).await,
+        }
+    }
+
+    async fn list_keys(&self, ns: &str) -> Result<Vec<String>> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.list_keys(ns).await,
+        }
+    }
+
+    async fn get_by_key(&self, ns: &str, key: &str) -> Result<T> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.get_by_key(ns, key).await,
+        }
+    }
+
+    async fn try_get_by_key(&self, ns: &str, key: &str) -> Result<Option<T>> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.try_get_by_key(ns, key).await,
+        }
+    }
+
+    async fn delete(&self, ns: &str, key: &str) -> Result<()> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.delete(ns, key).await,
+        }
+    }
+
+    async fn insert(&self, ns: &str, item: &T) -> Result<()> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.insert(ns, item).await,
+        }
+    }
+
+    async fn upsert(&self, ns: &str, item: &T) -> Result<()> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.upsert(ns, item).await,
+        }
+    }
+
+    async fn with_updates<F, Fut, R>(
+        &self,
+        ns: &str,
+        key: &str,
+        retries: u32,
+        update_fn: F,
+    ) -> Result<R>
+    where
+        F: Fn(Option<T>) -> Fut + Send + Sync,
+        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
+        R: Send,
+    {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.with_updates(ns, key, retries, update_fn).await,
+        }
+    }
+
+    async fn list_namespaces(&self) -> Result<Vec<String>> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.list_namespaces().await,
+        }
+    }
+
+    async fn create_namespace(&self, ns: &str) -> Result<()> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.create_namespace(ns).await,
+        }
+    }
+
+    async fn delete_namespace(&self, ns: &str, force: bool) -> Result<()> {
+        match self {
+            AnyNsProvider::Filesystem(p) => p.delete_namespace(ns, force).await,
+        }
+    }
+}
+
+/// A factory for creating database providers based on a runtime configuration.
+///
+/// This struct is designed to be cloned and shared in application state (e.g., Axum).
+/// It caches provider instances to avoid re-creating them on every request.
+#[derive(Clone)]
+pub struct Store {
+    config: Arc<StoreConfig>,
+    /// Caches instantiated providers. Key is `TypeId` of the resource, Value is `Arc<dyn Any + Send + Sync>`.
+    /// The `dyn Any` value is a downcastable `Arc<AnyProvider<T>>`.
+    providers: Arc<DashMap<TypeId, Arc<dyn Any + Send + Sync>>>,
+    providers_ns: Arc<DashMap<TypeId, Arc<dyn Any + Send + Sync>>>,
+}
+
+impl Store {
+    /// Creates a new `Store` with the given configuration.
+    pub fn new(config: StoreConfig) -> Self {
+        Self {
+            config: Arc::new(config),
+            providers: Arc::new(DashMap::new()),
+            providers_ns: Arc::new(DashMap::new()),
+        }
+    }
+
+    /// Returns a provider for a specific, non-namespaced resource type `T`.
+    ///
+    /// This method uses a cache to ensure that only one provider instance is created
+    /// for each resource type. It determines which backend to use based on the
+    /// configuration provided at `Store` creation.
+    pub fn provider<T>(&self) -> Arc<AnyProvider<T>>
+    where
+        T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    {
+        let type_id = TypeId::of::<T>();
+
+        // Fast path: check if the provider is already cached.
+        if let Some(entry) = self.providers.get(&type_id) {
+            return entry.value().clone().downcast::<AnyProvider<T>>().unwrap();
+        }
+
+        // Slow path: not in cache, so create, insert, and return.
+        let resource_kind = T::kind();
+        let backend_config = self
+            .config
+            .resource_backends
+            .get(resource_kind)
+            .or(self.config.default_backend.as_ref())
+            .unwrap_or_else(|| {
+                panic!(
+                    "No backend configured for kind '{}' and no default backend set",
+                    resource_kind
+                )
+            });
+
+        let provider = match backend_config {
+            BackendConfig::Filesystem { path } => {
+                let fs_provider = FilesystemDatabaseProvider::<T>::new(path.clone(), None);
+                Arc::new(AnyProvider::Filesystem(fs_provider))
+            }
+            BackendConfig::Sqlite { .. } => {
+                // Here you would instantiate your SqliteDatabaseProvider
+                panic!(
+                    "Sqlite backend is not implemented yet for kind '{}'",
+                    resource_kind
+                );
+            }
+        };
+
+        self.providers.insert(type_id, provider.clone());
+        provider
+    }
+
+    pub fn ns_provider<T>(&self) -> Arc<AnyNsProvider<T>>
+    where
+        T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    {
+        let type_id = TypeId::of::<T>();
+
+        // Fast path: check if the provider is already cached.
+        if let Some(entry) = self.providers_ns.get(&type_id) {
+            return entry
+                .value()
+                .clone()
+                .downcast::<AnyNsProvider<T>>()
+                .unwrap();
+        }
+
+        // Slow path: not in cache, so create, insert, and return.
+        let resource_kind = T::kind();
+        let backend_config = self
+            .config
+            .resource_backends
+            .get(resource_kind)
+            .or(self.config.default_backend.as_ref())
+            .unwrap_or_else(|| {
+                panic!(
+                    "No backend configured for kind '{}' and no default backend set",
+                    resource_kind
+                )
+            });
+
+        let provider = match backend_config {
+            BackendConfig::Filesystem { path } => {
+                let fs_provider =
+                    FilesystemNamespacedDatabaseProvider::<T>::new(path.clone(), None);
+                Arc::new(AnyNsProvider::Filesystem(fs_provider))
+            }
+            BackendConfig::Sqlite { .. } => {
+                // Here you would instantiate your SqliteDatabaseProvider
+                panic!(
+                    "Sqlite backend is not implemented yet for kind '{}'",
+                    resource_kind
+                );
+            }
+        };
+
+        self.providers_ns.insert(type_id, provider.clone());
+        provider
+    }
+}
+
+/// A handler that is called after a successful database operation within a transaction.
 pub type OnUpdateHandler<T> = Arc<
     dyn Fn(Option<&T>, Option<&T>) -> Pin<Box<dyn Future<Output = Result<()>> + Send + Sync>>
         + Send
@@ -34,7 +320,6 @@ pub enum TransactionState {
         path: PathBuf,
         modified: Option<SystemTime>,
     },
-    // Other states for different DBs can be added here.
     None,
 }
 
@@ -48,471 +333,18 @@ pub trait GenericDatabaseProvider<T>: Send + Sync
 where
     T: GitopsResourceRoot + Serialize + DeserializeOwned,
 {
-    /// Lists all resources of type `T`.
     async fn list(&self) -> Result<Vec<T>>;
-
-    /// Lists all resource keys of type `T`.
     async fn list_keys(&self) -> Result<Vec<String>>;
-
-    /// Retrieves a resource by its key. Returns an error if not found.
     async fn get_by_key(&self, key: &str) -> Result<T>;
-
-    /// Tries to retrieve a resource by its key. Returns `Ok(None)` if not found.
     async fn try_get_by_key(&self, key: &str) -> Result<Option<T>>;
-
-    /// Deletes a resource by its key.
     async fn delete(&self, key: &str) -> Result<()>;
-
-    /// Inserts a new resource. Fails if a resource with the same key already exists.
     async fn insert(&self, item: &T) -> Result<()>;
-
-    /// Inserts a new resource or updates an existing one.
     async fn upsert(&self, item: &T) -> Result<()>;
-
-    /// Performs a transactional read-modify-write operation on a resource.
-    ///
-    /// It will retry the operation up to `retries` times if an `OptimisticLockError` occurs.
-    /// The `update_fn` receives the current state of the resource (`None` if it doesn't exist)
-    /// and should return the desired new state (`None` to delete) and a result `R`.
     async fn with_updates<F, Fut, R>(&self, key: &str, retries: u32, update_fn: F) -> Result<R>
     where
         F: Fn(Option<T>) -> Fut + Send + Sync,
         Fut: Future<Output = Result<(Option<T>, R)>> + Send,
         R: Send;
-}
-
-/// A filesystem-based implementation of `GenericDatabaseProvider`.
-pub struct FilesystemDatabaseProvider<T>
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    base_path: PathBuf,
-    on_update: OnUpdateHandler<T>,
-    _phantom: PhantomData<T>,
-}
-
-impl<T> FilesystemDatabaseProvider<T>
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    /// Creates a new `FilesystemDatabaseProvider`.
-    ///
-    /// # Arguments
-    ///
-    /// * `base_path` - The root directory for storing data.
-    /// * `on_update` - An optional event handler to be called on data changes.
-    pub fn new(base_path: impl Into<PathBuf>, on_update: Option<OnUpdateHandler<T>>) -> Self {
-        Self {
-            base_path: base_path.into(),
-            on_update: on_update.unwrap_or_else(default_on_update),
-            _phantom: PhantomData,
-        }
-    }
-
-    fn get_resource_path(&self, key: &str) -> PathBuf {
-        self.base_path
-            .join(T::kind())
-            .join(format!("{}.yaml", urlencoding::encode(key)))
-    }
-
-    fn get_type_path(&self) -> PathBuf {
-        self.base_path.join(T::kind())
-    }
-
-    async fn get_with_transaction_state(&self, key: &str) -> Result<(Option<T>, TransactionState)> {
-        let path = self.get_resource_path(key);
-        match fs::read_to_string(&path).await {
-            Ok(content) => {
-                let meta = fs::metadata(&path).await?;
-                let resource: T::Serializable = serde_yaml::from_str(&content)?;
-                Ok((
-                    Some(T::from(resource)),
-                    TransactionState::File {
-                        path,
-                        modified: Some(meta.modified()?),
-                    },
-                ))
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok((
-                None,
-                TransactionState::File {
-                    path,
-                    modified: None,
-                },
-            )),
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    async fn write_with_transaction_state(
-        &self,
-        new_item: Option<&T>,
-        state: &TransactionState,
-    ) -> Result<()> {
-        let (path, expected_modified_time) = match state {
-            TransactionState::File { path, modified } => (path, modified),
-            _ => return Err(anyhow!("Invalid transaction state for filesystem DB")),
-        };
-
-        if let Some(modified) = expected_modified_time {
-            let current_meta = fs::metadata(&path).await?;
-            if current_meta.modified()? != *modified {
-                return Err(OptimisticLockError.into());
-            }
-        }
-
-        match new_item {
-            Some(item) => {
-                let serializable_item = item.as_serializable();
-                let yaml_content = serde_yaml::to_string(&serializable_item)?;
-                let parent_dir = path.parent().ok_or_else(|| {
-                    anyhow!("Failed to get parent directory for path: {:?}", path)
-                })?;
-                fs::create_dir_all(parent_dir).await?;
-                fs::write(&path, yaml_content).await?;
-            }
-            None => {
-                if expected_modified_time.is_some() {
-                    fs::remove_file(&path).await?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-impl<T> GenericDatabaseProvider<T> for FilesystemDatabaseProvider<T>
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    async fn list(&self) -> Result<Vec<T>> {
-        let dir_path = self.get_type_path();
-        let mut resources = Vec::new();
-
-        if !dir_path.exists() {
-            return Ok(resources);
-        }
-
-        let mut entries = fs::read_dir(&dir_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "yaml") {
-                let content = fs::read_to_string(&path).await?;
-                let resource: T::Serializable = serde_yaml::from_str(&content)?;
-                resources.push(resource.into());
-            }
-        }
-        Ok(resources)
-    }
-
-    async fn list_keys(&self) -> Result<Vec<String>> {
-        let dir_path = self.get_type_path();
-        let mut keys = Vec::new();
-
-        if !dir_path.exists() {
-            return Ok(keys);
-        }
-
-        let mut entries = fs::read_dir(&dir_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "yaml") {
-                if let Some(stem) = path.file_stem() {
-                    if let Some(key_str) = stem.to_str() {
-                        keys.push(urlencoding::decode(key_str)?.into_owned());
-                    }
-                }
-            }
-        }
-        Ok(keys)
-    }
-
-    async fn get_by_key(&self, key: &str) -> Result<T> {
-        self.try_get_by_key(key)
-            .await?
-            .ok_or_else(|| anyhow!("Resource with key '{}' not found", key))
-    }
-
-    async fn try_get_by_key(&self, key: &str) -> Result<Option<T>> {
-        self.get_with_transaction_state(key)
-            .await
-            .map(|(item, _)| item)
-    }
-
-    async fn delete(&self, key: &str) -> Result<()> {
-        self.with_updates(key, 0, |_| async { Ok((None, ())) })
-            .await
-    }
-
-    async fn insert(&self, item: &T) -> Result<()> {
-        let key = item.get_key();
-        let item_clone = item.clone();
-        self.with_updates(&key, 0, |existing| {
-            let key = key.clone();
-            let item_clone = item_clone.clone();
-            async move {
-                if existing.is_some() {
-                    Err(anyhow!("Resource with key '{}' already exists", key))
-                } else {
-                    Ok((Some(item_clone), ()))
-                }
-            }
-        })
-        .await
-    }
-
-    async fn upsert(&self, item: &T) -> Result<()> {
-        let key = item.get_key();
-        let item_clone = item.clone();
-        self.with_updates(&key, 0, |_| {
-            let item_clone = item_clone.clone();
-            async move { Ok((Some(item_clone), ())) }
-        })
-        .await
-    }
-
-    async fn with_updates<F, Fut, R>(&self, key: &str, retries: u32, update_fn: F) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send,
-    {
-        let mut attempts = 0;
-        loop {
-            let (before, tx_state) = self.get_with_transaction_state(key).await?;
-
-            let (after, result) = update_fn(before.clone()).await?;
-
-            let write_result = self
-                .write_with_transaction_state(after.as_ref(), &tx_state)
-                .await;
-
-            match write_result {
-                Ok(()) => {
-                    (self.on_update)(before.as_ref(), after.as_ref()).await?;
-                    return Ok(result);
-                }
-                Err(e) => {
-                    if e.downcast_ref::<OptimisticLockError>().is_some() {
-                        attempts += 1;
-                        if attempts > retries {
-                            return Err(e).context(format!(
-                                "Optimistic lock failed after {} retries",
-                                retries
-                            ));
-                        }
-                        tokio::time::sleep(tokio::time::Duration::from_millis(
-                            50 * attempts as u64,
-                        ))
-                        .await;
-                    } else {
-                        return Err(e);
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// A generic database provider that supports namespaces.
-pub trait GenericNamespacedDatabaseProvider<T>: Send + Sync
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    async fn list(&self, ns: &str) -> Result<Vec<T>>;
-    async fn list_keys(&self, ns: &str) -> Result<Vec<String>>;
-    async fn get_by_key(&self, ns: &str, key: &str) -> Result<T>;
-    async fn try_get_by_key(&self, ns: &str, key: &str) -> Result<Option<T>>;
-    async fn delete(&self, ns: &str, key: &str) -> Result<()>;
-    async fn insert(&self, ns: &str, item: &T) -> Result<()>;
-    async fn upsert(&self, ns: &str, item: &T) -> Result<()>;
-
-    async fn with_updates<F, Fut, R>(
-        &self,
-        ns: &str,
-        key: &str,
-        retries: u32,
-        update_fn: F,
-    ) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send;
-
-    async fn list_namespaces(&self) -> Result<Vec<String>>;
-    async fn create_namespace(&self, ns: &str) -> Result<()>;
-    async fn delete_namespace(&self, ns: &str, force: bool) -> Result<()>;
-}
-
-/// A filesystem-based implementation of `GenericNamespacedDatabaseProvider`.
-pub struct FilesystemNamespacedDatabaseProvider<T>
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    base_path: PathBuf,
-    on_update: OnUpdateHandler<T>,
-    _phantom: PhantomData<T>,
-}
-
-impl<T> FilesystemNamespacedDatabaseProvider<T>
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    pub fn new(base_path: impl Into<PathBuf>, on_update: Option<OnUpdateHandler<T>>) -> Self {
-        Self {
-            base_path: base_path.into(),
-            on_update: on_update.unwrap_or_else(default_on_update),
-            _phantom: PhantomData,
-        }
-    }
-
-    fn get_ns_path(&self, ns: &str) -> PathBuf {
-        self.base_path.join(urlencoding::encode(ns).as_ref())
-    }
-
-    fn get_type_path(&self, ns: &str) -> PathBuf {
-        self.get_ns_path(ns).join(T::kind())
-    }
-
-    fn get_resource_path(&self, ns: &str, key: &str) -> PathBuf {
-        self.get_type_path(ns)
-            .join(format!("{}.yaml", urlencoding::encode(key)))
-    }
-
-    fn provider_for_namespace(&self, ns: &str) -> FilesystemDatabaseProvider<T> {
-        FilesystemDatabaseProvider::new(self.get_ns_path(ns), Some(self.on_update.clone()))
-    }
-}
-
-impl<T> GenericNamespacedDatabaseProvider<T> for FilesystemNamespacedDatabaseProvider<T>
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    async fn list(&self, ns: &str) -> Result<Vec<T>> {
-        self.provider_for_namespace(ns).list().await
-    }
-
-    async fn list_keys(&self, ns: &str) -> Result<Vec<String>> {
-        self.provider_for_namespace(ns).list_keys().await
-    }
-
-    async fn get_by_key(&self, ns: &str, key: &str) -> Result<T> {
-        self.provider_for_namespace(ns).get_by_key(key).await
-    }
-
-    async fn try_get_by_key(&self, ns: &str, key: &str) -> Result<Option<T>> {
-        self.provider_for_namespace(ns).try_get_by_key(key).await
-    }
-
-    async fn delete(&self, ns: &str, key: &str) -> Result<()> {
-        self.provider_for_namespace(ns).delete(key).await
-    }
-
-    async fn insert(&self, ns: &str, item: &T) -> Result<()> {
-        self.provider_for_namespace(ns).insert(item).await
-    }
-
-    async fn upsert(&self, ns: &str, item: &T) -> Result<()> {
-        let ns_path = self.get_ns_path(ns);
-        if !ns_path.exists() {
-            fs::create_dir_all(&ns_path).await?;
-        }
-        self.provider_for_namespace(ns).upsert(item).await
-    }
-
-    async fn with_updates<F, Fut, R>(
-        &self,
-        ns: &str,
-        key: &str,
-        retries: u32,
-        update_fn: F,
-    ) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send,
-    {
-        self.provider_for_namespace(ns)
-            .with_updates(key, retries, update_fn)
-            .await
-    }
-
-    async fn list_namespaces(&self) -> Result<Vec<String>> {
-        let mut namespaces = Vec::new();
-        if !self.base_path.exists() {
-            return Ok(namespaces);
-        }
-        let mut entries = fs::read_dir(&self.base_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            if entry.file_type().await?.is_dir() {
-                if let Some(name) = entry.file_name().to_str() {
-                    namespaces.push(urlencoding::decode(name)?.into_owned());
-                }
-            }
-        }
-        Ok(namespaces)
-    }
-
-    async fn create_namespace(&self, ns: &str) -> Result<()> {
-        fs::create_dir_all(self.get_ns_path(ns))
-            .await
-            .map_err(Into::into)
-    }
-
-    async fn delete_namespace(&self, ns: &str, force: bool) -> Result<()> {
-        let ns_path = self.get_ns_path(ns);
-        if !ns_path.exists() {
-            return Ok(());
-        }
-
-        if !force {
-            let mut entries = fs::read_dir(&ns_path).await?;
-            if entries.next_entry().await?.is_some() {
-                return Err(anyhow!(
-                    "Cannot delete non-empty namespace '{}' without 'force=true'",
-                    ns
-                ));
-            }
-        }
-
-        fs::remove_dir_all(&ns_path).await.map_err(Into::into)
-    }
-}
-
-// Cloning a FilesystemDatabaseProvider should be possible for use across threads.
-impl<T> Clone for FilesystemDatabaseProvider<T>
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    fn clone(&self) -> Self {
-        Self {
-            base_path: self.base_path.clone(),
-            on_update: self.on_update.clone(),
-            _phantom: PhantomData,
-        }
-    }
-
-    fn clone_from(&mut self, source: &Self) {
-        *self = source.clone()
-    }
-}
-
-// Cloning a FilesystemNamespacedDatabaseProvider should be possible for use across threads.
-impl<T> Clone for FilesystemNamespacedDatabaseProvider<T>
-where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
-{
-    fn clone(&self) -> Self {
-        Self {
-            base_path: self.base_path.clone(),
-            on_update: self.on_update.clone(),
-            _phantom: PhantomData,
-        }
-    }
-
-    fn clone_from(&mut self, source: &Self) {
-        *self = source.clone()
-    }
 }
 
 #[cfg(test)]
@@ -520,310 +352,95 @@ mod tests {
     use super::*;
     use crate::{GitopsEnum, GitopsResourcePart, GitopsResourceRoot};
     use serde::{Deserialize, Serialize};
-    use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
 
     // --- Test Resource Definitions ---
 
-    #[derive(GitopsResourcePart, Debug, Deserialize, Serialize, Clone, PartialEq)]
-    pub struct Status {
-        pub ready_replicas: u32,
-        pub available_replicas: u32,
-        pub conditions: Vec<String>,
-    }
-
-    #[derive(GitopsEnum, Serialize, Deserialize, Clone, Debug, PartialEq)]
-    pub enum UserStatus {
-        Fired,
-        Replaced,
-        Normal,
-    }
-
-    /// The root GitOps resource for a Deployment.
     #[derive(GitopsResourceRoot, Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
-    #[gitops(key = "name", api_version = "apps.example.com/v1")]
-    pub struct Deployment {
+    #[gitops(key = "name", api_version = "example.com/v1", kind = "User")]
+    pub struct User {
         pub name: String,
-        #[gitops(skip_on_update)]
-        pub creation_timestamp: String,
-        pub status: Option<UserStatus>,
-        pub additional_info: Option<String>,
+        pub email: Option<String>,
     }
 
-    // --- Tests for FilesystemDatabaseProvider ---
+    #[derive(GitopsResourceRoot, Debug, Serialize, Deserialize, Clone, PartialEq, Default)]
+    #[gitops(key = "name", api_version = "example.com/v1", kind = "Project")]
+    pub struct Project {
+        pub name: String,
+        pub active: bool,
+    }
 
     #[tokio::test]
-    async fn test_fs_provider_insert_and_get() {
-        let dir = tempdir().unwrap();
-        let db = FilesystemDatabaseProvider::<Deployment>::new(dir.path(), None);
-        let deployment = Deployment {
-            name: "test-app".to_string(),
-            creation_timestamp: "now".to_string(),
-            status: Some(UserStatus::Normal),
-            additional_info: None,
+    async fn test_dynamic_backend_selection_with_store() {
+        let users_dir = tempdir().unwrap();
+        let projects_dir = tempdir().unwrap();
+
+        // 1. Define a configuration that maps resource kinds to different backends.
+        let config = StoreConfig {
+            default_backend: None, // No default, forcing explicit configuration
+            resource_backends: HashMap::from([
+                (
+                    "User".to_string(),
+                    BackendConfig::Filesystem {
+                        path: users_dir.path().to_path_buf(),
+                    },
+                ),
+                (
+                    "Project".to_string(),
+                    BackendConfig::Filesystem {
+                        path: projects_dir.path().to_path_buf(),
+                    },
+                ),
+            ]),
+            namespaced_resource_backends: HashMap::new(),
+            namespace_backends: HashMap::new(),
         };
 
-        db.insert(&deployment).await.unwrap();
-        let fetched = db.get_by_key("test-app").await.unwrap();
-        assert_eq!(deployment, fetched);
+        // 2. Create the Store, which acts as our application's central data access layer.
+        let store = Store::new(config);
 
-        // Inserting again should fail
-        assert!(db.insert(&deployment).await.is_err());
-    }
+        // 3. In a handler, get a provider for the `User` type.
+        // The Store will see that "User" maps to a filesystem backend at `users_dir`.
+        let user_provider = store.provider::<User>();
 
-    #[tokio::test]
-    async fn test_fs_provider_upsert() {
-        let dir = tempdir().unwrap();
-        let db = FilesystemDatabaseProvider::<Deployment>::new(dir.path(), None);
-        let mut deployment = Deployment {
-            name: "test-app".to_string(),
-            creation_timestamp: "now".to_string(),
-            status: Some(UserStatus::Normal),
-            additional_info: Some("initial".to_string()),
+        // Verify it's the correct type (for testing purposes)
+        assert!(matches!(&*user_provider, AnyProvider::Filesystem(_)));
+
+        // 4. Use the provider to work with Users.
+        let user1 = User {
+            name: "alice".into(),
+            email: Some("alice@example.com".into()),
         };
+        user_provider.insert(&user1).await.unwrap();
+        let fetched_user = user_provider.get_by_key("alice").await.unwrap();
+        assert_eq!(user1, fetched_user);
 
-        // Upsert should create
-        db.upsert(&deployment).await.unwrap();
-        let fetched = db.get_by_key("test-app").await.unwrap();
-        assert_eq!(fetched.additional_info, Some("initial".to_string()));
+        // 5. Get a provider for the `Project` type.
+        // The Store will see "Project" maps to a *different* filesystem backend at `projects_dir`.
+        let project_provider = store.provider::<Project>();
 
-        // Upsert should update
-        deployment.additional_info = Some("updated".to_string());
-        db.upsert(&deployment).await.unwrap();
-        let fetched_updated = db.get_by_key("test-app").await.unwrap();
-        assert_eq!(fetched_updated.additional_info, Some("updated".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_fs_provider_delete() {
-        let dir = tempdir().unwrap();
-        let db = FilesystemDatabaseProvider::<Deployment>::new(dir.path(), None);
-        let deployment = Deployment {
-            name: "to-delete".to_string(),
-            creation_timestamp: "tbd".to_string(),
-            status: None,
-            additional_info: None,
+        // 6. Use the provider to work with Projects.
+        let proj1 = Project {
+            name: "secret-project".into(),
+            active: true,
         };
+        project_provider.insert(&proj1).await.unwrap();
+        let fetched_project = project_provider.get_by_key("secret-project").await.unwrap();
+        assert_eq!(proj1, fetched_project);
 
-        db.insert(&deployment).await.unwrap();
-        assert!(db.get_by_key("to-delete").await.is_ok());
+        // 7. Crucially, verify that the data is isolated because the providers point to different directories.
+        assert!(user_provider.get_by_key("secret-project").await.is_err());
+        assert!(project_provider.get_by_key("alice").await.is_err());
 
-        db.delete("to-delete").await.unwrap();
-        assert!(db.get_by_key("to-delete").await.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_fs_provider_list() {
-        let dir = tempdir().unwrap();
-        let db = FilesystemDatabaseProvider::<Deployment>::new(dir.path(), None);
-
-        db.insert(&Deployment {
-            name: "app1".into(),
-            ..Default::default()
-        })
-        .await
-        .unwrap();
-        db.insert(&Deployment {
-            name: "app2".into(),
-            ..Default::default()
-        })
-        .await
-        .unwrap();
-
-        let keys = db.list_keys().await.unwrap();
-        let mut sorted_keys = keys;
-        sorted_keys.sort();
-        assert_eq!(sorted_keys.len(), 2);
-        assert!(sorted_keys.contains(&"app1".to_string()));
-
-        let items = db.list().await.unwrap();
-        assert_eq!(items.len(), 2);
-    }
-
-    #[tokio::test]
-    async fn test_fs_provider_with_updates_and_retries() {
-        let dir = tempdir().unwrap();
-        let db = FilesystemDatabaseProvider::<Deployment>::new(dir.path(), None);
-        let deployment = Deployment {
-            name: "tx-app".into(),
-            ..Default::default()
-        };
-        db.insert(&deployment).await.unwrap();
-
-        // Simulate a concurrent modification
-        let db_clone = FilesystemDatabaseProvider::<Deployment>::new(dir.path(), None);
-
-        let attempts = Arc::new(AtomicUsize::new(0));
-
-        let update_task = tokio::spawn({
-            let db = db.clone();
-            let attempts = attempts.clone();
-            async move {
-                db.with_updates("tx-app", 5, |maybe_item| {
-                    let attempts = attempts.clone();
-                    let db_clone = db_clone.clone();
-                    async move {
-                        attempts.fetch_add(1, Ordering::SeqCst);
-                        let mut item = maybe_item.unwrap();
-
-                        if attempts.load(Ordering::SeqCst) == 1 {
-                            // On the first attempt, we make an external modification
-                            // to cause an optimistic lock failure.
-                            let mut conflicting_item = item.clone();
-                            conflicting_item.additional_info = Some("conflict".to_string());
-                            db_clone.upsert(&conflicting_item).await.unwrap();
-                        }
-
-                        item.additional_info = Some("success".to_string());
-                        Ok((Some(item), "done".to_string()))
-                    }
-                })
-                .await
-            }
-        });
-
-        let result = update_task.await.unwrap().unwrap();
-        assert_eq!(result, "done");
-        assert_eq!(attempts.load(Ordering::SeqCst), 2); // Should succeed on the 2nd try
-
-        let final_item = FilesystemDatabaseProvider::<Deployment>::new(dir.path(), None)
-            .get_by_key("tx-app")
-            .await
-            .unwrap();
-        assert_eq!(final_item.additional_info, Some("success".to_string()));
-    }
-
-    #[tokio::test]
-    async fn test_fs_provider_on_update_handler() {
-        let dir = tempdir().unwrap();
-        let creation_count = Arc::new(AtomicUsize::new(0));
-        let update_count = Arc::new(AtomicUsize::new(0));
-        let deletion_count = Arc::new(AtomicUsize::new(0));
-
-        let cc_clone = creation_count.clone();
-        let uc_clone = update_count.clone();
-        let dc_clone = deletion_count.clone();
-
-        let on_update: OnUpdateHandler<Deployment> = Arc::new(move |before, after| {
-            let cc = cc_clone.clone();
-            let uc = uc_clone.clone();
-            let dc = dc_clone.clone();
-            Box::pin(async move {
-                match (before, after) {
-                    (None, Some(_)) => {
-                        cc.fetch_add(1, Ordering::SeqCst);
-                    }
-                    (Some(_), Some(_)) => {
-                        uc.fetch_add(1, Ordering::SeqCst);
-                    }
-                    (Some(_), None) => {
-                        dc.fetch_add(1, Ordering::SeqCst);
-                    }
-                    _ => {}
-                }
-                Ok(())
-            })
-        });
-
-        let db = FilesystemDatabaseProvider::<Deployment>::new(dir.path(), Some(on_update));
-
-        // Create
-        let deployment = Deployment {
-            name: "handler-test".into(),
-            ..Default::default()
-        };
-        db.insert(&deployment).await.unwrap();
-        assert_eq!(creation_count.load(Ordering::SeqCst), 1);
-
-        // Update
-        let mut updated_deployment = deployment.clone();
-        updated_deployment.additional_info = Some("info".to_string());
-        db.upsert(&updated_deployment).await.unwrap();
-        assert_eq!(update_count.load(Ordering::SeqCst), 1);
-
-        // Delete
-        db.delete("handler-test").await.unwrap();
-        assert_eq!(deletion_count.load(Ordering::SeqCst), 1);
-    }
-
-    // --- Tests for FilesystemNamespacedDatabaseProvider ---
-
-    #[tokio::test]
-    async fn test_fs_namespaced_provider_crud() {
-        let dir = tempdir().unwrap();
-        let db = FilesystemNamespacedDatabaseProvider::<Deployment>::new(dir.path(), None);
-        let deployment = Deployment {
-            name: "ns-app".into(),
-            ..Default::default()
-        };
-
-        // Insert into "ns1"
-        db.insert("ns1", &deployment).await.unwrap();
-        let fetched = db.get_by_key("ns1", "ns-app").await.unwrap();
-        assert_eq!(deployment, fetched);
-
-        // Should not exist in "ns2"
-        assert!(db.get_by_key("ns2", "ns-app").await.is_err());
-
-        // List keys
-        let keys_ns1 = db.list_keys("ns1").await.unwrap();
-        assert_eq!(keys_ns1, vec!["ns-app"]);
-        let keys_ns2 = db.list_keys("ns2").await.unwrap();
-        assert!(keys_ns2.is_empty());
-
-        // Delete
-        db.delete("ns1", "ns-app").await.unwrap();
-        assert!(db.get_by_key("ns1", "ns-app").await.is_err());
-    }
-
-    #[tokio::test]
-    async fn test_fs_namespaced_provider_namespace_management() {
-        let dir = tempdir().unwrap();
-        let db = FilesystemNamespacedDatabaseProvider::<Deployment>::new(dir.path(), None);
-
-        // Create
-        db.create_namespace("ns-a").await.unwrap();
-        db.create_namespace("ns-b").await.unwrap();
-
-        let mut namespaces = db.list_namespaces().await.unwrap();
-        namespaces.sort();
-        assert_eq!(namespaces, vec!["ns-a", "ns-b"]);
-
-        // Upsert implicitly creates namespace
-        let deployment = Deployment {
-            name: "auto-ns".into(),
-            ..Default::default()
-        };
-        db.upsert("ns-c", &deployment).await.unwrap();
-        let mut namespaces = db.list_namespaces().await.unwrap();
-        namespaces.sort();
-        assert_eq!(namespaces, vec!["ns-a", "ns-b", "ns-c"]);
-
-        // Delete empty ns
-        db.delete_namespace("ns-a", false).await.unwrap();
-
-        // Fail to delete non-empty ns without force
-        assert!(db.delete_namespace("ns-c", false).await.is_err());
-
-        // Succeed to delete non-empty ns with force
-        db.delete_namespace("ns-c", true).await.unwrap();
-
-        let mut namespaces_after_delete = db.list_namespaces().await.unwrap();
-        namespaces_after_delete.sort();
-        assert_eq!(namespaces_after_delete, vec!["ns-b"]);
-    }
-
-    // Cloning a FilesystemDatabaseProvider should be possible for use across threads.
-    impl<T> Clone for FilesystemDatabaseProvider<T>
-    where
-        T: GitopsResourceRoot + Serialize + DeserializeOwned,
-    {
-        fn clone(&self) -> Self {
-            Self {
-                base_path: self.base_path.clone(),
-                on_update: self.on_update.clone(),
-                _phantom: PhantomData,
-            }
-        }
+        // Check the actual filesystem to be sure
+        let user_file_path = users_dir.path().join("User").join("alice.yaml");
+        assert!(user_file_path.exists());
+        let project_file_path = projects_dir
+            .path()
+            .join("Project")
+            .join("secret-project.yaml");
+        assert!(project_file_path.exists());
+        let non_existent_path = users_dir.path().join("Project");
+        assert!(!non_existent_path.exists());
     }
 }

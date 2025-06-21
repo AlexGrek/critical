@@ -1,8 +1,9 @@
 use axum::{extract::{State, Json}, http::StatusCode, response::IntoResponse};
 use chrono::Utc;
+use gitops_lib::store::GenericDatabaseProvider;
 use std::{collections::HashMap, sync::Arc};
 use crate::{
-    errors::AppError, middleware::AuthenticatedUser, models::{LoginRequest, LoginResponse, RegisterRequest}, state::AppState
+    errors::AppError, middleware::AuthenticatedUser, models::{entities::User, LoginRequest, LoginResponse, RegisterRequest}, state::AppState
 };
 use uuid::Uuid;
 
@@ -14,16 +15,16 @@ pub async fn register(
 
     let id = Uuid::new_v4();
 
-    // let user = User {
-    //     email: req.email.clone(),
-    //     password_hash: Some(hashed_password),
-    //     metadata: HashMap::new(),
-    //     admin: None, // TODO: use admins txt
-    //     oauth_id: None,
-    //     created_at: Utc::now()
-    // };
+    let user = User {
+        uid: req.email.clone(),
+        password_hash: Some(hashed_password),
+        created_at: Utc::now().to_rfc3339(),
+        oauth: None,
+        annotations: HashMap::new(),
+        has_admin_status: false,
+    };
 
-    // app_state.db.upsert_user(user)?;
+    app_state.store.provider::<User>().insert(&user).await?;
 
     log::info!("Auth event -> {}", format!("User with ID {:?} created: {}", id, &req.email));
 
@@ -34,20 +35,19 @@ pub async fn login(
     State(app_state): State<Arc<AppState>>,
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    // let user = app_state.db.get_user(&req.email)?
-    //     .ok_or(AppError::InvalidCredentials)?;
+    let user_provider = app_state.store.provider::<User>();
+    let user = user_provider.try_get_by_key(&req.email).await?
+        .ok_or(AppError::InvalidCredentials)?;
 
-    // if !app_state.auth.verify_password(&req.password, &user.password_hash.unwrap_or("".to_string()))? {
-    //     return Err(AppError::InvalidCredentials);
-    // }
+    if !app_state.auth.verify_password(&req.password, &user.password_hash.unwrap_or("".to_string()))? {
+        return Err(AppError::InvalidCredentials);
+    }
 
-    // let token = app_state.auth.create_token(&user.email)?;
+    let token = app_state.auth.create_token(&user.uid)?;
 
-    // log::info!("Auth event -> {}", format!("User logged in: {}", &user.email));
+    log::info!("Auth event -> {}", format!("User logged in: {}", &user.uid));
 
-    // Ok(Json(LoginResponse { token }))
-
-    Ok(())
+    Ok(Json(LoginResponse { token }))
 }
 
 pub async fn get_protected_data(

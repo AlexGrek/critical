@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 pub mod entities;
-// mod entities_expanded;
+pub mod managers;
 
 
 

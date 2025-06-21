@@ -6,7 +6,9 @@ use axum::{
     Router,
 };
 use exlogging::{configure_log_event, log_event, LogLevel, LoggerConfig};
+use gitops_lib::store::{config::StoreConfig, Store};
 use log::{error, info};
+use tokio::fs;
 
 use crate::{
     auth::Auth, middleware::jwt_auth_middleware, state::AppState,
@@ -39,6 +41,14 @@ async fn main() -> tokio::io::Result<()> {
     let log_file_path = env::var("LOG_FILE_PATH").unwrap_or_else(|_| "application.log".to_string());
     let data_dir_path = env::var("DATA_DIR_PATH").unwrap_or_else(|_| "data".to_string());
 
+    let config_content = fs::read_to_string("config.yaml")
+        .await
+        .expect("Failed to read config.yaml. Make sure the file exists.");
+    let store_config: StoreConfig = serde_yaml::from_str(&config_content).unwrap();
+
+    let store = Store::new(store_config);
+
+
     let config = LoggerConfig { log_file_path };
     configure_log_event(config).await.unwrap();
 
@@ -55,8 +65,8 @@ async fn main() -> tokio::io::Result<()> {
         auth,
         data_dir_path: PathBuf::from(data_dir_path),
         admin_file_path: PathBuf::from(admin_file_path),
+        store: Arc::new(store)
     });
-    info!("State initialized: {:?}", shared_state);
 
     // Define a fallback handler for API routes that don't match
     async fn api_fallback() -> impl IntoResponse {

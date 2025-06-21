@@ -1,0 +1,9 @@
+resourceBackends:
+  User:
+    type: filesystem
+    path: "data/users"
+
+namespacedResourceBackends:
+  Project:
+    type: sqlite
+    connectionString: "data/projects.db"
