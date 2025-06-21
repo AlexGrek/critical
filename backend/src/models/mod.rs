@@ -1,7 +1,12 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-#[derive(Debug, Serialize, Deserialize)]
+pub mod entities;
+// mod entities_expanded;
+
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
     pub id: Uuid,
     pub email: String,

@@ -10,8 +10,6 @@ use crate::exlogging;
 pub enum AppError {
     #[error("Serialization/Deserialization error")]
     SerdeError(#[from] serde_json::Error),
-    #[error("Surreal DB Error: {0}")]
-    DbInternalError(#[from] surrealdb::Error),
     #[error("DB Error: {0}")]
     DatabaseError(String),
     #[error("JWT error")]

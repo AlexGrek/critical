@@ -1,0 +1,156 @@
+[2025-06-17 22:46:26.079 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-17 22:46:26.079 UTC] [INFO] [User: test_user] Test message
+[2025-06-17 22:46:26.079 UTC] [ERROR] Error message
+[2025-06-17 22:46:26.079 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-17 22:46:26.281 UTC] [INFO] Info via macro
+[2025-06-17 22:46:26.281 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-17 22:53:00.598 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-17 22:53:00.598 UTC] [INFO] [User: test_user] Test message
+[2025-06-17 22:53:00.598 UTC] [ERROR] Error message
+[2025-06-17 22:53:00.598 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-17 22:53:00.799 UTC] [INFO] Info via macro
+[2025-06-17 22:53:00.799 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:18:24.866 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:18:24.866 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:18:24.866 UTC] [ERROR] Error message
+[2025-06-20 22:18:24.866 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:18:25.068 UTC] [INFO] Info via macro
+[2025-06-20 22:18:25.068 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:21:27.498 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:21:27.498 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:21:27.499 UTC] [ERROR] Error message
+[2025-06-20 22:21:27.499 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:21:27.700 UTC] [INFO] Info via macro
+[2025-06-20 22:21:27.701 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:21:44.112 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:21:44.112 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:21:44.112 UTC] [ERROR] Error message
+[2025-06-20 22:21:44.112 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:21:44.314 UTC] [INFO] Info via macro
+[2025-06-20 22:21:44.314 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:25:51.887 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:25:51.887 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:25:51.887 UTC] [ERROR] Error message
+[2025-06-20 22:25:51.887 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:25:52.090 UTC] [INFO] Info via macro
+[2025-06-20 22:25:52.090 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:29:49.512 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:29:49.512 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:29:49.512 UTC] [ERROR] Error message
+[2025-06-20 22:29:49.513 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:29:49.714 UTC] [INFO] Info via macro
+[2025-06-20 22:29:49.714 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:32:54.978 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:32:54.978 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:32:54.978 UTC] [ERROR] Error message
+[2025-06-20 22:32:54.978 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:32:55.179 UTC] [INFO] Info via macro
+[2025-06-20 22:32:55.179 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:36:32.619 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:36:32.619 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:36:32.619 UTC] [ERROR] Error message
+[2025-06-20 22:36:32.619 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:36:32.821 UTC] [INFO] Info via macro
+[2025-06-20 22:36:32.821 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:39:13.809 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:39:13.810 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:39:13.810 UTC] [ERROR] Error message
+[2025-06-20 22:39:13.810 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:39:14.011 UTC] [INFO] Info via macro
+[2025-06-20 22:39:14.011 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:41:39.658 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:41:39.658 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:41:39.658 UTC] [ERROR] Error message
+[2025-06-20 22:41:39.658 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:41:39.861 UTC] [INFO] Info via macro
+[2025-06-20 22:41:39.861 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:48:14.198 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:48:14.199 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:48:14.199 UTC] [ERROR] Error message
+[2025-06-20 22:48:14.199 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:48:14.400 UTC] [INFO] Info via macro
+[2025-06-20 22:48:14.400 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:50:20.540 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:50:20.540 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:50:20.540 UTC] [ERROR] Error message
+[2025-06-20 22:50:20.541 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:50:20.742 UTC] [INFO] Info via macro
+[2025-06-20 22:50:20.742 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:50:35.716 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:50:35.716 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:50:35.716 UTC] [ERROR] Error message
+[2025-06-20 22:50:35.716 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:50:35.919 UTC] [INFO] Info via macro
+[2025-06-20 22:50:35.919 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:51:16.630 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:51:16.630 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:51:16.630 UTC] [ERROR] Error message
+[2025-06-20 22:51:16.630 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:51:16.832 UTC] [INFO] Info via macro
+[2025-06-20 22:51:16.832 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:51:41.269 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:51:41.269 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:51:41.269 UTC] [ERROR] Error message
+[2025-06-20 22:51:41.269 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:51:41.470 UTC] [INFO] Info via macro
+[2025-06-20 22:51:41.471 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:52:32.749 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:52:32.749 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:52:32.749 UTC] [ERROR] Error message
+[2025-06-20 22:52:32.749 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:52:32.951 UTC] [INFO] Info via macro
+[2025-06-20 22:52:32.951 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:53:13.205 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:53:13.205 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:53:13.205 UTC] [ERROR] Error message
+[2025-06-20 22:53:13.205 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:53:13.407 UTC] [INFO] Info via macro
+[2025-06-20 22:53:13.407 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:53:25.226 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:53:25.226 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:53:25.226 UTC] [ERROR] Error message
+[2025-06-20 22:53:25.226 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:53:25.429 UTC] [INFO] Info via macro
+[2025-06-20 22:53:25.429 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:53:38.498 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:53:38.499 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:53:38.499 UTC] [ERROR] Error message
+[2025-06-20 22:53:38.499 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:53:38.701 UTC] [INFO] Info via macro
+[2025-06-20 22:53:38.701 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:54:22.348 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:54:22.348 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:54:22.348 UTC] [ERROR] Error message
+[2025-06-20 22:54:22.348 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:54:22.550 UTC] [INFO] Info via macro
+[2025-06-20 22:54:22.550 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:55:53.313 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:55:53.313 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:55:53.313 UTC] [ERROR] Error message
+[2025-06-20 22:55:53.313 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:55:53.515 UTC] [INFO] Info via macro
+[2025-06-20 22:55:53.515 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:56:42.622 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:56:42.622 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:56:42.622 UTC] [ERROR] Error message
+[2025-06-20 22:56:42.622 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:56:42.824 UTC] [INFO] Info via macro
+[2025-06-20 22:56:42.824 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-20 22:56:44.066 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-20 22:56:44.066 UTC] [INFO] [User: test_user] Test message
+[2025-06-20 22:56:44.066 UTC] [ERROR] Error message
+[2025-06-20 22:56:44.066 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-20 22:56:44.269 UTC] [INFO] Info via macro
+[2025-06-20 22:56:44.269 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-21 08:35:46.790 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-21 08:35:46.790 UTC] [INFO] [User: test_user] Test message
+[2025-06-21 08:35:46.790 UTC] [ERROR] Error message
+[2025-06-21 08:35:46.790 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-21 08:35:46.991 UTC] [INFO] Info via macro
+[2025-06-21 08:35:46.991 UTC] [ERROR] [User: macro_user] Error via macro
+[2025-06-21 08:46:56.874 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "test.log" }
+[2025-06-21 08:46:56.874 UTC] [INFO] [User: test_user] Test message
+[2025-06-21 08:46:56.874 UTC] [ERROR] Error message
+[2025-06-21 08:46:56.874 UTC] [WARN] [User: warn_user] Warning message
+[2025-06-21 08:46:57.076 UTC] [INFO] Info via macro
+[2025-06-21 08:46:57.076 UTC] [ERROR] [User: macro_user] Error via macro

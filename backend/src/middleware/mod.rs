@@ -8,7 +8,7 @@ use axum::{
 };
 // Removed: use tower_http::handle_error::HandleErrorLayer; // Not used in this file
 
-use crate::{db::issue_tracker::User, errors::AppError, state::AppState};
+use crate::{models::User, errors::AppError, state::AppState};
 
 use std::collections::HashSet;
 use std::fs::File;
@@ -82,12 +82,12 @@ pub async fn jwt_auth_middleware(
     match app_state.auth.decode_token(&token) {
         Ok(claims) => {
             parts.extensions.insert(claims.sub.clone());
-            // insert actual user
-            app_state
-                .db
-                .get_user(&claims.sub).await?
-                .and_then(|u| parts.extensions.insert(u))
-                .ok_or(AppError::UserNotFound)?;
+            // // insert actual user
+            // app_state
+            //     .db
+            //     .get_user(&claims.sub).await?
+            //     .and_then(|u| parts.extensions.insert(u))
+            //     .ok_or(AppError::UserNotFound)?;
 
             let req = Request::from_parts(parts, body);
             Ok(next.run(req).await)

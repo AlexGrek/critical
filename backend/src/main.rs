@@ -9,7 +9,7 @@ use exlogging::{configure_log_event, log_event, LogLevel, LoggerConfig};
 use log::{error, info};
 
 use crate::{
-    auth::Auth, db::issue_tracker::IssueTrackerDb, middleware::jwt_auth_middleware, state::AppState,
+    auth::Auth, middleware::jwt_auth_middleware, state::AppState,
 };
 use dotenv::dotenv;
 use std::{env, path::PathBuf, sync::Arc};
@@ -25,6 +25,7 @@ mod middleware;
 mod models;
 mod state;
 mod utils;
+mod test;
 
 #[tokio::main]
 async fn main() -> tokio::io::Result<()> {
@@ -46,20 +47,11 @@ async fn main() -> tokio::io::Result<()> {
     check_admin_file(&admin_file_path);
 
     info!("Initializing database at: {}", database_url);
-    let app_db = match IssueTrackerDb::new(&database_url).await {
-        Ok(db) => {
-            info!("Database initialized successfully.");
-            db
-        }
-        Err(e) => {
-            error!("Failed to initialize database: {:?}", e);
-            panic!("Database initialization failed!");
-        }
-    };
+ 
     let auth = Auth::new(jwt_secret.as_bytes());
 
     let shared_state = Arc::new(AppState {
-        db: app_db,
+        // db: app_db,
         auth,
         data_dir_path: PathBuf::from(data_dir_path),
         admin_file_path: PathBuf::from(admin_file_path),
