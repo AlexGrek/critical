@@ -1,13 +1,11 @@
 use crate::store::{GenericDatabaseProvider, OptimisticLockError, TransactionState};
 use crate::GitopsResourceRoot;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, Result};
 use dashmap::DashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use std::any::{Any, TypeId};
-use std::collections::{HashMap, VecDeque};
+use std::collections::{VecDeque};
 use std::marker::PhantomData;
-use std::path::{Path, PathBuf};
-use std::pin::Pin;
+use std::path::{PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tokio::fs;
@@ -327,11 +325,6 @@ where
 
     fn get_type_path(&self) -> PathBuf {
         self.base_path.join(T::kind())
-    }
-
-    fn get_resource_path(&self, ns: &str, key: &str) -> PathBuf {
-        self.get_ns_path(ns)
-            .join(format!("{}.yaml", urlencoding::encode(key)))
     }
 
     fn provider_for_namespace(&self, ns: &str) -> FilesystemDatabaseProvider<T> {

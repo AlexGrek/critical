@@ -45,7 +45,7 @@ pub trait GitopsResourcePart: Sized + Clone + std::fmt::Debug + Serialize + for<
 // Private module for helpers that might be used by the generated macro code
 #[doc(hidden)]
 pub mod private {
-    use syn::{Type, TypePath, PathArguments, GenericArgument};
+    use syn::Type;
 
     /// Helper used by the macro to check if a type is "part-like".
     /// This is a mirror of the `is_gitops_part_like_type` in `gitops_macros`.
