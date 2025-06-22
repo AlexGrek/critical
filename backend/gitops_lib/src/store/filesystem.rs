@@ -1,40 +1,100 @@
-use crate::store::{default_on_update, GenericDatabaseProvider, OnUpdateHandler, OptimisticLockError, TransactionState};
+use crate::store::{GenericDatabaseProvider, OptimisticLockError, TransactionState};
 use crate::GitopsResourceRoot;
 use anyhow::{anyhow, Context, Result};
 use dashmap::DashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use std::any::{Any, TypeId};
-use std::collections::HashMap;
-use std::future::Future;
+use std::collections::{HashMap, VecDeque};
 use std::marker::PhantomData;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tokio::fs;
 use tokio::io;
 
 /// A filesystem-based implementation of `GenericDatabaseProvider`.
+/// It now includes a configurable LRU cache to reduce file parsing overhead.
 pub struct FilesystemDatabaseProvider<T>
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
     base_path: PathBuf,
-    on_update: OnUpdateHandler<T>,
+    cache: Arc<DashMap<String, (T, SystemTime)>>,
+    lru_keys: Arc<Mutex<VecDeque<String>>>,
+    cache_capacity: usize,
     _phantom: PhantomData<T>,
 }
 
 impl<T> FilesystemDatabaseProvider<T>
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
-    pub fn new(base_path: impl Into<PathBuf>, on_update: Option<OnUpdateHandler<T>>) -> Self {
+    /// Creates a new `FilesystemDatabaseProvider`.
+    ///
+    /// * `base_path`: The root directory for storing resources.
+    /// * `cache_capacity`: The number of parsed resources to keep in an in-memory LRU cache.
+    pub fn new(base_path: impl Into<PathBuf>, cache_capacity: usize) -> Self {
         Self {
             base_path: base_path.into(),
-            on_update: on_update.unwrap_or_else(default_on_update),
+            cache: Arc::new(DashMap::new()),
+            lru_keys: Arc::new(Mutex::new(VecDeque::with_capacity(cache_capacity))),
+            cache_capacity,
             _phantom: PhantomData,
         }
     }
+
+    // -- Cache Helper Methods --
+
+    /// Retrieves an item from the cache if it exists and moves it to the front of the LRU queue.
+    fn cache_get(&self, key: &str) -> Option<(T, SystemTime)> {
+        let result = self.cache.get(key).map(|r| r.value().clone());
+        if result.is_some() {
+            let mut lru = self.lru_keys.lock().unwrap();
+            // Inefficiently move to front. For high-contention or large caches,
+            // a more sophisticated LRU implementation would be better.
+            if let Some(pos) = lru.iter().position(|k| k == key) {
+                if let Some(k) = lru.remove(pos) {
+                    lru.push_front(k);
+                }
+            }
+        }
+        result
+    }
+
+    /// Inserts an item into the cache and updates the LRU queue, evicting the oldest item if capacity is exceeded.
+    fn cache_insert(&self, key: String, item: T, modified: SystemTime) {
+        if self.cache_capacity == 0 {
+            return;
+        }
+        self.cache.insert(key.clone(), (item, modified));
+        let mut lru = self.lru_keys.lock().unwrap();
+
+        // Remove any existing instance of the key to prevent duplicates and update its freshness.
+        if let Some(pos) = lru.iter().position(|k| *k == key) {
+            lru.remove(pos);
+        }
+
+        lru.push_front(key);
+
+        // Evict the least recently used item if the cache is over capacity.
+        if lru.len() > self.cache_capacity {
+            if let Some(key_to_evict) = lru.pop_back() {
+                self.cache.remove(&key_to_evict);
+            }
+        }
+    }
+
+    /// Removes an item from the cache and its corresponding entry in the LRU queue.
+    fn cache_remove(&self, key: &str) {
+        self.cache.remove(key);
+        let mut lru = self.lru_keys.lock().unwrap();
+        if let Some(pos) = lru.iter().position(|k| k == key) {
+            lru.remove(pos);
+        }
+    }
+
+    // -- Core Logic --
 
     fn get_resource_path(&self, key: &str) -> PathBuf {
         self.base_path
@@ -48,25 +108,47 @@ where
 
     async fn get_with_transaction_state(&self, key: &str) -> Result<(Option<T>, TransactionState)> {
         let path = self.get_resource_path(key);
-        match fs::read_to_string(&path).await {
-            Ok(content) => {
-                let meta = fs::metadata(&path).await?;
+        match fs::metadata(&path).await {
+            Ok(meta) => {
+                let modified = meta.modified()?;
+                // Check cache first
+                if let Some((cached_item, cached_modified)) = self.cache_get(key) {
+                    if cached_modified == modified {
+                        return Ok((
+                            Some(cached_item),
+                            TransactionState::File {
+                                path,
+                                modified: Some(modified),
+                            },
+                        ));
+                    }
+                }
+
+                // Cache miss or stale, read from file
+                let content = fs::read_to_string(&path).await?;
                 let resource: T::Serializable = serde_yaml::from_str(&content)?;
+                let item = T::from(resource);
+
+                self.cache_insert(key.to_string(), item.clone(), modified);
+
                 Ok((
-                    Some(T::from(resource)),
+                    Some(item),
                     TransactionState::File {
                         path,
-                        modified: Some(meta.modified()?),
+                        modified: Some(modified),
                     },
                 ))
             }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Ok((
-                None,
-                TransactionState::File {
-                    path,
-                    modified: None,
-                },
-            )),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                self.cache_remove(key); // Ensure cache is clean if file is gone
+                Ok((
+                    None,
+                    TransactionState::File {
+                        path,
+                        modified: None,
+                    },
+                ))
+            }
             Err(e) => Err(e.into()),
         }
     }
@@ -118,23 +200,14 @@ where
 
 impl<T> GenericDatabaseProvider<T> for FilesystemDatabaseProvider<T>
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
     async fn list(&self) -> Result<Vec<T>> {
-        let dir_path = self.get_type_path();
-        let mut resources = Vec::new();
-
-        if !dir_path.exists() {
-            return Ok(resources);
-        }
-
-        let mut entries = fs::read_dir(&dir_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            let path = entry.path();
-            if path.is_file() && path.extension().map_or(false, |ext| ext == "yaml") {
-                let content = fs::read_to_string(&path).await?;
-                let resource: T::Serializable = serde_yaml::from_str(&content)?;
-                resources.push(resource.into());
+        let keys = self.list_keys().await?;
+        let mut resources = Vec::with_capacity(keys.len());
+        for key in keys {
+            if let Some(resource) = self.try_get_by_key(&key).await? {
+                resources.push(resource);
             }
         }
         Ok(resources)
@@ -175,74 +248,33 @@ where
     }
 
     async fn delete(&self, key: &str) -> Result<()> {
-        self.with_updates(key, 0, |_| async { Ok((None, ())) })
-            .await
+        let (_, tx_state) = self.get_with_transaction_state(key).await?;
+        self.write_with_transaction_state(None, &tx_state).await?;
+        self.cache_remove(key);
+        Ok(())
     }
 
     async fn insert(&self, item: &T) -> Result<()> {
         let key = item.get_key();
-        let item = item.clone();
-        self.with_updates(&key, 0, |existing| {
-            let key = key.clone();
-            let item = item.clone();
-            async move {
-                if existing.is_some() {
-                    Err(anyhow!("Resource with key '{}' already exists", key))
-                } else {
-                    Ok((Some(item), ()))
-                }
-            }
-        })
-        .await
+        let (existing, tx_state) = self.get_with_transaction_state(&key).await?;
+
+        if existing.is_some() {
+            return Err(anyhow!("Resource with key '{}' already exists", key));
+        }
+
+        self.write_with_transaction_state(Some(item), &tx_state)
+            .await?;
+        self.cache_remove(&key);
+        Ok(())
     }
 
     async fn upsert(&self, item: &T) -> Result<()> {
         let key = item.get_key();
-        let item = item.clone();
-        self.with_updates(&key, 0, |_| {
-            let item = item.clone();
-            async move { Ok((Some(item), ())) }
-        })
-        .await
-    }
-
-    async fn with_updates<F, Fut, R>(&self, key: &str, retries: u32, update_fn: F) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send,
-    {
-        let mut attempts = 0;
-        loop {
-            let (before, tx_state) = self.get_with_transaction_state(key).await?;
-            let (after, result) = update_fn(before.clone()).await?;
-            let write_result = self
-                .write_with_transaction_state(after.as_ref(), &tx_state)
-                .await;
-            match write_result {
-                Ok(()) => {
-                    (self.on_update)(before.as_ref(), after.as_ref()).await?;
-                    return Ok(result);
-                }
-                Err(e) => {
-                    if e.downcast_ref::<OptimisticLockError>().is_some() {
-                        attempts += 1;
-                        if attempts > retries {
-                            return Err(e).context(format!(
-                                "Optimistic lock failed after {} retries",
-                                retries
-                            ));
-                        }
-                        tokio::time::sleep(tokio::time::Duration::from_millis(
-                            50 * attempts as u64,
-                        ))
-                        .await;
-                    } else {
-                        return Err(e);
-                    }
-                }
-            }
-        }
+        let (_, tx_state) = self.get_with_transaction_state(&key).await?;
+        self.write_with_transaction_state(Some(item), &tx_state)
+            .await?;
+        self.cache_remove(&key);
+        Ok(())
     }
 }
 
@@ -251,7 +283,7 @@ where
 /// A generic database provider that supports namespaces.
 pub trait GenericNamespacedDatabaseProvider<T>: Send + Sync
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
     async fn list(&self, ns: &str) -> Result<Vec<T>>;
     async fn list_keys(&self, ns: &str) -> Result<Vec<String>>;
@@ -260,19 +292,6 @@ where
     async fn delete(&self, ns: &str, key: &str) -> Result<()>;
     async fn insert(&self, ns: &str, item: &T) -> Result<()>;
     async fn upsert(&self, ns: &str, item: &T) -> Result<()>;
-
-    async fn with_updates<F, Fut, R>(
-        &self,
-        ns: &str,
-        key: &str,
-        retries: u32,
-        update_fn: F,
-    ) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send;
-
     async fn list_namespaces(&self) -> Result<Vec<String>>;
     async fn create_namespace(&self, ns: &str) -> Result<()>;
     async fn delete_namespace(&self, ns: &str, force: bool) -> Result<()>;
@@ -281,21 +300,21 @@ where
 /// A filesystem-based implementation of `GenericNamespacedDatabaseProvider`.
 pub struct FilesystemNamespacedDatabaseProvider<T>
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
     base_path: PathBuf,
-    on_update: OnUpdateHandler<T>,
+    cache_capacity: usize,
     _phantom: PhantomData<T>,
 }
 
 impl<T> FilesystemNamespacedDatabaseProvider<T>
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
-    pub fn new(base_path: impl Into<PathBuf>, on_update: Option<OnUpdateHandler<T>>) -> Self {
+    pub fn new(base_path: impl Into<PathBuf>, cache_capacity: usize) -> Self {
         Self {
             base_path: base_path.into(),
-            on_update: on_update.unwrap_or_else(default_on_update),
+            cache_capacity,
             _phantom: PhantomData,
         }
     }
@@ -316,13 +335,13 @@ where
     }
 
     fn provider_for_namespace(&self, ns: &str) -> FilesystemDatabaseProvider<T> {
-        FilesystemDatabaseProvider::new(self.get_ns_path(ns), Some(self.on_update.clone()))
+        FilesystemDatabaseProvider::new(self.get_ns_path(ns), self.cache_capacity)
     }
 }
 
 impl<T> GenericNamespacedDatabaseProvider<T> for FilesystemNamespacedDatabaseProvider<T>
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
     async fn list(&self, ns: &str) -> Result<Vec<T>> {
         self.provider_for_namespace(ns).list().await
@@ -354,23 +373,6 @@ where
             fs::create_dir_all(&ns_path).await?;
         }
         self.provider_for_namespace(ns).upsert(item).await
-    }
-
-    async fn with_updates<F, Fut, R>(
-        &self,
-        ns: &str,
-        key: &str,
-        retries: u32,
-        update_fn: F,
-    ) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send,
-    {
-        self.provider_for_namespace(ns)
-            .with_updates(key, retries, update_fn)
-            .await
     }
 
     async fn list_namespaces(&self) -> Result<Vec<String>> {
@@ -418,12 +420,14 @@ where
 // Cloning a FilesystemDatabaseProvider should be possible for use across threads.
 impl<T> Clone for FilesystemDatabaseProvider<T>
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
     fn clone(&self) -> Self {
         Self {
             base_path: self.base_path.clone(),
-            on_update: self.on_update.clone(),
+            cache: self.cache.clone(),
+            lru_keys: self.lru_keys.clone(),
+            cache_capacity: self.cache_capacity,
             _phantom: PhantomData,
         }
     }
@@ -436,12 +440,12 @@ where
 // Cloning a FilesystemNamespacedDatabaseProvider should be possible for use across threads.
 impl<T> Clone for FilesystemNamespacedDatabaseProvider<T>
 where
-    T: GitopsResourceRoot + Serialize + DeserializeOwned,
+    T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
     fn clone(&self) -> Self {
         Self {
             base_path: self.base_path.clone(),
-            on_update: self.on_update.clone(),
+            cache_capacity: self.cache_capacity,
             _phantom: PhantomData,
         }
     }

@@ -1,19 +1,14 @@
 use crate::store::filesystem::{FilesystemDatabaseProvider, FilesystemNamespacedDatabaseProvider, GenericNamespacedDatabaseProvider};
 use crate::GitopsResourceRoot;
-use anyhow::{anyhow, Context, Result};
+use anyhow::Result;
 use dashmap::DashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use std::any::{Any, TypeId};
-use std::collections::HashMap;
 use std::future::Future;
-use std::marker::PhantomData;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::fs;
-use tokio::io;
-
 pub mod config;
 pub mod filesystem;
 use config::{BackendConfig, StoreConfig};
@@ -77,17 +72,6 @@ where
             AnyProvider::Filesystem(p) => p.upsert(item).await,
         }
     }
-
-    async fn with_updates<F, Fut, R>(&self, key: &str, retries: u32, update_fn: F) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send,
-    {
-        match self {
-            AnyProvider::Filesystem(p) => p.with_updates(key, retries, update_fn).await,
-        }
-    }
 }
 
 pub enum AnyNsProvider<T>
@@ -142,23 +126,6 @@ where
     async fn upsert(&self, ns: &str, item: &T) -> Result<()> {
         match self {
             AnyNsProvider::Filesystem(p) => p.upsert(ns, item).await,
-        }
-    }
-
-    async fn with_updates<F, Fut, R>(
-        &self,
-        ns: &str,
-        key: &str,
-        retries: u32,
-        update_fn: F,
-    ) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send,
-    {
-        match self {
-            AnyNsProvider::Filesystem(p) => p.with_updates(ns, key, retries, update_fn).await,
         }
     }
 
@@ -236,7 +203,7 @@ impl Store {
 
         let provider = match backend_config {
             BackendConfig::Filesystem { path } => {
-                let fs_provider = FilesystemDatabaseProvider::<T>::new(path.clone(), None);
+                let fs_provider = FilesystemDatabaseProvider::<T>::new(path.clone(), 10);
                 Arc::new(AnyProvider::Filesystem(fs_provider))
             }
             BackendConfig::Sqlite { .. } => {
@@ -284,7 +251,7 @@ impl Store {
         let provider = match backend_config {
             BackendConfig::Filesystem { path } => {
                 let fs_provider =
-                    FilesystemNamespacedDatabaseProvider::<T>::new(path.clone(), None);
+                    FilesystemNamespacedDatabaseProvider::<T>::new(path.clone(), 10);
                 Arc::new(AnyNsProvider::Filesystem(fs_provider))
             }
             BackendConfig::Sqlite { .. } => {
@@ -340,11 +307,6 @@ where
     async fn delete(&self, key: &str) -> Result<()>;
     async fn insert(&self, item: &T) -> Result<()>;
     async fn upsert(&self, item: &T) -> Result<()>;
-    async fn with_updates<F, Fut, R>(&self, key: &str, retries: u32, update_fn: F) -> Result<R>
-    where
-        F: Fn(Option<T>) -> Fut + Send + Sync,
-        Fut: Future<Output = Result<(Option<T>, R)>> + Send,
-        R: Send;
 }
 
 #[cfg(test)]
