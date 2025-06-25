@@ -3,9 +3,9 @@ use crate::GitopsResourceRoot;
 use anyhow::{anyhow, Result};
 use dashmap::DashMap;
 use serde::{de::DeserializeOwned, Serialize};
-use std::collections::{VecDeque};
+use std::collections::VecDeque;
 use std::marker::PhantomData;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use tokio::fs;
@@ -49,8 +49,6 @@ where
         let result = self.cache.get(key).map(|r| r.value().clone());
         if result.is_some() {
             let mut lru = self.lru_keys.lock().unwrap();
-            // Inefficiently move to front. For high-contention or large caches,
-            // a more sophisticated LRU implementation would be better.
             if let Some(pos) = lru.iter().position(|k| k == key) {
                 if let Some(k) = lru.remove(pos) {
                     lru.push_front(k);
@@ -234,15 +232,18 @@ where
     }
 
     async fn get_by_key(&self, key: &str) -> Result<T> {
+        println!("Fetching item {}", key);
         self.try_get_by_key(key)
             .await?
             .ok_or_else(|| anyhow!("Resource with key '{}' not found", key))
     }
 
     async fn try_get_by_key(&self, key: &str) -> Result<Option<T>> {
-        self.get_with_transaction_state(key)
-            .await
-            .map(|(item, _)| item)
+        println!("Fetching item (try) {}", key);
+        self.get_with_transaction_state(key).await.map(|(item, _)| {
+            println!("Got an item: {:?}", item);
+            item
+        })
     }
 
     async fn delete(&self, key: &str) -> Result<()> {

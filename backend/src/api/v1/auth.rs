@@ -3,30 +3,30 @@ use chrono::Utc;
 use gitops_lib::store::GenericDatabaseProvider;
 use std::{collections::HashMap, sync::Arc};
 use crate::{
-    errors::AppError, middleware::AuthenticatedUser, models::{entities::User, LoginRequest, LoginResponse, RegisterRequest}, state::AppState
+    auth::invites::use_registration_invite, errors::AppError, middleware::AuthenticatedUser, models::{entities::User, LoginRequest, LoginResponse, RegisterRequest}, state::AppState
 };
-use uuid::Uuid;
 
 pub async fn register(
     State(app_state): State<Arc<AppState>>,
     Json(req): Json<RegisterRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    use_registration_invite(&app_state, &req.invite_id, &req.invite_key).await?;
+
     let hashed_password = app_state.auth.hash_password(&req.password)?;
 
-    let id = Uuid::new_v4();
-
     let user = User {
-        uid: req.email.clone(),
+        uid: req.uid.clone(),
         password_hash: Some(hashed_password),
-        created_at: Utc::now().to_rfc3339(),
-        oauth: None,
         annotations: HashMap::new(),
         has_admin_status: false,
+        email: req.email.clone(),
+        oauth: None,
+        created_at: Utc::now().to_rfc3339(),
     };
 
     app_state.store.provider::<User>().insert(&user).await?;
 
-    log::info!("Auth event -> {}", format!("User with ID {:?} created: {}", id, &req.email));
+    log::info!("Auth event -> {}", format!("User with ID {:?} created: {}", &req.uid, &req.email));
 
     Ok(StatusCode::OK)
 }
@@ -36,7 +36,7 @@ pub async fn login(
     Json(req): Json<LoginRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let user_provider = app_state.store.provider::<User>();
-    let user = user_provider.try_get_by_key(&req.email).await?
+    let user = user_provider.try_get_by_key(&req.uid).await?
         .ok_or(AppError::InvalidCredentials)?;
 
     if !app_state.auth.verify_password(&req.password, &user.password_hash.unwrap_or("".to_string()))? {

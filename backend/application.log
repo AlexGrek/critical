@@ -39,3 +39,29 @@
 [2025-06-21 22:23:12.326 UTC] [INFO] Application started
 [2025-06-21 22:31:26.791 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
 [2025-06-21 22:31:26.801 UTC] [INFO] Application started
+[2025-06-25 12:23:27.997 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 12:23:28.735 UTC] [INFO] Application started
+[2025-06-25 12:25:35.242 UTC] [WARN] Error response: "Any server error error"
+[2025-06-25 12:28:21.629 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 12:28:21.631 UTC] [INFO] Application started
+[2025-06-25 12:28:24.018 UTC] [WARN] Error response: "Any server error error"
+[2025-06-25 12:33:28.708 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 12:33:28.711 UTC] [INFO] Application started
+[2025-06-25 12:33:50.198 UTC] [WARN] Error response: "Unauthorized"
+[2025-06-25 12:34:15.830 UTC] [WARN] Error response: "Missing expected extension: user type"
+[2025-06-25 12:38:31.697 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 12:38:31.699 UTC] [INFO] Application started
+[2025-06-25 12:39:27.251 UTC] [WARN] Error response: "User not found"
+[2025-06-25 13:12:08.633 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 13:12:08.636 UTC] [INFO] Application started
+[2025-06-25 13:12:42.375 UTC] [WARN] Error response: "User not found"
+[2025-06-25 13:13:32.360 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 13:13:32.362 UTC] [INFO] Application started
+[2025-06-25 13:13:50.963 UTC] [WARN] Error response: "User not found"
+[2025-06-25 13:15:15.242 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 13:15:15.244 UTC] [INFO] Application started
+[2025-06-25 13:15:22.566 UTC] [WARN] Error response: "User not found"
+[2025-06-25 13:24:00.442 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 13:24:00.445 UTC] [INFO] Application started
+[2025-06-25 13:26:54.367 UTC] [INFO] [User: root] Logger initialized with config: LoggerConfig { log_file_path: "application.log" }
+[2025-06-25 13:26:54.369 UTC] [INFO] Application started

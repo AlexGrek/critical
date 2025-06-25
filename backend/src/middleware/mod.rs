@@ -6,9 +6,10 @@ use axum::{
     middleware::Next, // Import Next without generic
     response::Response,
 };
+use gitops_lib::store::GenericDatabaseProvider;
 // Removed: use tower_http::handle_error::HandleErrorLayer; // Not used in this file
 
-use crate::{models::User, errors::AppError, state::AppState};
+use crate::{errors::AppError, models::entities::User, state::AppState};
 
 use std::collections::HashSet;
 use std::fs::File;
@@ -82,12 +83,18 @@ pub async fn jwt_auth_middleware(
     match app_state.auth.decode_token(&token) {
         Ok(claims) => {
             parts.extensions.insert(claims.sub.clone());
-            // // insert actual user
-            // app_state
-            //     .db
-            //     .get_user(&claims.sub).await?
-            //     .and_then(|u| parts.extensions.insert(u))
-            //     .ok_or(AppError::UserNotFound)?;
+            // insert actual user
+            let user = app_state
+                .store.provider::<User>()
+                .try_get_by_key(&claims.sub).await?;
+
+            match user {
+                Some(u) => {
+                    parts.extensions.insert(u);
+                    ()
+                },
+                _ => return Err(AppError::UserNotFound)
+            }
 
             let req = Request::from_parts(parts, body);
             Ok(next.run(req).await)

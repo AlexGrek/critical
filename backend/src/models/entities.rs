@@ -11,6 +11,7 @@ use std::collections::HashMap;
 #[gitops(key = "uid")]
 pub struct User {
     pub uid: String,
+    pub email: String,
     pub password_hash: Option<String>,
     pub oauth: Option<String>,
     pub created_at: String,
@@ -39,7 +40,29 @@ pub struct Project {
     pub owner_uid: String,
     pub admins_uid: Vec<String>,
     pub visibility: VisibilityConfig,
-    pub links: ProjectLinks
+    pub links: ProjectLinks,
+    pub issue_categories: Vec<String>,
+}
+
+#[derive(GitopsResourceRoot, Debug, Serialize, Deserialize, Clone)]
+#[gitops(key = "name_id")]
+pub struct GitopsProject {
+    pub name_id: String,
+    pub public_name: String,
+    #[gitops(skip_on_update)]
+    pub owner_uid: String,
+    pub admins_uid: Vec<String>,
+    pub visibility: VisibilityConfig,
+    pub links: ProjectLinks,
+    pub issue_categories: Vec<String>,
+}
+
+#[derive(GitopsResourceRoot, Debug, Serialize, Deserialize, Clone)]
+#[gitops(key = "invite_uid")]
+pub struct Invite {
+    pub invite_uid: String,
+    pub invite_key: String,
+    pub used: bool
 }
 
 

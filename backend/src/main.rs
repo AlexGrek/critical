@@ -5,16 +5,17 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use chrono::Utc;
 use exlogging::{configure_log_event, log_event, LogLevel, LoggerConfig};
-use gitops_lib::store::{config::StoreConfig, Store};
-use log::{error, info};
+use gitops_lib::store::{config::StoreConfig, GenericDatabaseProvider, Store};
+use log::{info};
 use tokio::fs;
 
 use crate::{
-    auth::Auth, middleware::jwt_auth_middleware, state::AppState,
+    auth::Auth, errors::AppError, middleware::jwt_auth_middleware, models::entities::User, state::AppState
 };
 use dotenv::dotenv;
-use std::{env, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
 use tower_http::{services::ServeDir, trace::TraceLayer};
 
 mod api;
@@ -28,6 +29,31 @@ mod models;
 mod state;
 mod utils;
 mod test;
+
+async fn create_default_user(state: &AppState) -> Result<(), anyhow::Error> {
+    let root = state.store.provider::<User>().try_get_by_key("root").await?;
+    match root {
+        Some(_) => {
+            info!("User root already exists, skipping creation");
+            Ok(())
+        }
+        None => {
+            info!("Creating user root with password admin123");
+            let hashed_password = state.auth.hash_password("admin123")?;
+            let root_user = User {
+                uid: "root".to_string(),
+                email: "root@cluster.local".to_string(),
+                password_hash: Some(hashed_password),
+                oauth: None,
+                created_at: Utc::now().to_rfc3339(),
+                annotations: HashMap::new(),
+                has_admin_status: true,
+            };
+            let insertion_result = state.store.provider::<User>().insert(&root_user).await?;
+            Ok(insertion_result)
+        }
+    }
+}
 
 #[tokio::main]
 async fn main() -> tokio::io::Result<()> {
@@ -68,6 +94,12 @@ async fn main() -> tokio::io::Result<()> {
         store: Arc::new(store)
     });
 
+    let failure_in_default_user_creation = create_default_user(&shared_state).await;
+    match failure_in_default_user_creation {
+        Err(e) => log_event(LogLevel::Error, e.to_string(), None::<&str>),
+        _ => ()
+    }
+
     // Define a fallback handler for API routes that don't match
     async fn api_fallback() -> impl IntoResponse {
         (StatusCode::NOT_FOUND, "API endpoint not found").into_response()
@@ -80,6 +112,14 @@ async fn main() -> tokio::io::Result<()> {
         .nest(
             "/protected",
             Router::new().route("/check", get(api::v1::auth::get_protected_data)),
+        )
+        .layer(from_fn_with_state(
+            shared_state.clone(),
+            jwt_auth_middleware,
+        ))
+        .nest(
+            "/adm",
+            Router::new().route("/issue_invite", post(api::v1::adm::user_managements_endpoints::issue_invite)),
         )
         .layer(from_fn_with_state(
             shared_state.clone(),

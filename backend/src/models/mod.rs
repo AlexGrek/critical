@@ -1,27 +1,21 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 pub mod entities;
 pub mod managers;
 
 
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct User {
-    pub id: Uuid,
-    pub email: String,
-    pub password_hash: String,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RegisterRequest {
     pub email: String,
     pub password: String,
+    pub invite_id: String,
+    pub invite_key: String,
+    pub uid: String
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoginRequest {
-    pub email: String,
+    pub uid: String,
     pub password: String,
 }
 

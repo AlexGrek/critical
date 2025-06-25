@@ -6,7 +6,6 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::any::TypeId;
 
 /// Defines the configuration for a specific database backend.
 ///

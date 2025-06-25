@@ -1,3 +1,7 @@
+defaultBackend:
+  type: filesystem
+  path: "data/"
+
 resourceBackends:
   User:
     type: filesystem
