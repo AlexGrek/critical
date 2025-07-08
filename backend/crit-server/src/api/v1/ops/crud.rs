@@ -71,11 +71,11 @@ pub async fn handle_list(
     Query(namespace): Query<Ns>,
 ) -> Result<impl IntoResponse, AppError> {
     let kind_cap = capitalize_first(&kind);
-    if kind_cap == "user" {
+    if kind_cap == "User" {
         let manager = UserManager::new(app_state.store.clone());
         return Ok(manager.list_as_response().await?.into_response());
     }
-    if kind_cap == "project" {
+    if kind_cap == "Project" {
         let manager = ProjectManager::new(app_state.store.clone(), &user);
         return Ok(manager.list_as_response().await?.into_response());
     }
