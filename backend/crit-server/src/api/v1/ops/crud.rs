@@ -1,4 +1,4 @@
-use crate::{errors::AppError, middleware::AuthenticatedUser, state::AppState};
+use crate::{errors::AppError, middleware::AuthenticatedUser, models::managers::UserManager, state::AppState};
 use axum::{
     body::{to_bytes, Body},
     extract::{Json, Path, State},
@@ -51,8 +51,12 @@ pub async fn handle_list(
     State(app_state): State<Arc<AppState>>,
     Path(kind): Path<String>,
 ) -> Result<impl IntoResponse, AppError> {
-    let data = app_state.store.provider().get_by_key(&kind).await?;
-
-    result
+    match kind.as_str() {
+        "user" => {
+            let manager = UserManager::new(app_state.store.clone());
+            return manager.list_as_response().await;
+        }
+        k => return Err(AppError::InvalidData(format!("Unknown kind: '{}'", k)))
+    }
 }
 

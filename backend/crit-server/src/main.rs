@@ -126,7 +126,7 @@ async fn main() -> tokio::io::Result<()> {
                 post(api::v1::ops::crud::handle_create),
             )
             .route(
-                "/list/{}",
+                "/list/{kind}",
                 get(api::v1::ops::crud::handle_list),
             ),
         )
