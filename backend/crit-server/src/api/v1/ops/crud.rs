@@ -1,7 +1,7 @@
 use crate::{errors::AppError, middleware::AuthenticatedUser, state::AppState};
 use axum::{
-    body::{Body, to_bytes},
-    extract::{Json, State},
+    body::{to_bytes, Body},
+    extract::{Json, Path, State},
     http::{Request, StatusCode},
     response::IntoResponse,
 };
@@ -9,9 +9,10 @@ use crit_shared::{
     KindOnly,
     entities::{ProjectGitopsUpdate, UserGitopsUpdate},
 };
+use gitops_lib::store::GenericDatabaseProvider;
 use std::sync::Arc;
 
-async fn handle_create(
+pub async fn handle_create(
     AuthenticatedUser(_user): AuthenticatedUser,
     State(_app_state): State<Arc<AppState>>,
     req: Request<Body>,
@@ -44,3 +45,14 @@ async fn handle_create(
 
     result
 }
+
+pub async fn handle_list(
+    AuthenticatedUser(_user): AuthenticatedUser,
+    State(app_state): State<Arc<AppState>>,
+    Path(kind): Path<String>,
+) -> Result<impl IntoResponse, AppError> {
+    let data = app_state.store.provider().get_by_key(&kind).await?;
+
+    result
+}
+

@@ -123,7 +123,11 @@ async fn main() -> tokio::io::Result<()> {
             "/ops",
             Router::new().route(
                 "/create",
-                post(api::v1::adm::user_managements_endpoints::issue_invite),
+                post(api::v1::ops::crud::handle_create),
+            )
+            .route(
+                "/list/{}",
+                get(api::v1::ops::crud::handle_list),
             ),
         )
         .nest(
