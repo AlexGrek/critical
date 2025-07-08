@@ -126,6 +126,10 @@ async fn main() -> tokio::io::Result<()> {
                 post(api::v1::ops::crud::handle_create),
             )
             .route(
+                "/upsert",
+                post(api::v1::ops::crud::handle_upsert),
+            )
+            .route(
                 "/list/{kind}",
                 get(api::v1::ops::crud::handle_list),
             ),

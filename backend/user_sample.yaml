@@ -1,0 +1,9 @@
+annotations: {}
+apiVersion: v1.0
+createdAt: 2025-07-08T15:10:46.256524700+00:00
+email: a@a.com
+hasAdminStatus: false
+kind: User
+oauth: null
+passwordHash: $2b$12$fkXqGplu3croEYf19xeJcetqoegpV9c7Tqknmz6svzbdC07F4UuGC
+uid: huiuser

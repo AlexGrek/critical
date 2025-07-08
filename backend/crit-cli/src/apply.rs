@@ -13,6 +13,7 @@ pub struct ApplyArgs {
     #[arg(short = 'f', long)]
     pub file: Option<PathBuf>,
     pub url: String,
+    pub jwt: String,
 }
 
 pub async fn handle_apply(args: ApplyArgs) -> Result<()> {
@@ -66,8 +67,11 @@ pub async fn handle_apply(args: ApplyArgs) -> Result<()> {
             }
         };
 
+        let url = args.url.clone();
+
         let resp = client
-            .post("http://localhost:8000/api/v1/ops/upsert")
+            .post(format!("{}/api/v1/ops/upsert", url))
+            .bearer_auth(&args.jwt)
             .json(&json_value)
             .send()
             .await;

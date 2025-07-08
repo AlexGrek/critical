@@ -41,6 +41,14 @@ impl UserManager {
         Ok(Json(users.into_iter().map(|u| u.into()).collect()))
     }
 
+    pub async fn upsert(&self, item: UserGitopsSerializable) -> Result<(), AppError> {
+        self.store
+            .provider::<User>()
+            .upsert(&User::from(item))
+            .await
+            .map_err(|e| e.into())
+    }
+
     pub async fn delete_by_id(&self, id: &str) -> Result<(), AppError> {
         self.store
             .provider::<Project>()

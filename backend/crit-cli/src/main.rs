@@ -268,6 +268,7 @@ async fn handle_apply_f(file: Option<PathBuf>) {
     let result = handle_apply(apply::ApplyArgs {
         file: file,
         url: auth_config.url,
+        jwt: auth_config.jwt_token
     })
     .await;
     match result {
