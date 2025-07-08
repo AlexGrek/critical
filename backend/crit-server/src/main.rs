@@ -1,20 +1,18 @@
 use axum::{
+    Router,
     http::StatusCode,
     middleware::from_fn_with_state,
     response::IntoResponse,
     routing::{get, post},
-    Router,
 };
 use chrono::Utc;
 use crit_shared::entities::User;
-use exlogging::{configure_log_event, log_event, LogLevel, LoggerConfig};
-use gitops_lib::store::{config::StoreConfig, GenericDatabaseProvider, Store};
-use log::{info};
+use exlogging::{LogLevel, LoggerConfig, configure_log_event, log_event};
+use gitops_lib::store::{GenericDatabaseProvider, Store, config::StoreConfig};
+use log::info;
 use tokio::fs;
 
-use crate::{
-    auth::Auth, errors::AppError, middleware::jwt_auth_middleware, state::AppState
-};
+use crate::{auth::Auth, errors::AppError, middleware::jwt_auth_middleware, state::AppState};
 use dotenv::dotenv;
 use std::{collections::HashMap, env, path::PathBuf, sync::Arc};
 use tower_http::{services::ServeDir, trace::TraceLayer};
@@ -28,11 +26,15 @@ mod exlogging;
 mod middleware;
 mod models;
 mod state;
-mod utils;
 mod test;
+mod utils;
 
 async fn create_default_user(state: &AppState) -> Result<(), anyhow::Error> {
-    let root = state.store.provider::<User>().try_get_by_key("root").await?;
+    let root = state
+        .store
+        .provider::<User>()
+        .try_get_by_key("root")
+        .await?;
     match root {
         Some(_) => {
             info!("User root already exists, skipping creation");
@@ -75,7 +77,6 @@ async fn main() -> tokio::io::Result<()> {
 
     let store = Store::new(store_config);
 
-
     let config = LoggerConfig { log_file_path };
     configure_log_event(config).await.unwrap();
 
@@ -84,7 +85,7 @@ async fn main() -> tokio::io::Result<()> {
     check_admin_file(&admin_file_path);
 
     info!("Initializing database at: {}", database_url);
- 
+
     let auth = Auth::new(jwt_secret.as_bytes());
 
     let shared_state = Arc::new(AppState {
@@ -92,13 +93,13 @@ async fn main() -> tokio::io::Result<()> {
         auth,
         data_dir_path: PathBuf::from(data_dir_path),
         admin_file_path: PathBuf::from(admin_file_path),
-        store: Arc::new(store)
+        store: Arc::new(store),
     });
 
     let failure_in_default_user_creation = create_default_user(&shared_state).await;
     match failure_in_default_user_creation {
         Err(e) => log_event(LogLevel::Error, e.to_string(), None::<&str>),
-        _ => ()
+        _ => (),
     }
 
     // Define a fallback handler for API routes that don't match
@@ -119,8 +120,18 @@ async fn main() -> tokio::io::Result<()> {
             jwt_auth_middleware,
         ))
         .nest(
+            "/ops",
+            Router::new().route(
+                "/create",
+                post(api::v1::adm::user_managements_endpoints::issue_invite),
+            ),
+        )
+        .nest(
             "/adm",
-            Router::new().route("/issue_invite", post(api::v1::adm::user_managements_endpoints::issue_invite)),
+            Router::new().route(
+                "/issue_invite",
+                post(api::v1::adm::user_managements_endpoints::issue_invite),
+            ),
         )
         .layer(from_fn_with_state(
             shared_state.clone(),
