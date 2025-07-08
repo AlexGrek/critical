@@ -14,7 +14,8 @@ use axum::{
 use crit_shared::{
     KindOnly,
     entities::{
-        ProjectGitopsSerializable, ProjectGitopsUpdate, UserGitopsSerializable, UserGitopsUpdate,
+        Invite, ProjectGitopsSerializable, ProjectGitopsUpdate, UserGitopsSerializable,
+        UserGitopsUpdate,
     },
     requests::Ns,
 };
@@ -121,6 +122,18 @@ pub async fn handle_list(
     if kind_cap == "Project" {
         let manager = ProjectManager::new(app_state.store.clone(), &user);
         return Ok(manager.list_as_response().await?.into_response());
+    }
+    if kind_cap == "Invite" {
+        if !user.has_admin_status {
+            return Err(AppError::AdminCheckFailed);
+        }
+        let all = app_state
+            .store
+            .provider::<Invite>()
+            .list()
+            .await
+            .map_err(|e| AppError::from(e))?;
+        return Ok(Json(all).into_response());
     }
     return Err(AppError::InvalidData(format!(
         "Unknown kind: '{}'",

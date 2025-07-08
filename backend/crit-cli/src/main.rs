@@ -1,6 +1,5 @@
 use clap::{Arg, ArgMatches, ColorChoice, Command, ValueEnum};
 use console::style;
-use crit_shared::entities::{Project, User};
 use crit_shared::requests::{LoginRequest, LoginResponse};
 use dialoguer::{Input, Password};
 use reqwest::Client;
