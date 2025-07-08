@@ -1,20 +1,26 @@
-use crate::{errors::AppError, middleware::AuthenticatedUser, models::managers::UserManager, state::AppState};
+use crate::{
+    errors::AppError,
+    middleware::AuthenticatedUser,
+    models::managers::{ProjectManager, UserManager},
+    state::AppState,
+};
 use axum::{
-    body::{to_bytes, Body},
-    extract::{Json, Path, State},
+    body::{Body, to_bytes},
+    extract::{Json, Path, Query, State},
     http::{Request, StatusCode},
     response::IntoResponse,
 };
 use crit_shared::{
     KindOnly,
     entities::{ProjectGitopsUpdate, UserGitopsUpdate},
+    requests::Ns,
 };
 use gitops_lib::store::GenericDatabaseProvider;
 use std::sync::Arc;
 
 pub async fn handle_create(
     AuthenticatedUser(_user): AuthenticatedUser,
-    State(_app_state): State<Arc<AppState>>,
+    State(app_state): State<Arc<AppState>>,
     req: Request<Body>,
 ) -> Result<impl IntoResponse, AppError> {
     let body = to_bytes(req.into_body(), 10000000).await;
@@ -35,7 +41,7 @@ pub async fn handle_create(
     // Dispatch based on kind
     let result: Result<(), AppError> = match kind.as_str() {
         "user" => serde_json::from_slice::<UserGitopsUpdate>(&bytes)
-            .map(|_| ())
+            .map(|item| UserManager::new(app_state.store.clone()).create(item))
             .map_err(|e| e.into()),
         "project" => serde_json::from_slice::<ProjectGitopsUpdate>(&bytes)
             .map(|_| ())
@@ -47,16 +53,18 @@ pub async fn handle_create(
 }
 
 pub async fn handle_list(
-    AuthenticatedUser(_user): AuthenticatedUser,
+    AuthenticatedUser(user): AuthenticatedUser,
     State(app_state): State<Arc<AppState>>,
     Path(kind): Path<String>,
+    Query(namespace): Query<Ns>,
 ) -> Result<impl IntoResponse, AppError> {
-    match kind.as_str() {
-        "user" => {
-            let manager = UserManager::new(app_state.store.clone());
-            return manager.list_as_response().await;
-        }
-        k => return Err(AppError::InvalidData(format!("Unknown kind: '{}'", k)))
+    if kind == "user" {
+        let manager = UserManager::new(app_state.store.clone());
+        return Ok(manager.list_as_response().await?.into_response());
     }
+    if kind == "project" {
+        let manager = ProjectManager::new(app_state.store.clone(), &user);
+        return Ok(manager.list_as_response().await?.into_response());
+    }
+    return Err(AppError::InvalidData(format!("Unknown kind: '{}'", kind)));
 }
-

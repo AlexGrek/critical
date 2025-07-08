@@ -17,6 +17,11 @@ pub struct RegisterRequest {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct Ns {
+    pub ns: Option<String>
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
     pub token: String,
 }
