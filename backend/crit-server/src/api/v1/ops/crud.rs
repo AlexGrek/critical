@@ -3,6 +3,7 @@ use crate::{
     middleware::AuthenticatedUser,
     models::managers::{ProjectManager, UserManager},
     state::AppState,
+    utils::capitalize_first,
 };
 use axum::{
     body::{Body, to_bytes},
@@ -12,14 +13,16 @@ use axum::{
 };
 use crit_shared::{
     KindOnly,
-    entities::{ProjectGitopsUpdate, UserGitopsUpdate},
+    entities::{
+        ProjectGitopsSerializable, ProjectGitopsUpdate, UserGitopsSerializable, UserGitopsUpdate,
+    },
     requests::Ns,
 };
 use gitops_lib::store::GenericDatabaseProvider;
 use std::sync::Arc;
 
 pub async fn handle_create(
-    AuthenticatedUser(_user): AuthenticatedUser,
+    AuthenticatedUser(user): AuthenticatedUser,
     State(app_state): State<Arc<AppState>>,
     req: Request<Body>,
 ) -> Result<impl IntoResponse, AppError> {
@@ -38,14 +41,23 @@ pub async fn handle_create(
         }
     };
 
-    // Dispatch based on kind
-    let result: Result<(), AppError> = match kind.as_str() {
-        "user" => serde_json::from_slice::<UserGitopsUpdate>(&bytes)
-            .map(|item| UserManager::new(app_state.store.clone()).create(item))
-            .map_err(|e| e.into()),
-        "project" => serde_json::from_slice::<ProjectGitopsUpdate>(&bytes)
-            .map(|_| ())
-            .map_err(|e| e.into()),
+    let result: Result<(), AppError> = match capitalize_first(&kind).as_str() {
+        "User" => {
+            if !user.has_admin_status {
+                // only admin can create users
+                return Err(AppError::AdminCheckFailed);
+            }
+            let item =
+                serde_json::from_slice::<UserGitopsSerializable>(&bytes).map_err(AppError::from)?;
+            UserManager::new(app_state.store.clone()).create(item).await
+        }
+        "Project" => {
+            let item = serde_json::from_slice::<ProjectGitopsSerializable>(&bytes)
+                .map_err(AppError::from)?;
+            ProjectManager::new(app_state.store.clone(), &user)
+                .create(item)
+                .await
+        }
         kind => Err(AppError::InvalidData(format!("Unknown kind: '{}'", kind))),
     };
 
@@ -58,13 +70,17 @@ pub async fn handle_list(
     Path(kind): Path<String>,
     Query(namespace): Query<Ns>,
 ) -> Result<impl IntoResponse, AppError> {
-    if kind == "user" {
+    let kind_cap = capitalize_first(&kind);
+    if kind_cap == "user" {
         let manager = UserManager::new(app_state.store.clone());
         return Ok(manager.list_as_response().await?.into_response());
     }
-    if kind == "project" {
+    if kind_cap == "project" {
         let manager = ProjectManager::new(app_state.store.clone(), &user);
         return Ok(manager.list_as_response().await?.into_response());
     }
-    return Err(AppError::InvalidData(format!("Unknown kind: '{}'", kind)));
+    return Err(AppError::InvalidData(format!(
+        "Unknown kind: '{}'",
+        kind_cap
+    )));
 }

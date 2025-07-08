@@ -1,0 +1,18 @@
+kind: Project
+apiVersion: 1
+name_id: "project-123"
+public_name: "My Awesome Project"
+owner_uid: "user-abc123"
+admins_uid:
+  - "user-abc123"
+  - "user-def456"
+visibility:
+  public_visible: true
+  public_can_report: false
+  public_can_see_tickets: false
+links:
+  github: "https://github.com/myorg/my-awesome-project"
+issue_categories:
+  - "bug"
+  - "feature"
+  - "documentation"

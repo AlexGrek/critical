@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
 use axum::Json;
-use crit_shared::entities::{Project, ProjectGitopsSerializable, User, UserGitopsSerializable};
+use crit_shared::entities::{
+    Project, ProjectGitopsSerializable, User, UserGitopsSerializable, UserGitopsUpdate,
+};
 use gitops_lib::store::{GenericDatabaseProvider, Store};
 
 // use crate::models::entities::{User, UserGitopsUpdate};
 use anyhow::Result;
-use syn::token::Use;
 
 use crate::errors::AppError;
 
@@ -27,9 +28,25 @@ impl UserManager {
             .map_err(|e| e.into())
     }
 
+    pub async fn create(&self, item: UserGitopsSerializable) -> Result<(), AppError> {
+        self.store
+            .provider::<User>()
+            .insert(&User::from(item))
+            .await
+            .map_err(|e| e.into())
+    }
+
     pub async fn list_as_response(&self) -> Result<Json<Vec<UserGitopsSerializable>>, AppError> {
         let users = self.list().await?;
         Ok(Json(users.into_iter().map(|u| u.into()).collect()))
+    }
+
+    pub async fn delete_by_id(&self, id: &str) -> Result<(), AppError> {
+        self.store
+            .provider::<Project>()
+            .delete(id)
+            .await
+            .map_err(|e| e.into())
     }
 }
 
@@ -41,6 +58,42 @@ pub struct ProjectManager<'a> {
 impl<'a> ProjectManager<'a> {
     pub fn new(store: Arc<Store>, user: &'a User) -> Self {
         Self { store, user }
+    }
+
+    pub async fn create(&self, mut item: ProjectGitopsSerializable) -> Result<(), AppError> {
+        item.owner_uid = self.user.uid.clone();
+        item.admins_uid = if item.admins_uid.is_empty() {
+            vec![item.owner_uid.clone()]
+        } else {
+            item.admins_uid
+        };
+        self.store
+            .provider::<Project>()
+            .insert(&Project::from(item))
+            .await
+            .map_err(|e| e.into())
+    }
+
+    pub async fn upsert(&self, mut item: ProjectGitopsSerializable) -> Result<(), AppError> {
+        item.owner_uid = self.user.uid.clone();
+        item.admins_uid = if item.admins_uid.is_empty() {
+            vec![item.owner_uid.clone()]
+        } else {
+            item.admins_uid
+        };
+        self.store
+            .provider::<Project>()
+            .upsert(&Project::from(item))
+            .await
+            .map_err(|e| e.into())
+    }
+
+    pub async fn delete_by_id(&self, id: &str) -> Result<(), AppError> {
+        self.store
+            .provider::<Project>()
+            .delete(id)
+            .await
+            .map_err(|e| e.into())
     }
 
     pub async fn is_project_visible_to_user(&self, proj: &Project) -> Result<bool, AppError> {
