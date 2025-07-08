@@ -1,0 +1,12 @@
+[package]
+name = "crit-shared"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+serde_yaml = { workspace = true }
+tokio = { workspace = true }
+
+gitops_lib = { path = "../gitops_lib" }
+serde = "1.0.219"
+chrono = "0.4.41"

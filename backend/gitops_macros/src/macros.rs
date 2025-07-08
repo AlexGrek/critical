@@ -485,7 +485,7 @@ pub fn gitops_resource_root_derive_impl(
         }
     }
 
-    let gen = quote! {
+    let r#gen = quote! {
         // Automatically derive Clone for the original struct
         // IMPORTANT: The original struct definition is NOT re-emitted here.
         // It is provided by the user's code. Only the impl blocks are generated.
@@ -575,7 +575,7 @@ pub fn gitops_resource_root_derive_impl(
             #(#serializable_fields)*
         }
     };
-    Ok(gen.into())
+    Ok(r#gen.into())
 }
 
 /// Implements `GitopsResourcePart` for a struct.
@@ -850,7 +850,7 @@ pub fn gitops_resource_part_derive_impl(
         })
         .collect();
 
-    let gen = quote! {
+    let r#gen = quote! {
         // IMPORTANT: The original struct definition is NOT re-emitted here.
         // It is provided by the user's code. Only the impl blocks and generated structs are emitted.
         // The user must manually apply `#[derive(Clone, Debug, Serialize, Deserialize)]` and
@@ -891,7 +891,7 @@ pub fn gitops_resource_part_derive_impl(
             
         }
     };
-    Ok(gen.into())
+    Ok(r#gen.into())
 }
 
 pub fn gitops_enum_derive_impl(input: syn::DeriveInput) -> syn::Result<proc_macro2::TokenStream> {
@@ -912,7 +912,7 @@ pub fn gitops_enum_derive_impl(input: syn::DeriveInput) -> syn::Result<proc_macr
         }
     }
 
-    let gen = quote! {
+    let r#gen = quote! {
         // Implement GitopsResourcePart trait for the enum
         impl #impl_generics gitops_lib::GitopsResourcePart for #enum_name #ty_generics #where_clause {
             type UpdatePart = Self; // For enums, the update type is the enum itself
@@ -929,5 +929,5 @@ pub fn gitops_enum_derive_impl(input: syn::DeriveInput) -> syn::Result<proc_macr
         }
     };
 
-    Ok(gen.into())
+    Ok(r#gen.into())
 }

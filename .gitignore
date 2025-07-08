@@ -1,2 +1,3 @@
-.DS_store
-backens/test.log
+**/.DS_store
+**/target
+**/*.log

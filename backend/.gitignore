@@ -1,7 +1,2 @@
-/target
-Cargo.lock
-/data/sled_db
-/gitops_lib/target
-/gitops_macros/target
-/data
-/test_data
+data/
+target/
