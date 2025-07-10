@@ -120,19 +120,15 @@ async fn main() -> tokio::io::Result<()> {
             jwt_auth_middleware,
         ))
         .nest(
+            "/state",
+            Router::new().route("/describe/{kind}", get(api::v1::state::fetch::handle_describe)),
+        )
+        .nest(
             "/ops",
-            Router::new().route(
-                "/create",
-                post(api::v1::ops::crud::handle_create),
-            )
-            .route(
-                "/upsert",
-                post(api::v1::ops::crud::handle_upsert),
-            )
-            .route(
-                "/list/{kind}",
-                get(api::v1::ops::crud::handle_list),
-            ),
+            Router::new()
+                .route("/create", post(api::v1::ops::crud::handle_create))
+                .route("/upsert", post(api::v1::ops::crud::handle_upsert))
+                .route("/list/{kind}", get(api::v1::ops::crud::handle_list)),
         )
         .nest(
             "/adm",

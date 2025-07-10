@@ -37,19 +37,5 @@ pub fn create_user() -> User {
 }
 
 pub fn create_project() -> Project {
-    return Project {
-        name_id: "".to_string(),
-        public_name: "".to_string(),
-        owner_uid: "".to_string(),
-        admins_uid: vec![],
-        visibility: VisibilityConfig {
-            public_visible: true,
-            public_can_report: false,
-            public_can_see_tickets: vec![],
-        },
-        links: ProjectLinks {
-            github: "".to_string(),
-        },
-        issue_categories: vec![],
-    };
+    return Project::default()
 }

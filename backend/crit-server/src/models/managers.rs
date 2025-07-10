@@ -1,8 +1,12 @@
 use std::sync::Arc;
 
 use axum::Json;
-use crit_shared::entities::{
-    Project, ProjectGitopsSerializable, User, UserGitopsSerializable, UserGitopsUpdate,
+use crit_shared::state_entities::ProjectStateResponse;
+use crit_shared::{
+    entities::{
+        Project, ProjectGitopsSerializable, User, UserGitopsSerializable, UserGitopsUpdate,
+    },
+    state_entities::ProjectState,
 };
 use gitops_lib::store::{GenericDatabaseProvider, Store};
 
@@ -102,6 +106,18 @@ impl<'a> ProjectManager<'a> {
             .delete(id)
             .await
             .map_err(|e| e.into())
+    }
+
+    pub async fn describe(&self, id: &str) -> Result<ProjectStateResponse, AppError> {
+        self.store
+            .provider::<Project>()
+            .get_by_key(id)
+            .await
+            .map_err(|e| e.into())
+            .map(|item| ProjectStateResponse {
+                meta: item.into(),
+                state: ProjectState { total_tickets: 0 },
+            })
     }
 
     pub async fn is_project_visible_to_user(&self, proj: &Project) -> Result<bool, AppError> {
