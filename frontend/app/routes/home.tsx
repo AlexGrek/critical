@@ -17,7 +17,7 @@ export function meta({ }: Route.MetaArgs) {
 
 export default function Home() {
   return <>
-    <TopAppHeader LeftContent={<LogoCriticalAnimated/>} NavContent={<div/>} RightContent={<Button>right</Button>}>
+    <TopAppHeader LeftContent={<LogoCriticalAnimated />} NavContent={<div />} RightContent={<Link to="/auth">Log in</Link>}>
     </TopAppHeader>
     <ProjectContainer
       projectName="my-cool-project"
@@ -28,6 +28,7 @@ export default function Home() {
       <p>This is a demo paragraph in the dark content area.</p>
       <p>Scroll to see the parallax and shrink effects.</p>
       <Link to="/project">Go go</Link>
+      <Link to="/auth">Log in</Link>
       {/* Add more content to allow scrolling */}
       {Array.from({ length: 30 }, (_, i) => (
         <p key={i}>Content line {i + 1}</p>

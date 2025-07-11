@@ -1,6 +1,7 @@
-use crate::store::{GenericDatabaseProvider, OptimisticLockError, TransactionState};
+use crate::store::{
+    GenericDatabaseProvider, Result, StorageError, TransactionState,
+};
 use crate::GitopsResourceRoot;
-use anyhow::{anyhow, Result};
 use dashmap::DashMap;
 use serde::{de::DeserializeOwned, Serialize};
 use std::collections::VecDeque;
@@ -104,9 +105,11 @@ where
 
     async fn get_with_transaction_state(&self, key: &str) -> Result<(Option<T>, TransactionState)> {
         let path = self.get_resource_path(key);
+        let map_io_err = |e: io::Error| StorageError::StorageError { reason: e.to_string() };
+
         match fs::metadata(&path).await {
             Ok(meta) => {
-                let modified = meta.modified()?;
+                let modified = meta.modified().map_err(map_io_err)?;
                 // Check cache first
                 if let Some((cached_item, cached_modified)) = self.cache_get(key) {
                     if cached_modified == modified {
@@ -121,8 +124,12 @@ where
                 }
 
                 // Cache miss or stale, read from file
-                let content = fs::read_to_string(&path).await?;
-                let resource: T::Serializable = serde_yaml::from_str(&content)?;
+                let content = fs::read_to_string(&path).await.map_err(map_io_err)?;
+                let resource: T::Serializable = serde_yaml::from_str(&content).map_err(|e| {
+                    StorageError::ReadItemFailure {
+                        reason: e.to_string(),
+                    }
+                })?;
                 let item = T::from(resource);
 
                 self.cache_insert(key.to_string(), item.clone(), modified);
@@ -145,7 +152,7 @@ where
                     },
                 ))
             }
-            Err(e) => Err(e.into()),
+            Err(e) => Err(map_io_err(e)),
         }
     }
 
@@ -156,36 +163,45 @@ where
     ) -> Result<()> {
         let (path, expected_modified_time) = match state {
             TransactionState::File { path, modified } => (path, modified),
-            _ => return Err(anyhow!("Invalid transaction state for filesystem DB")),
+            _ => return Err(StorageError::StorageError {
+                reason: "Invalid transaction state for filesystem DB".to_string()
+            }),
         };
+
+        let map_io_err = |e: io::Error| StorageError::StorageError { reason: e.to_string() };
 
         if let Some(modified) = expected_modified_time {
             if path.exists() {
-                let current_meta = fs::metadata(&path).await?;
-                if current_meta.modified()? != *modified {
-                    return Err(OptimisticLockError.into());
+                let current_meta = fs::metadata(&path).await.map_err(map_io_err)?;
+                if current_meta.modified().map_err(map_io_err)? != *modified {
+                    return Err(StorageError::OptimisticLock);
                 }
             } else {
-                return Err(OptimisticLockError.into());
+                return Err(StorageError::OptimisticLock);
             }
         }
 
         match new_item {
             Some(item) => {
                 let serializable_item = item.as_serializable();
-                let yaml_content = serde_yaml::to_string(&serializable_item)?;
-                let parent_dir = path.parent().ok_or_else(|| {
-                    anyhow!("Failed to get parent directory for path: {:?}", path)
+                let yaml_content = serde_yaml::to_string(&serializable_item).map_err(|e| {
+                    StorageError::WriteItemFailure {
+                        reason: e.to_string(),
+                    }
                 })?;
-                fs::create_dir_all(parent_dir).await?;
-                fs::write(&path, yaml_content).await?;
+                let parent_dir = path.parent().ok_or_else(|| StorageError::StorageError {
+                    reason: format!("Failed to get parent directory for path: {:?}", path),
+                })?;
+
+                fs::create_dir_all(parent_dir).await.map_err(map_io_err)?;
+                fs::write(&path, yaml_content).await.map_err(map_io_err)?;
             }
             None => {
                 if expected_modified_time.is_some() {
                     match fs::remove_file(&path).await {
                         Ok(_) => {}
                         Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-                        Err(e) => return Err(e.into()),
+                        Err(e) => return Err(map_io_err(e)),
                     }
                 }
             }
@@ -216,14 +232,21 @@ where
         if !dir_path.exists() {
             return Ok(keys);
         }
+        
+        let map_io_err = |e: io::Error| StorageError::StorageError { reason: e.to_string() };
+        let mut entries = fs::read_dir(&dir_path).await.map_err(map_io_err)?;
 
-        let mut entries = fs::read_dir(&dir_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
+        while let Some(entry) = entries.next_entry().await.map_err(map_io_err)? {
             let path = entry.path();
             if path.is_file() && path.extension().map_or(false, |ext| ext == "yaml") {
                 if let Some(stem) = path.file_stem() {
                     if let Some(key_str) = stem.to_str() {
-                        keys.push(urlencoding::decode(key_str)?.into_owned());
+                        let decoded_key = urlencoding::decode(key_str).map_err(|e| {
+                            StorageError::ItemKeyError {
+                                reason: e.to_string(),
+                            }
+                        })?;
+                        keys.push(decoded_key.into_owned());
                     }
                 }
             }
@@ -232,18 +255,18 @@ where
     }
 
     async fn get_by_key(&self, key: &str) -> Result<T> {
-        println!("Fetching item {}", key);
         self.try_get_by_key(key)
             .await?
-            .ok_or_else(|| anyhow!("Resource with key '{}' not found", key))
+            .ok_or_else(|| StorageError::ItemNotFound {
+                key: key.to_string(),
+                kind: T::kind().to_string(),
+            })
     }
 
     async fn try_get_by_key(&self, key: &str) -> Result<Option<T>> {
-        println!("Fetching item (try) {}", key);
-        self.get_with_transaction_state(key).await.map(|(item, _)| {
-            println!("Got an item: {:?}", item);
-            item
-        })
+        self.get_with_transaction_state(key)
+            .await
+            .map(|(item, _)| item)
     }
 
     async fn delete(&self, key: &str) -> Result<()> {
@@ -258,7 +281,10 @@ where
         let (existing, tx_state) = self.get_with_transaction_state(&key).await?;
 
         if existing.is_some() {
-            return Err(anyhow!("Resource with key '{}' already exists", key));
+            return Err(StorageError::Duplicate {
+                key,
+                kind: T::kind().to_string(),
+            });
         }
 
         self.write_with_transaction_state(Some(item), &tx_state)
@@ -320,10 +346,9 @@ where
 
     fn get_ns_path(&self, ns: &str) -> PathBuf {
         self.get_type_path()
-            .join(T::kind())
             .join(urlencoding::encode(ns).as_ref())
     }
-
+    
     fn get_type_path(&self) -> PathBuf {
         self.base_path.join(T::kind())
     }
@@ -364,21 +389,30 @@ where
     async fn upsert(&self, ns: &str, item: &T) -> Result<()> {
         let ns_path = self.get_ns_path(ns);
         if !ns_path.exists() {
-            fs::create_dir_all(&ns_path).await?;
+            fs::create_dir_all(&ns_path)
+                .await
+                .map_err(|e| StorageError::StorageError { reason: e.to_string() })?;
         }
         self.provider_for_namespace(ns).upsert(item).await
     }
 
     async fn list_namespaces(&self) -> Result<Vec<String>> {
         let mut namespaces = Vec::new();
-        if !self.base_path.exists() {
+        let type_path = self.get_type_path();
+        if !type_path.exists() {
             return Ok(namespaces);
         }
-        let mut entries = fs::read_dir(&self.base_path).await?;
-        while let Some(entry) = entries.next_entry().await? {
-            if entry.file_type().await?.is_dir() {
+        let map_io_err = |e: io::Error| StorageError::StorageError { reason: e.to_string() };
+        let mut entries = fs::read_dir(&type_path).await.map_err(map_io_err)?;
+        while let Some(entry) = entries.next_entry().await.map_err(map_io_err)? {
+            if entry.file_type().await.map_err(map_io_err)?.is_dir() {
                 if let Some(name) = entry.file_name().to_str() {
-                    namespaces.push(urlencoding::decode(name)?.into_owned());
+                    let decoded_ns = urlencoding::decode(name).map_err(|e| {
+                        StorageError::ItemKeyError {
+                            reason: format!("Invalid namespace name format: {}", e),
+                        }
+                    })?;
+                    namespaces.push(decoded_ns.into_owned());
                 }
             }
         }
@@ -388,26 +422,30 @@ where
     async fn create_namespace(&self, ns: &str) -> Result<()> {
         fs::create_dir_all(self.get_ns_path(ns))
             .await
-            .map_err(Into::into)
+            .map_err(|e| StorageError::StorageError { reason: e.to_string() })
     }
 
     async fn delete_namespace(&self, ns: &str, force: bool) -> Result<()> {
         let ns_path = self.get_ns_path(ns);
         if !ns_path.exists() {
-            return Ok(());
+            return Ok(()); // Deleting a non-existent namespace is not an error.
         }
+        
+        let map_io_err = |e: io::Error| StorageError::StorageError { reason: e.to_string() };
 
         if !force {
-            let mut entries = fs::read_dir(&ns_path).await?;
-            if entries.next_entry().await?.is_some() {
-                return Err(anyhow!(
-                    "Cannot delete non-empty namespace '{}' without 'force=true'",
-                    ns
-                ));
+            let mut entries = fs::read_dir(&ns_path).await.map_err(map_io_err)?;
+            if entries.next_entry().await.map_err(map_io_err)?.is_some() {
+                return Err(StorageError::StorageError {
+                    reason: format!(
+                        "Cannot delete non-empty namespace '{}' without 'force=true'",
+                        ns
+                    ),
+                });
             }
         }
 
-        fs::remove_dir_all(&ns_path).await.map_err(Into::into)
+        fs::remove_dir_all(&ns_path).await.map_err(map_io_err)
     }
 }
 
