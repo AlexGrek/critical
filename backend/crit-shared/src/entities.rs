@@ -3,6 +3,15 @@ use gitops_lib::{GitopsEnum, GitopsResourcePart, GitopsResourceRoot};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+#[derive(GitopsResourceRoot, Debug, Serialize, Deserialize, Clone, Default)]
+#[gitops(key = "uid")]
+pub struct UserPublicData {
+    pub uid: String,
+    pub email: String,
+    pub annotations: HashMap<String, String>,
+    pub has_admin_status: bool,
+}
+
 #[derive(GitopsResourceRoot, Debug, Serialize, Deserialize, Clone)]
 #[gitops(key = "uid")]
 pub struct User {
@@ -13,6 +22,12 @@ pub struct User {
     pub created_at: String,
     pub annotations: HashMap<String, String>,
     pub has_admin_status: bool,
+}
+
+impl User {
+    pub fn to_public_data(&self) -> UserPublicData {
+        return UserPublicData { uid: self.uid.clone(), email: self.email.clone(), annotations: self.annotations.clone(), has_admin_status: self.has_admin_status }
+    }
 }
 
 impl Default for User {
@@ -137,6 +152,39 @@ impl Default for Invite {
             used: false,
         }
     }
+}
+
+#[derive(GitopsResourcePart, Debug, Serialize, Deserialize, Clone, Default)]
+
+pub struct AttachmentHandle {
+    pub a_type: String,
+    pub is_image: bool,
+    pub id: String
+}
+
+#[derive(GitopsResourceRoot, Debug, Serialize, Deserialize, Clone, Default)]
+#[gitops(key = "uid")]
+pub struct Ticket {
+    pub uid: String,
+    pub assignee: Vec<String>,
+    pub reporter: String,
+    pub subscribers: Vec<String>,
+    pub epic: Option<String>,
+    pub sprint: Option<String>,
+    pub closed: bool,
+    pub status: String,
+
+    // info
+    pub name: String,
+    pub descr: String,
+    pub attachments: Vec<AttachmentHandle>,
+
+    // relationships
+    pub duplicate_of: Option<String>,
+    pub blocked_by: Option<String>,
+    pub parent: Option<String>,
+    pub children: Vec<String>,
+    pub is_draft: bool
 }
 
 #[derive(GitopsEnum, Serialize, Deserialize, Clone, Debug, PartialEq)]

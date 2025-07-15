@@ -48,7 +48,7 @@ const Button = ({ children }: { children: React.ReactNode }) => (
   </motion.button>
 );
 
-const authFetch = async (url: string, data: any) => {
+const postLogin = async (url: string, data: any) => {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -74,9 +74,9 @@ export default function AuthPage() {
       password: form.password.value,
     };
     try {
-      const res = await authFetch("/api/v1/login", data);
-      localStorage.setItem("token", res.token);
-      navigate("/dashboard"); // or navigate('/dashboard')
+      const res = await postLogin("/api/v1/login", data);
+      localStorage.setItem("authToken", res.token);
+      navigate("/dashboard");
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {
@@ -104,9 +104,8 @@ export default function AuthPage() {
       invite_key: form.invite_key.value,
     };
     try {
-      const res = await authFetch("/api/v1/register", data);
-      localStorage.setItem("token", res.token);
-      navigate("/dashboard");
+      const _res = await postLogin("/api/v1/register", data);
+      navigate("/auth");
     } catch (err: any) {
       setError(err.message || "Registration failed");
     } finally {
@@ -128,17 +127,15 @@ export default function AuthPage() {
           <TabsList className="flex mb-6 text-sm">
             <TabsTrigger
               value="login"
-              className={`flex-1 text-center py-2 px-4 text-white ${
-                tab === "login" ? "bg-red-600 text-black" : "bg-transparent"
-              }`}
+              className={`flex-1 text-center py-2 px-4 text-white ${tab === "login" ? "bg-red-600 text-black" : "bg-transparent"
+                }`}
             >
               Login
             </TabsTrigger>
             <TabsTrigger
               value="register"
-              className={`flex-1 text-center py-2 px-4 text-white ${
-                tab === "register" ? "bg-red-600 text-black" : "bg-transparent"
-              }`}
+              className={`flex-1 text-center py-2 px-4 text-white ${tab === "register" ? "bg-red-600 text-black" : "bg-transparent"
+                }`}
             >
               Register
             </TabsTrigger>

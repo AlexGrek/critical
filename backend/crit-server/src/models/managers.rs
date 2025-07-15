@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
 use axum::Json;
-use crit_shared::state_entities::ProjectStateResponse;
+use crit_shared::state_entities::{ProjectStateResponse, UserDashboard};
 use crit_shared::{
     entities::{
-        Project, ProjectGitopsSerializable, User, UserGitopsSerializable, UserGitopsUpdate,
+        Project, ProjectGitopsSerializable, User, UserGitopsSerializable,
     },
     state_entities::ProjectState,
 };
@@ -14,6 +14,21 @@ use gitops_lib::store::{GenericDatabaseProvider, Store};
 use anyhow::Result;
 
 use crate::errors::AppError;
+
+pub struct SpecificUserManager<'a> {
+    store: Arc<Store>,
+    user: &'a User,
+}
+
+impl<'a> SpecificUserManager<'a> {
+    pub fn new(store: Arc<Store>, user: &'a User) -> Self {
+        Self { store, user }
+    }
+
+    pub async fn gen_dashboard(&self) -> UserDashboard {
+        return UserDashboard::default();
+    }
+}
 
 pub struct UserManager {
     store: Arc<Store>,

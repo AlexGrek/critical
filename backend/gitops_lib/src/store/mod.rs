@@ -13,6 +13,9 @@ use std::sync::Arc;
 use std::time::SystemTime;
 pub mod config;
 pub mod filesystem;
+pub mod qstorage;
+pub mod qstorage_persy;
+pub mod qstorage_sled;
 use config::{BackendConfig, StoreConfig};
 
 /// A specialized Result type for storage operations.

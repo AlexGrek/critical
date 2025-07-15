@@ -8,7 +8,9 @@ use axum::{
 use chrono::Utc;
 use crit_shared::entities::User;
 use exlogging::{LogLevel, LoggerConfig, configure_log_event, log_event};
-use gitops_lib::store::{GenericDatabaseProvider, Store, config::StoreConfig};
+use gitops_lib::store::{
+    GenericDatabaseProvider, Store, config::StoreConfig, qstorage::KvStorage, qstorage_sled,
+};
 use log::info;
 use tokio::fs;
 
@@ -65,6 +67,7 @@ async fn main() -> tokio::io::Result<()> {
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("debug"));
 
     let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| "data/sled_db".to_string());
+    let database_index_url = env::var("INDEX_DB").unwrap_or_else(|_| "data/index_db".to_string());
     let jwt_secret = env::var("JWT_SECRET").unwrap_or_else(|_| "supersecretjwtkey".to_string());
     let admin_file_path = env::var("ADMIN_FILE_PATH").unwrap_or_else(|_| "admins.txt".to_string());
     let log_file_path = env::var("LOG_FILE_PATH").unwrap_or_else(|_| "application.log".to_string());
@@ -88,12 +91,24 @@ async fn main() -> tokio::io::Result<()> {
 
     let auth = Auth::new(jwt_secret.as_bytes());
 
+    let mut index = qstorage_sled::SledKv::new(database_index_url.clone()).unwrap_or_else(|e| {
+        log_event(LogLevel::Error, e.to_string(), None::<&str>);
+        panic!(
+            "Failed to create or open index db: {}, url: {}",
+            e.to_string(),
+            database_index_url
+        )
+    });
+
+    db::initialize_index(&mut index);
+
     let shared_state = Arc::new(AppState {
         // db: app_db,
         auth,
         data_dir_path: PathBuf::from(data_dir_path),
         admin_file_path: PathBuf::from(admin_file_path),
         store: Arc::new(store),
+        index: Arc::new(index),
     });
 
     let failure_in_default_user_creation = create_default_user(&shared_state).await;
@@ -121,7 +136,17 @@ async fn main() -> tokio::io::Result<()> {
         ))
         .nest(
             "/state",
-            Router::new().route("/describe/{kind}", get(api::v1::state::fetch::handle_describe)),
+            Router::new().route(
+                "/describe/{kind}",
+                get(api::v1::state::fetch::handle_describe),
+            ),
+        )
+        .nest(
+            "/personal",
+            Router::new().route(
+                "/dashboard",
+                get(api::v1::dashboard::user_dashboard::handle_user_dashboard),
+            ),
         )
         .nest(
             "/ops",
