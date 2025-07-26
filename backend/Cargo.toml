@@ -1,11 +1,11 @@
 [workspace]
 members = [
     "crit-cli",
-    "crit-server", 
     "gitops_lib",
     "gitops_macros",
-    "crit-shared"
-]
+    "crit-shared",
+    "critsrv"
+, "crit_resource_macro", "crit-res", "shared"]
 
 resolver = "3"
 

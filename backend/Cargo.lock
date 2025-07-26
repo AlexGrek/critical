@@ -466,7 +466,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "crit-server"
+name = "crit-res"
+version = "0.1.0"
+dependencies = [
+ "crit_resource_macro",
+ "serde",
+]
+
+[[package]]
+name = "crit-shared"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "gitops_lib",
+ "serde",
+ "serde_yaml",
+ "tokio",
+]
+
+[[package]]
+name = "crit_resource_macro"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.104",
+]
+
+[[package]]
+name = "critsrv"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -501,17 +529,6 @@ dependencies = [
  "tower",
  "tower-http 0.5.2",
  "uuid",
-]
-
-[[package]]
-name = "crit-shared"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "gitops_lib",
- "serde",
- "serde_yaml",
- "tokio",
 ]
 
 [[package]]
@@ -2139,6 +2156,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6"
 dependencies = [
  "lazy_static",
+]
+
+[[package]]
+name = "shared"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
