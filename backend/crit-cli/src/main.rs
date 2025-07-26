@@ -10,10 +10,12 @@ use tokio;
 use crate::apply::handle_apply;
 use crate::auth::{AuthConfig, get_auth_file_path, load_auth_config, save_auth_config};
 use crate::cli::format_cli_output;
+use crate::template::handle_template;
 
 pub mod apply;
 pub mod auth;
 pub mod cli;
+pub mod template;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const APP_NAME: &str = "crit";
@@ -83,6 +85,16 @@ async fn main() {
                 ),
         )
         .subcommand(
+            Command::new("template")
+                .about("Template for creating a specific resource")
+                .arg(
+                    Arg::new("resource")
+                        .help("Resource type (user, project)")
+                        .required(true)
+                        .index(1),
+                ),
+        )
+        .subcommand(
             Command::new("delete")
                 .about("Delete a resource")
                 .arg(
@@ -113,6 +125,10 @@ async fn main() {
         Some(("logout", _)) => handle_logout().await,
         Some(("status", _)) => handle_status().await,
         Some(("get", sub_matches)) => handle_get(sub_matches, output_format).await,
+        Some(("template", sub_matches)) => {
+            let _ = handle_template(sub_matches).await;
+            ()
+        }
         Some(("describe", sub_matches)) => handle_describe(sub_matches, output_format).await,
         Some(("delete", sub_matches)) => handle_delete(sub_matches, output_format).await,
         _ => {
@@ -267,7 +283,7 @@ async fn handle_apply_f(file: Option<PathBuf>) {
     let result = handle_apply(apply::ApplyArgs {
         file: file,
         url: auth_config.url,
-        jwt: auth_config.jwt_token
+        jwt: auth_config.jwt_token,
     })
     .await;
     match result {

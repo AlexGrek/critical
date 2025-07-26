@@ -1,12 +1,14 @@
 import Button from "./Button";
 import Input from "./Input";
-import LogoCritical from "./LogoCritical";
+import LogoCritical, { LogoCriticalAnimated } from "./LogoCritical";
 import { Modal } from "./Modal";
+import TopPanel from "./TopPanel";
 import { CodeBlock, Paragraph } from "./typography";
 
 const UiGallery = () => {
     return (
         <div className="bg-black text-white min-h-screen p-10 font-sans">
+            <TopPanel/>
             <h1 className="text-4xl font-bold font-mono mb-8">Component Gallery</h1>
 
             {/* Logo */}
@@ -16,6 +18,7 @@ const UiGallery = () => {
                     <LogoCritical size="sm" />
                     <LogoCritical size="md" />
                     <LogoCritical size="lg" />
+                    <LogoCriticalAnimated/>
                 </div>
             </div>
 

@@ -8,9 +8,11 @@ use crate::exlogging;
 
 #[derive(Error, Debug)]
 pub enum AppError {
+    #[error("Storage error: {0}")]
+    GitopsStorageError(#[from] gitops_lib::store::StorageError),
     #[error("Serialization/Deserialization error")]
     SerdeError(#[from] serde_json::Error),
-    #[error("Any server error error")]
+    #[error("Any server error {0}")]
     AnyhowError(#[from] anyhow::Error),
     #[error("DB Error: {0}")]
     DatabaseError(String),
@@ -62,6 +64,19 @@ struct ErrorResponse {
 impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let status_code = match &self {
+            AppError::GitopsStorageError(storage_err) => {
+                use gitops_lib::store::StorageError;
+                match storage_err {
+                    StorageError::ItemNotFound { .. } | StorageError::NamespaceNotFound { .. } => {
+                        StatusCode::NOT_FOUND
+                    }
+                    StorageError::Duplicate { .. } | StorageError::OptimisticLock => {
+                        StatusCode::CONFLICT
+                    }
+                    StorageError::ItemKeyError { .. } => StatusCode::BAD_REQUEST,
+                    _ => StatusCode::INTERNAL_SERVER_ERROR, // Catches other internal storage errors
+                }
+            }
             AppError::Unauthorized => StatusCode::UNAUTHORIZED,
             AppError::Forbidden => StatusCode::FORBIDDEN,
             AppError::LicenseExpired => StatusCode::FORBIDDEN,

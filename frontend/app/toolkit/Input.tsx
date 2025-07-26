@@ -1,7 +1,4 @@
 import React, { useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { cva, type VariantProps } from 'class-variance-authority';
-import { X } from 'lucide-react';
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   monospace?: boolean;

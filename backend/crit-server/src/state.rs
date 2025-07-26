@@ -1,4 +1,4 @@
-use gitops_lib::store::Store;
+use gitops_lib::store::{qstorage::KvStorage, Store};
 
 use crate::{auth::Auth};
 use std::{path::PathBuf, sync::Arc};
@@ -9,4 +9,5 @@ pub struct AppState {
     pub admin_file_path: PathBuf,
     pub data_dir_path: PathBuf,
     pub store: Arc<Store>,
+    pub index: Arc<dyn KvStorage>
 }

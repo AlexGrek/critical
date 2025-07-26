@@ -22,6 +22,12 @@ pub struct Ns {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct IdNs {
+    pub ns: Option<String>,
+    pub id: String
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoginResponse {
     pub token: String,
 }
