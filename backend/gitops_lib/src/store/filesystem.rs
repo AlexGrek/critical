@@ -103,7 +103,7 @@ where
         self.base_path.join(T::kind())
     }
 
-    async fn get_with_transaction_state(&self, key: &str) -> Result<(Option<T>, TransactionState)> {
+    async fn get_with_transaction_state(&self, key: &str) -> Result<(Option<(u, T)>, TransactionState)> {
         let path = self.get_resource_path(key);
         let map_io_err = |e: io::Error| StorageError::StorageError { reason: e.to_string() };
 
@@ -214,7 +214,7 @@ impl<T> GenericDatabaseProvider<T> for FilesystemDatabaseProvider<T>
 where
     T: GitopsResourceRoot + Serialize + DeserializeOwned + Clone,
 {
-    async fn list(&self) -> Result<Vec<T>> {
+    async fn list(&self) -> Result<Vec<(i64, T)>> {
         let keys = self.list_keys().await?;
         let mut resources = Vec::with_capacity(keys.len());
         for key in keys {
@@ -263,7 +263,7 @@ where
             })
     }
 
-    async fn try_get_by_key(&self, key: &str) -> Result<Option<T>> {
+    async fn try_get_by_key(&self, key: &str) -> Result<Option<(T, i64)>> {
         self.get_with_transaction_state(key)
             .await
             .map(|(item, _)| item)

@@ -3,40 +3,98 @@ use std::sync::Arc;
 use axum::Json;
 use crit_shared::state_entities::{ProjectStateResponse, UserDashboard};
 use crit_shared::{
-    entities::{
-        Project, ProjectGitopsSerializable, User, UserGitopsSerializable,
-    },
+    entities::{Project, ProjectGitopsSerializable, User, UserGitopsSerializable},
     state_entities::ProjectState,
 };
-use gitops_lib::store::{GenericDatabaseProvider, Store};
+use gitops_lib::store::qstorage::KvStorage;
+use gitops_lib::store::{GenericDatabaseProvider, StorageError, Store};
 
 // use crate::models::entities::{User, UserGitopsUpdate};
 use anyhow::Result;
+use gitops_lib::GitopsResourceRoot;
 
+use crate::db::index_view::IndexView;
+use crate::db::indexable_consts::USER_TO_PROJECTS;
 use crate::errors::AppError;
+use crate::state::AppState;
+
+pub trait DataManager<T: GitopsResourceRoot> {
+    async fn fetch(&self, key: &str) -> Result<T, StorageError>;
+
+    async fn try_fetch(&self, key: &str) -> Result<Option<T>, StorageError> {
+        let result = self.fetch(key).await;
+        match result {
+            Err(StorageError::ItemNotFound { .. }) => Ok(None),
+            Ok(val) => Ok(Some(val)),
+            Err(e) => Err(e),
+        }
+    }
+
+    async fn try_fetch_all<'a>(&self, keys: Vec<&'a str>) -> Result<Vec<T>, StorageError> {
+        let mut items = Vec::with_capacity(keys.len());
+        for key in keys {
+            let result = self.try_fetch(key).await?;
+            if let Some(item) = result {
+                items.push(item);
+            }
+        }
+        Ok(items)
+    }
+
+    async fn try_fetch_all_owned<'a>(&self, keys: Vec<String>) -> Result<Vec<T>, StorageError> {
+        let mut items = Vec::with_capacity(keys.len());
+        for key in keys {
+            let result = self.try_fetch(&key).await?;
+            if let Some(item) = result {
+                items.push(item);
+            }
+        }
+        Ok(items)
+    }
+}
 
 pub struct SpecificUserManager<'a> {
     store: Arc<Store>,
+    index: Arc<dyn KvStorage>,
     user: &'a User,
 }
 
 impl<'a> SpecificUserManager<'a> {
-    pub fn new(store: Arc<Store>, user: &'a User) -> Self {
-        Self { store, user }
+    pub fn new(store: Arc<Store>, index: Arc<dyn KvStorage>, user: &'a User) -> Self {
+        Self { store, user, index }
     }
 
-    pub async fn gen_dashboard(&self) -> UserDashboard {
-        return UserDashboard::default();
+    pub async fn get_referenced_projects(&self) -> Result<Vec<Project>, StorageError> {
+        let projects =
+            IndexView::new(self.index.clone(), USER_TO_PROJECTS).get_all(&self.user.uid)?;
+        let pm = ProjectManager::new(self.store.clone(), self.index.clone(), self.user);
+        return pm.try_fetch_all_owned(projects).await;
+    }
+
+    pub async fn gen_dashboard(&self) -> Result<UserDashboard, AppError> {
+        let mut dashboard = UserDashboard::default();
+        dashboard.recent_and_owned_projects = self
+            .get_referenced_projects()
+            .await?
+            .into_iter()
+            .map(|p| p.into_serializable())
+            .collect();
+
+        Ok(dashboard)
     }
 }
 
 pub struct UserManager {
     store: Arc<Store>,
+    index: Arc<dyn KvStorage>,
 }
 
 impl UserManager {
-    pub fn new(store: Arc<Store>) -> Self {
-        Self { store }
+    pub fn from_app_state(state: &AppState) -> Self {
+        Self {
+            index: state.index.clone(),
+            store: state.store.clone(),
+        }
     }
 
     pub async fn list(&self) -> Result<Vec<User>, AppError> {
@@ -80,11 +138,20 @@ impl UserManager {
 pub struct ProjectManager<'a> {
     store: Arc<Store>,
     user: &'a User,
+    index: Arc<dyn KvStorage>,
 }
 
 impl<'a> ProjectManager<'a> {
-    pub fn new(store: Arc<Store>, user: &'a User) -> Self {
-        Self { store, user }
+    pub fn from_app_state(state: &AppState, user: &'a User) -> Self {
+        Self {
+            index: state.index.clone(),
+            store: state.store.clone(),
+            user,
+        }
+    }
+
+    pub fn new(store: Arc<Store>, index: Arc<dyn KvStorage>, user: &'a User) -> Self {
+        Self { store, user, index }
     }
 
     pub async fn create(&self, mut item: ProjectGitopsSerializable) -> Result<(), AppError> {
@@ -94,6 +161,11 @@ impl<'a> ProjectManager<'a> {
         } else {
             item.admins_uid
         };
+        let user_to_projects_mapping = IndexView::new(self.index.clone(), USER_TO_PROJECTS);
+        for user in item.admins_uid.iter() {
+            user_to_projects_mapping.append_unique(user, &item.name_id)?;
+        }
+        user_to_projects_mapping.append_unique(&item.owner_uid, &item.name_id);
         self.store
             .provider::<Project>()
             .insert(&Project::from(item))
@@ -167,5 +239,17 @@ impl<'a> ProjectManager<'a> {
     pub async fn list_as_response(&self) -> Result<Json<Vec<ProjectGitopsSerializable>>, AppError> {
         let users = self.list().await?;
         Ok(Json(users.into_iter().map(|u| u.into()).collect()))
+    }
+}
+
+impl<'a> DataManager<Project> for ProjectManager<'a> {
+    async fn fetch(&self, key: &str) -> Result<Project, StorageError> {
+        self.store.provider::<Project>().get_by_key(key).await
+    }
+}
+
+impl DataManager<User> for UserManager {
+    async fn fetch(&self, key: &str) -> Result<User, StorageError> {
+        self.store.provider::<User>().get_by_key(key).await
     }
 }

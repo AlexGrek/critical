@@ -492,9 +492,13 @@ pub fn gitops_resource_root_derive_impl(
 
         impl #impl_generics From<#struct_name #ty_generics> for #serializable_struct_name #ty_generics #where_clause {
             fn from(resource: #struct_name #ty_generics) -> Self {
+                let my_datetime: ::chrono::DateTime<::chrono::Utc> = ::chrono::Utc::now();
+                let timestamp_secs: i64 = my_datetime.timestamp();
+                // generate default timestamp: now
                 Self {
                     kind: #kind_value.to_string(),
                     api_version: #api_version.to_string(),
+                    mod_timestamp: timestamp_secs,
                     #(#from_resource_initializers)*
                 }
             }
@@ -522,18 +526,40 @@ pub fn gitops_resource_root_derive_impl(
             type Update = #update_struct_name #ty_generics;
 
             fn as_serializable(&self) -> Self::Serializable {
+                let now = ::chrono::Utc::now();
                 Self::Serializable {
                     kind: #kind_value.to_string(),
                     api_version: #api_version.to_string(),
+                    mod_timestamp: now.timestamp(),
                     #(#as_serializable_fields)*
                 }
             }
 
             fn into_serializable(self) -> Self::Serializable {
+                let now = ::chrono::Utc::now();
                 Self::Serializable {
                     kind: #kind_value.to_string(),
                     api_version: #api_version.to_string(),
+                    mod_timestamp: now.timestamp(),
                     #(#into_serializable_fields)*
+                }
+            }
+
+            fn into_serializable_with_timestamp(self, timestamp: i64) -> Self::Serializable {
+                Self::Serializable {
+                    kind: #kind_value.to_string(),
+                    api_version: #api_version.to_string(),
+                    mod_timestamp: timestamp,
+                    #(#into_serializable_fields)*
+                }
+            }
+
+            fn as_serializable_with_timestamp(&self, timestamp: i64) -> Self::Serializable {
+                Self::Serializable {
+                    kind: #kind_value.to_string(),
+                    api_version: #api_version.to_string(),
+                    mod_timestamp: timestamp,
+                    #(#as_serializable_fields)*
                 }
             }
 
@@ -572,6 +598,7 @@ pub fn gitops_resource_root_derive_impl(
             pub kind: String,
             #[serde(rename = "apiVersion")]
             pub api_version: String,
+            pub mod_timestamp: i64,
             #(#serializable_fields)*
         }
     };
@@ -888,7 +915,7 @@ pub fn gitops_resource_part_derive_impl(
         // Add a helper method for deep merging nested GitopsResourcePart fields.
         // This is called by the root's `with_updates_from` for nested parts.
         impl #impl_generics #struct_name #ty_generics #where_clause {
-            
+
         }
     };
     Ok(r#gen.into())
@@ -899,7 +926,10 @@ pub fn gitops_enum_derive_impl(input: syn::DeriveInput) -> syn::Result<proc_macr
     let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
     let Data::Enum(data_enum) = &input.data else {
-        return Err(syn::Error::new_spanned(input.ident, "GitopsEnum can only be derived for enums."));
+        return Err(syn::Error::new_spanned(
+            input.ident,
+            "GitopsEnum can only be derived for enums.",
+        ));
     };
 
     // Validate that all variants are unit variants (no associated data)
@@ -907,7 +937,7 @@ pub fn gitops_enum_derive_impl(input: syn::DeriveInput) -> syn::Result<proc_macr
         if !variant.fields.is_empty() {
             return Err(syn::Error::new_spanned(
                 &variant.fields,
-                "GitopsEnum only supports simple enums without associated values (unit variants)."
+                "GitopsEnum only supports simple enums without associated values (unit variants).",
             ));
         }
     }

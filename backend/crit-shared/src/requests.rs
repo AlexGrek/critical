@@ -24,7 +24,8 @@ pub struct Ns {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IdNs {
     pub ns: Option<String>,
-    pub id: String
+    pub id: String,
+    limit: Option<isize>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

@@ -30,11 +30,11 @@ pub async fn handle_list(
 ) -> Result<impl IntoResponse, AppError> {
     let kind_cap = capitalize_first(&kind);
     if kind_cap == "User" {
-        let manager = UserManager::new(app_state.store.clone());
+        let manager = UserManager::from_app_state(&app_state);
         return Ok(manager.list_as_response().await?.into_response());
     }
     if kind_cap == "Project" {
-        let manager = ProjectManager::new(app_state.store.clone(), &user);
+        let manager = ProjectManager::from_app_state(&app_state, &user);
         return Ok(manager.list_as_response().await?.into_response());
     }
     if kind_cap == "Invite" {
@@ -63,11 +63,11 @@ pub async fn handle_describe(
 ) -> Result<impl IntoResponse, AppError> {
     let kind_cap = capitalize_first(&kind);
     if kind_cap == "User" {
-        let manager = UserManager::new(app_state.store.clone());
+        let manager = UserManager::from_app_state(&app_state);
         return Ok(manager.list_as_response().await?.into_response());
     }
     if kind_cap == "Project" {
-        let manager = ProjectManager::new(app_state.store.clone(), &user);
+        let manager = ProjectManager::from_app_state(&app_state, &user);
         return Ok(Json(manager.describe(&q.id).await?).into_response());
     }
     if kind_cap == "Invite" {
@@ -77,7 +77,7 @@ pub async fn handle_describe(
         let all = app_state
             .store
             .provider::<Invite>()
-            .list()
+            .get_by_key(&q.id)
             .await
             .map_err(|e| AppError::from(e))?;
         return Ok(Json(all).into_response());

@@ -1,35 +1,38 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    sync::{Arc},
+};
 
 use gitops_lib::store::{
     StorageError,
     qstorage::{KvStorage, StorageResult},
 };
 
-pub struct IndexView<'a, S: KvStorage> {
-    storage: &'a mut S,
-    store: &'a str,
+pub struct IndexView {
+    storage: Arc<dyn KvStorage>,
+    store: &'static str,
 }
 
-impl<'a, S: KvStorage> IndexView<'a, S> {
+impl IndexView {
     /// Creates a new `IndexView` bound to a specific store name.
     ///
     /// The caller is responsible for ensuring the store is initialized.
-    pub fn new(storage: &'a mut S, store: &'a str) -> Self {
+    pub fn new(storage: Arc<dyn KvStorage>, store:&'static str ) -> Self {
         Self { storage, store }
     }
 
-    /// A helper to get a list of items, returning an empty Vec if the key is not found.
+    /// Helper to get items, taking a locked storage guard to prevent re-locking.
     fn _get_or_empty(&self, key: &str) -> StorageResult<Vec<String>> {
-        match self.storage.get(self.store, key) {
+        match self.storage.get(&self.store, key) {
             Ok(items) => Ok(items),
-            Err(StorageError::ItemNotFound { .. }) => Ok(Vec::new()), // Treat not found as empty
-            Err(e) => Err(e),                                         // Propagate other errors
+            Err(StorageError::ItemNotFound { .. }) => Ok(Vec::new()),
+            Err(e) => Err(e),
         }
     }
 
     /// Appends a string to the list if it's not already present.
     #[must_use]
-    pub fn append_unique(&mut self, key: &str, item: &str) -> StorageResult<()> {
+    pub fn append_unique(&self, key: &str, item: &str) -> StorageResult<()> {
         let mut items = self._get_or_empty(key)?;
         if !items.iter().any(|i| i == item) {
             items.push(item.to_string());
@@ -40,7 +43,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Appends multiple strings from an iterator, skipping any that are already present.
     #[must_use]
-    pub fn append_unique_list<'i, I>(&mut self, key: &str, new_items: I) -> StorageResult<()>
+    pub fn append_unique_list<'i, I>(&self, key: &str, new_items: I) -> StorageResult<()>
     where
         I: IntoIterator<Item = &'i str>,
     {
@@ -61,7 +64,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Removes a specific string from the list. Does nothing if the item is not found.
     #[must_use]
-    pub fn remove(&mut self, key: &str, item_to_remove: &str) -> StorageResult<()> {
+    pub fn remove(&self, key: &str, item_to_remove: &str) -> StorageResult<()> {
         let mut items = self._get_or_empty(key)?;
         let original_len = items.len();
         items.retain(|i| i != item_to_remove);
@@ -74,7 +77,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Removes multiple strings from the list.
     #[must_use]
-    pub fn remove_list<'i, I>(&mut self, key: &str, items_to_remove: I) -> StorageResult<()>
+    pub fn remove_list<'i, I>(&self, key: &str, items_to_remove: I) -> StorageResult<()>
     where
         I: IntoIterator<Item = &'i str>,
     {
@@ -96,7 +99,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Removes an item, returning an `ItemNotFound` error if it wasn't present.
     #[must_use]
-    pub fn remove_or_fail(&mut self, key: &str, item_to_remove: &str) -> StorageResult<()> {
+    pub fn remove_or_fail(&self, key: &str, item_to_remove: &str) -> StorageResult<()> {
         let mut items = self.storage.get(self.store, key)?;
         let original_len = items.len();
 
@@ -159,7 +162,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Appends a list of items without checking for uniqueness.
     #[must_use]
-    pub fn append_copy_list<'i, I>(&mut self, key: &str, new_items: I) -> StorageResult<()>
+    pub fn append_copy_list<'i, I>(&self, key: &str, new_items: I) -> StorageResult<()>
     where
         I: IntoIterator<Item = &'i str>,
     {
@@ -176,7 +179,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Removes all items for a key and returns them. Returns an empty Vec if key was not present.
     #[must_use]
-    pub fn drain(&mut self, key: &str) -> StorageResult<Vec<String>> {
+    pub fn drain(&self, key: &str) -> StorageResult<Vec<String>> {
         let items = self._get_or_empty(key)?;
         if !items.is_empty() {
             self.storage.set(self.store, key, Vec::new())?;
@@ -217,7 +220,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Replaces the data for a key with new data, returning the old data.
     #[must_use]
-    pub fn swap(&mut self, key: &str, new_data: Vec<String>) -> StorageResult<Vec<String>> {
+    pub fn swap(&self, key: &str, new_data: Vec<String>) -> StorageResult<Vec<String>> {
         let old_data = self._get_or_empty(key)?;
         self.storage.set(self.store, key, new_data)?;
         Ok(old_data)
@@ -225,7 +228,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Calls `append_unique` for an item across multiple keys.
     #[must_use]
-    pub fn append_unique_to_all<'k, I>(&mut self, keys: I, item: &str) -> StorageResult<()>
+    pub fn append_unique_to_all<'k, I>(&self, keys: I, item: &str) -> StorageResult<()>
     where
         I: IntoIterator<Item = &'k str>,
     {
@@ -237,7 +240,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Calls `remove` for an item across multiple keys.
     #[must_use]
-    pub fn remove_from_all<'k, I>(&mut self, keys: I, item: &str) -> StorageResult<()>
+    pub fn remove_from_all<'k, I>(&self, keys: I, item: &str) -> StorageResult<()>
     where
         I: IntoIterator<Item = &'k str>,
     {
@@ -250,7 +253,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
     /// Calls `append_unique_list` for multiple items across multiple keys.
     #[must_use]
     pub fn append_unique_to_all_list<'k, 'i, K, I>(
-        &mut self,
+        &self,
         keys: K,
         items: I,
     ) -> StorageResult<()>
@@ -266,7 +269,7 @@ impl<'a, S: KvStorage> IndexView<'a, S> {
 
     /// Calls `remove_list` for multiple items across multiple keys.
     #[must_use]
-    pub fn remove_from_all_list<'k, 'i, K, I>(&mut self, keys: K, items: I) -> StorageResult<()>
+    pub fn remove_from_all_list<'k, 'i, K, I>(&self, keys: K, items: I) -> StorageResult<()>
     where
         K: IntoIterator<Item = &'k str>,
         I: IntoIterator<Item = &'i str> + Clone,

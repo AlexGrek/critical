@@ -11,6 +11,6 @@ pub async fn handle_user_dashboard(
     AuthenticatedUser(user): AuthenticatedUser,
     State(app_state): State<Arc<crate::state::AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
-    let manager = SpecificUserManager::new(app_state.store.clone(), &user);
-    return Ok(axum::Json(manager.gen_dashboard().await))
+    let manager = SpecificUserManager::new(app_state.store.clone(), app_state.index.clone(), &user);
+    return Ok(axum::Json(manager.gen_dashboard().await?))
 }

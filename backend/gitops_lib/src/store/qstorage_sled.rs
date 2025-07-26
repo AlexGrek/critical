@@ -47,7 +47,7 @@ impl SledKv {
 }
 
 impl KvStorage for SledKv {
-    fn initialize(&mut self, store: &str) -> StorageResult<()> {
+    fn initialize(&self, store: &str) -> StorageResult<()> {
         let tree = self
             .db
             .open_tree(store)
@@ -81,7 +81,7 @@ impl KvStorage for SledKv {
         Ok(parsed)
     }
 
-    fn set(&mut self, store: &str, key: &str, value: Vec<String>) -> StorageResult<()> {
+    fn set(&self, store: &str, key: &str, value: Vec<String>) -> StorageResult<()> {
         let tree = self.get_tree(store)?;
         let serialized =
             bincode::encode_to_vec(&value, bincode::config::standard()).map_err(|e| {

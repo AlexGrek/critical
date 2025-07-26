@@ -14,7 +14,6 @@ use std::time::SystemTime;
 pub mod config;
 pub mod filesystem;
 pub mod qstorage;
-pub mod qstorage_persy;
 pub mod qstorage_sled;
 use config::{BackendConfig, StoreConfig};
 
@@ -67,7 +66,7 @@ impl<T> GenericDatabaseProvider<T> for AnyProvider<T>
 where
     T: GitopsResourceRoot + Serialize + DeserializeOwned,
 {
-    async fn list(&self) -> Result<Vec<T>> {
+    async fn list(&self) -> Result<Vec<(T, i64)>> {
         match self {
             AnyProvider::Filesystem(p) => p.list().await,
         }

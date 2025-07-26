@@ -31,9 +31,9 @@ pub struct TicketStateResponse {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserDashboard {
-    recent_and_owned_projects: Vec<ProjectGitopsSerializable>,
-    recent_tickets: Vec<TicketGitopsSerializable>,
-    me: UserPublicDataGitopsSerializable,
+    pub recent_and_owned_projects: Vec<ProjectGitopsSerializable>,
+    pub recent_tickets: Vec<TicketGitopsSerializable>,
+    pub me: UserPublicDataGitopsSerializable,
 }
 
 impl Default for UserDashboard {

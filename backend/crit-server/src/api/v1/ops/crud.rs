@@ -50,12 +50,12 @@ pub async fn handle_create(
             }
             let item =
                 serde_json::from_slice::<UserGitopsSerializable>(&bytes).map_err(AppError::from)?;
-            UserManager::new(app_state.store.clone()).create(item).await
+            UserManager::from_app_state(&app_state).create(item).await
         }
         "Project" => {
             let item = serde_json::from_slice::<ProjectGitopsSerializable>(&bytes)
                 .map_err(AppError::from)?;
-            ProjectManager::new(app_state.store.clone(), &user)
+            ProjectManager::from_app_state(&app_state, &user)
                 .create(item)
                 .await
         }
@@ -93,12 +93,12 @@ pub async fn handle_upsert(
             }
             let item =
                 serde_json::from_slice::<UserGitopsSerializable>(&bytes).map_err(AppError::from)?;
-            UserManager::new(app_state.store.clone()).upsert(item).await
+            UserManager::from_app_state(&app_state).upsert(item).await
         }
         "Project" => {
             let item = serde_json::from_slice::<ProjectGitopsSerializable>(&bytes)
                 .map_err(AppError::from)?;
-            ProjectManager::new(app_state.store.clone(), &user)
+            ProjectManager::from_app_state(&app_state, &user)
                 .upsert(item)
                 .await
         }
@@ -116,11 +116,11 @@ pub async fn handle_list(
 ) -> Result<impl IntoResponse, AppError> {
     let kind_cap = capitalize_first(&kind);
     if kind_cap == "User" {
-        let manager = UserManager::new(app_state.store.clone());
+        let manager = UserManager::from_app_state(&app_state);
         return Ok(manager.list_as_response().await?.into_response());
     }
     if kind_cap == "Project" {
-        let manager = ProjectManager::new(app_state.store.clone(), &user);
+        let manager = ProjectManager::from_app_state(&app_state, &user);
         return Ok(manager.list_as_response().await?.into_response());
     }
     if kind_cap == "Invite" {
