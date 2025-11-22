@@ -1,8 +1,0 @@
-[package]
-name = "crit-res"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-crit_resource_macro = { path = "../crit_resource_macro" }
-serde = { version = "1", features = ["derive"] }

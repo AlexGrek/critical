@@ -1,4 +1,3 @@
-# Detect container runtime (podman preferred, fallback to docker)
 CONTAINER ?= $(shell (command -v podman >/dev/null 2>&1 && echo podman) || echo docker)
 COMPOSE ?= $(shell (command -v podman-compose >/dev/null 2>&1 && echo podman-compose) || echo docker compose)
 
@@ -20,3 +19,15 @@ reset-db:
 logs-db:
 	@echo ">>> Tailing ArangoDB logs"
 	$(COMPOSE) logs -f arangodb
+
+.PHONY: itests
+
+itests:
+	@if [ ! -d ".venv" ]; then \
+		python3 -m venv .venv; \
+	fi
+	@. .venv/bin/activate && \
+		pip install --upgrade pip && \
+		pip install requests pytest && \
+		pip install websockets && \
+		pytest itests/tests
