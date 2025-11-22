@@ -10,6 +10,7 @@ pub mod state;
 pub mod test;
 pub mod utils;
 pub mod validation;
+pub mod services;
 
 use std::sync::Arc;
 
@@ -88,6 +89,7 @@ pub fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::Error>
         config,
         auth,
         Arc::new(InMemoryDatabase::new()),
+        None
     ))
 }
 
@@ -128,6 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         config.clone(),
         auth,
         database.unwrap_or(Arc::new(InMemoryDatabase::new())),
+        None
     );
     let shared_state = Arc::new(app_state);
 

@@ -29,3 +29,7 @@ utoipa-axum = "0.2.0"
 utoipa_auto_discovery = "0.3.0"
 utoipauto = "0.2.0"
 bitflags = { version = "2.10.0", features = ["serde", "std"] }
+reqwest = "0.12.24"
+tokio-tungstenite = "0.28.0"
+futures-util = "0.3.31"
+url = "2.5.7"
