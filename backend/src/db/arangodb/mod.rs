@@ -8,6 +8,7 @@ use arangors::transaction::{
     Transaction as ArangoInnerTx, TransactionCollections, TransactionSettings,
 };
 use async_trait::async_trait;
+use log::Log;
 use serde_json::json;
 
 use crate::db::*;
@@ -102,22 +103,45 @@ impl ArangoDb {
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        // obtain database handle
-        let db = conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?;
+        // obtain database handle\
+        let db = match conn.db(db_name).await {
+            Ok(db) => db,
+            Err(_) => {
+                println!("Creating database...");
+                conn.create_database(db_name)
+                    .await
+                    .map_err(|e| anyhow!(e.to_string()))?;
+                conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?
+            }
+        };
 
-        // obtain collections (ensure these collections exist beforehand)
-        let users = db
-            .collection("users")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        let groups = db
-            .collection("groups")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        let memberships = db
-            .collection("memberships")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        // obtain or create collections
+        // Create users collection if it doesn't exist
+        let users = match db.collection("users").await {
+            Ok(collection) => collection,
+            Err(_) => db
+                .create_collection("users")
+                .await
+                .map_err(|e| anyhow!(e.to_string()))?,
+        };
+
+        // Create groups collection if it doesn't exist
+        let groups = match db.collection("groups").await {
+            Ok(collection) => collection,
+            Err(_) => db
+                .create_collection("groups")
+                .await
+                .map_err(|e| anyhow!(e.to_string()))?,
+        };
+
+        // Create memberships edge collection if it doesn't exist
+        let memberships = match db.collection("memberships").await {
+            Ok(collection) => collection,
+            Err(_) => db
+                .create_edge_collection("memberships")
+                .await
+                .map_err(|e| anyhow!(e.to_string()))?,
+        };
 
         Ok(Self {
             conn,
@@ -316,7 +340,7 @@ impl DatabaseInterface for ArangoDb {
         let query = r#"
             FOR m IN memberships
                 FILTER m.group == @group
-                FILTER LIKE(m.principal, "u:%")
+                FILTER LIKE(m.principal, "u_%")
                 RETURN m.principal
         "#;
 
@@ -374,14 +398,28 @@ impl DatabaseInterface for ArangoDb {
     }
 
     async fn get_user_by_id(&self, user_id: &str) -> Result<Option<User>> {
-        match self.users.document::<User>(user_id).await {
+        println!("Getting user {} by id", user_id);
+        let id = if user_id.starts_with("_") {
+            user_id
+        } else {
+            &format!("u_{}", user_id)
+        };
+        match self.users.document::<User>(id).await {
             Ok(doc) => Ok(Some(doc.document)),
             Err(arangors::ClientError::Arango(it)) => {
                 let error = it;
                 let message = error.message().to_string();
-                if error.code() == 1202 {
+                if error.code() == 404 {
+                    let all = self.get_users_list().await?;
+                    println!("All users: {:?}", all);
+                    println!("User not found, but that's OK");
                     return Ok(None);
                 }
+                println!(
+                    "Something went wrong, {} :: {}",
+                    error.code(),
+                    error.message()
+                );
                 Err(anyhow!(message))
             } // document not found
             Err(e) => Err(anyhow!(e.to_string())),

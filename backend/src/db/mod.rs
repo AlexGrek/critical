@@ -45,10 +45,10 @@ pub trait DatabaseInterface: Send + Sync {
     /// List groups
     async fn get_groups_list(&self) -> Result<Vec<Group>>;
 
-    /// Get direct user principals in group (returns principal ids like "u:alice")
+    /// Get direct user principals in group (returns principal ids like "u_alice")
     async fn get_users_in_group(&self, group_id: &str) -> Result<Vec<String>>;
 
-    /// Get direct group principals in group (returns principal ids like "g:admins")
+    /// Get direct group principals in group (returns principal ids like "g_admins")
     async fn get_groups_in_group(&self, group_id: &str) -> Result<Vec<String>>;
 
     /// Modify user by ID (replace the full User struct)

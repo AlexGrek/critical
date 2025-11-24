@@ -88,7 +88,7 @@ impl DatabaseInterface for InMemoryDb {
         if let Some(set) = memberships.get(group_id) {
             Ok(set
                 .iter()
-                .filter(|id| id.starts_with("u:"))
+                .filter(|id| id.starts_with("u_"))
                 .cloned()
                 .collect())
         } else {

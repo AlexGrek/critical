@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use crate::schema;
 use bitflags::bitflags;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
 
 pub type PrincipalId = String;
 
@@ -37,7 +37,7 @@ pub struct AccessControlStore {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct AccessControlList {
     pub permissions: Permissions,
-    pub principals: Vec<String>
+    pub principals: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -50,6 +50,7 @@ pub struct PersonalInfo {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct User {
+    #[serde(rename = "_key")]
     pub id: PrincipalId,
     pub password_hash: String,
     pub created_at: DateTime<Utc>,
@@ -65,7 +66,7 @@ impl From<crate::schema::User> for User {
         metadata.insert("registered_at".to_string(), Utc::now().to_rfc3339());
 
         Self {
-            id: src.username,
+            id: format!("u_{}", src.username),
             password_hash: src.password_hash,
             metadata,
             ..Self::default()
@@ -77,13 +78,13 @@ impl From<crate::schema::User> for User {
 pub struct Project {
     pub id: uuid::Uuid,
     pub acl: AccessControlStore,
-    pub tickets: Vec<TicketGroup>
+    pub tickets: Vec<TicketGroup>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TicketGroup {
     pub prefix: String,
-    pub acl: AccessControlStore
+    pub acl: AccessControlStore,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -92,8 +93,8 @@ pub struct Ticket {
     pub title: String,
     pub severity: (u8, String),
     pub description: String,
-    pub created_by: String, // only user
-    pub assigned_to: String, // can be group
+    pub created_by: String,     // only user
+    pub assigned_to: String,    // can be group
     pub mentioned: Vec<String>, // principals
     pub last_modification: DateTime<Utc>,
     pub creation_date: DateTime<Utc>,
@@ -101,6 +102,7 @@ pub struct Ticket {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Group {
+    #[serde(rename = "_key")]
     pub id: PrincipalId,
     pub name: String,
 }

@@ -64,7 +64,7 @@ def auth_token(test_user):
     payload = {"user": test_user["username"], "password": test_user["password"]}
 
     resp = requests.post(URL_LOGIN, json=payload, headers=headers)
-    assert resp.status_code == 200, f"Login failed: {resp.text}"
+    assert resp.status_code == 200
 
     data = resp.json()
     assert "token" in data, "No token in response"
