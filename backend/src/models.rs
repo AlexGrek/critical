@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use crate::schema;
 use bitflags::bitflags;
 
+pub type PrincipalId = String;
+
 bitflags! {
     // derive common traits for easier usage
     #[derive(Default, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -48,7 +50,7 @@ pub struct PersonalInfo {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct User {
-    pub username: String,
+    pub id: PrincipalId,
     pub password_hash: String,
     pub created_at: DateTime<Utc>,
     pub created_by: Option<String>, // user ID who created this user, if not self-registered
@@ -63,7 +65,7 @@ impl From<crate::schema::User> for User {
         metadata.insert("registered_at".to_string(), Utc::now().to_rfc3339());
 
         Self {
-            username: src.username,
+            id: src.username,
             password_hash: src.password_hash,
             metadata,
             ..Self::default()
@@ -99,7 +101,12 @@ pub struct Ticket {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Group {
-    pub gid: String,
+    pub id: PrincipalId,
     pub name: String,
-    pub principals: Vec<String>
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GroupMembership {
+    pub principal: PrincipalId,
+    pub group: PrincipalId,
 }

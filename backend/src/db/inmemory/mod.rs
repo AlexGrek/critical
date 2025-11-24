@@ -1,373 +1,127 @@
-// Example implementation structure for in-memory database
-use std::collections::HashMap;
-use std::sync::RwLock;
+use crate::db::*;
+use anyhow::Result;
+use async_trait::async_trait;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
-use crate::db::{BoxFuture, DatabaseInterface, GroupsRepo, ProjectsRepo, TicketsRepo, UsersRepo};
-use crate::error::AppError;
-use crate::models::Ticket;
-
-use crate::models::{Group, Project, User};
-
-pub struct InMemoryDatabase {
-    users_repo: InMemoryUsersRepo,
-    projects_repo: InMemoryProjectsRepo,
-    groups_repo: InMemoryGroupsRepo,
-    tickets_repo: InMemoryTicketsRepo,
+/// In-memory database structure.
+#[derive(Clone, Default)]
+pub struct InMemoryDb {
+    users: Arc<Mutex<HashMap<String, User>>>,
+    groups: Arc<Mutex<HashMap<String, Group>>>,
+    memberships: Arc<Mutex<HashMap<String, HashSet<String>>>>,
 }
 
-impl Default for InMemoryDatabase {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl InMemoryDatabase {
+impl InMemoryDb {
     pub fn new() -> Self {
         Self {
-            users_repo: InMemoryUsersRepo::new(),
-            projects_repo: InMemoryProjectsRepo::new(),
-            groups_repo: InMemoryGroupsRepo::new(),
-            tickets_repo: InMemoryTicketsRepo::new(),
+            users: Arc::new(Mutex::new(HashMap::new())),
+            groups: Arc::new(Mutex::new(HashMap::new())),
+            memberships: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
 
-impl DatabaseInterface for InMemoryDatabase {
-    fn users(&self) -> &dyn UsersRepo {
-        &self.users_repo
+/// Dummy transaction object that does nothing.
+pub struct DummyTx;
+
+#[async_trait]
+impl Transaction for DummyTx {
+    async fn commit(&mut self) -> Result<()> {
+        Ok(())
     }
 
-    fn projects(&self) -> &dyn ProjectsRepo {
-        &self.projects_repo
+    async fn abort(&mut self) -> Result<()> {
+        Ok(())
     }
 
-    fn groups(&self) -> &dyn GroupsRepo {
-        &self.groups_repo
-    }
-
-    fn tickets(&self) -> &dyn TicketsRepo {
-        &self.tickets_repo
-    }
-
-    fn begin_transaction<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            // No-op for in-memory implementation
-            Ok(())
-        })
-    }
-
-    fn commit_transaction<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            // No-op for in-memory implementation
-            Ok(())
-        })
-    }
-
-    fn rollback_transaction<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            // No-op for in-memory implementation
-            Ok(())
-        })
-    }
-
-    fn initialize(&self) -> BoxFuture<'_, Result<(), AppError>> {
-        // do nothing, succesfully
-        Box::pin(async move { Ok(()) })
+    fn as_any(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
-// In-memory Users Repository
-pub struct InMemoryUsersRepo {
-    users: RwLock<HashMap<String, User>>,
-}
-
-impl Default for InMemoryUsersRepo {
-    fn default() -> Self {
-        Self::new()
+#[async_trait]
+impl DatabaseInterface for InMemoryDb {
+    async fn begin_transaction(&self) -> Result<Option<BoxTransaction>> {
+        // In-memory DB does not support transactions
+        Ok(None)
     }
-}
 
-impl InMemoryUsersRepo {
-    pub fn new() -> Self {
-        Self {
-            users: RwLock::new(HashMap::new()),
-        }
+    async fn create_user(&self, user: User, _tx: Option<&mut BoxTransaction>) -> Result<()> {
+        let mut map = self.users.lock().unwrap();
+        map.insert(user.id.clone(), user);
+        Ok(())
     }
-}
 
-impl UsersRepo for InMemoryUsersRepo {
-    fn get_user<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<User, AppError>> {
-        Box::pin(async move {
-            let users = self.users.read().unwrap();
-            users
-                .get(id)
+    async fn create_group(&self, group: Group, _tx: Option<&mut BoxTransaction>) -> Result<()> {
+        let mut map = self.groups.lock().unwrap();
+        map.insert(group.id.clone(), group);
+        Ok(())
+    }
+
+    async fn add_principal_to_group(
+        &self,
+        principal_id: &str,
+        group_id: &str,
+        _tx: Option<&mut BoxTransaction>,
+    ) -> Result<()> {
+        let mut memberships = self.memberships.lock().unwrap();
+        let set = memberships
+            .entry(group_id.to_string())
+            .or_insert_with(HashSet::new);
+        set.insert(principal_id.to_string());
+        Ok(())
+    }
+
+    async fn get_users_list(&self) -> Result<Vec<User>> {
+        let map = self.users.lock().unwrap();
+        Ok(map.values().cloned().collect())
+    }
+
+    async fn get_groups_list(&self) -> Result<Vec<Group>> {
+        let map = self.groups.lock().unwrap();
+        Ok(map.values().cloned().collect())
+    }
+
+    async fn get_users_in_group(&self, group_id: &str) -> Result<Vec<String>> {
+        let memberships = self.memberships.lock().unwrap();
+        if let Some(set) = memberships.get(group_id) {
+            Ok(set
+                .iter()
+                .filter(|id| id.starts_with("u:"))
                 .cloned()
-                .ok_or_else(|| AppError::NotFound(format!("User {} not found", id)))
-        })
-    }
-
-    fn create_user<'a>(&'a self, user: User) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut users = self.users.write().unwrap();
-            let id = user.username.clone();
-            if users.contains_key(&id.to_string()) {
-                return Err(AppError::Conflict(format!("User {} already exists", id)));
-            }
-            users.insert(id.to_string(), user);
-            Ok(())
-        })
-    }
-
-    fn update_user<'a>(&'a self, id: &'a str, user: User) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut users = self.users.write().unwrap();
-            if !users.contains_key(id) {
-                return Err(AppError::NotFound(format!("User {} not found", id)));
-            }
-            users.insert(id.to_string(), user);
-            Ok(())
-        })
-    }
-
-    fn delete_user<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut users = self.users.write().unwrap();
-            users
-                .remove(id)
-                .ok_or_else(|| AppError::NotFound(format!("User {} not found", id)))?;
-            Ok(())
-        })
-    }
-
-    fn list_users<'a>(&'a self) -> BoxFuture<'a, Result<Vec<User>, AppError>> {
-        Box::pin(async move {
-            let users = self.users.read().unwrap();
-            Ok(users.values().cloned().collect())
-        })
-    }
-}
-
-// In-memory Projects Repository
-pub struct InMemoryProjectsRepo {
-    projects: RwLock<HashMap<String, Project>>,
-}
-
-impl Default for InMemoryProjectsRepo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl InMemoryProjectsRepo {
-    pub fn new() -> Self {
-        Self {
-            projects: RwLock::new(HashMap::new()),
+                .collect())
+        } else {
+            Ok(vec![])
         }
     }
-}
 
-impl ProjectsRepo for InMemoryProjectsRepo {
-    fn get_project<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Project, AppError>> {
-        Box::pin(async move {
-            let projects = self.projects.read().unwrap();
-            projects
-                .get(id)
+    async fn get_groups_in_group(&self, group_id: &str) -> Result<Vec<String>> {
+        let memberships = self.memberships.lock().unwrap();
+        if let Some(set) = memberships.get(group_id) {
+            Ok(set
+                .iter()
+                .filter(|id| id.starts_with("g:"))
                 .cloned()
-                .ok_or_else(|| AppError::NotFound(format!("Project {} not found", id)))
-        })
-    }
-
-    fn create_project<'a>(&'a self, project: Project) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut projects = self.projects.write().unwrap();
-            let id = project.id;
-            if projects.contains_key(&id.to_string()) {
-                return Err(AppError::Conflict(format!("Project {} already exists", id)));
-            }
-            projects.insert(id.to_string(), project);
-            Ok(())
-        })
-    }
-
-    fn update_project<'a>(
-        &'a self,
-        id: &'a str,
-        project: Project,
-    ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut projects = self.projects.write().unwrap();
-            if !projects.contains_key(id) {
-                return Err(AppError::NotFound(format!("Project {} not found", id)));
-            }
-            projects.insert(id.to_string(), project);
-            Ok(())
-        })
-    }
-
-    fn delete_project<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut projects = self.projects.write().unwrap();
-            projects
-                .remove(id)
-                .ok_or_else(|| AppError::NotFound(format!("Project {} not found", id)))?;
-            Ok(())
-        })
-    }
-
-    fn list_projects<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Project>, AppError>> {
-        Box::pin(async move {
-            let projects = self.projects.read().unwrap();
-            Ok(projects.values().cloned().collect())
-        })
-    }
-}
-
-// In-memory Groups Repository
-pub struct InMemoryGroupsRepo {
-    groups: RwLock<HashMap<String, Group>>,
-}
-
-impl Default for InMemoryGroupsRepo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl InMemoryGroupsRepo {
-    pub fn new() -> Self {
-        Self {
-            groups: RwLock::new(HashMap::new()),
+                .collect())
+        } else {
+            Ok(vec![])
         }
     }
-}
 
-impl GroupsRepo for InMemoryGroupsRepo {
-    fn get_group<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Group, AppError>> {
-        Box::pin(async move {
-            let groups = self.groups.read().unwrap();
-            groups
-                .get(id)
-                .cloned()
-                .ok_or_else(|| AppError::NotFound(format!("Group {} not found", id)))
-        })
+        async fn modify_user(&self, user: User, _tx: Option<&mut BoxTransaction>) -> Result<()> {
+        let mut map = self.users.lock().unwrap();
+        map.insert(user.id.clone(), user);
+        Ok(())
     }
 
-    fn create_group<'a>(&'a self, group: Group) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut groups = self.groups.write().unwrap();
-            let id = group.gid.to_string();
-            if groups.contains_key(&id) {
-                return Err(AppError::Conflict(format!("Group {} already exists", id)));
-            }
-            groups.insert(id.to_string(), group);
-            Ok(())
-        })
+    async fn get_user_by_id(&self, user_id: &str) -> Result<Option<User>> {
+        let map = self.users.lock().unwrap();
+        Ok(map.get(user_id).cloned())
     }
 
-    fn update_group<'a>(
-        &'a self,
-        id: &'a str,
-        group: Group,
-    ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut groups = self.groups.write().unwrap();
-            if !groups.contains_key(id) {
-                return Err(AppError::NotFound(format!("Group {} not found", id)));
-            }
-            groups.insert(id.to_string(), group);
-            Ok(())
-        })
-    }
-
-    fn delete_group<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut groups = self.groups.write().unwrap();
-            groups
-                .remove(id)
-                .ok_or_else(|| AppError::NotFound(format!("Group {} not found", id)))?;
-            Ok(())
-        })
-    }
-
-    fn list_groups<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Group>, AppError>> {
-        Box::pin(async move {
-            let groups = self.groups.read().unwrap();
-            Ok(groups.values().cloned().collect())
-        })
-    }
-}
-
-// In-memory Tickets Repository
-pub struct InMemoryTicketsRepo {
-    tickets: RwLock<HashMap<String, Ticket>>,
-}
-
-impl Default for InMemoryTicketsRepo {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl InMemoryTicketsRepo {
-    pub fn new() -> Self {
-        Self {
-            tickets: RwLock::new(HashMap::new()),
-        }
-    }
-}
-
-impl TicketsRepo for InMemoryTicketsRepo {
-    fn get_ticket<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Ticket, AppError>> {
-        Box::pin(async move {
-            let tickets = self.tickets.read().unwrap();
-            tickets
-                .get(id)
-                .cloned()
-                .ok_or_else(|| AppError::NotFound(format!("Ticket {} not found", id)))
-        })
-    }
-
-    fn create_ticket<'a>(&'a self, ticket: Ticket) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut tickets = self.tickets.write().unwrap();
-            let id = ticket.id;
-            if tickets.contains_key(&id.to_string()) {
-                return Err(AppError::Conflict(format!("Ticket {} already exists", id)));
-            }
-            tickets.insert(id.to_string(), ticket);
-            Ok(())
-        })
-    }
-
-    fn update_ticket<'a>(
-        &'a self,
-        id: &'a str,
-        ticket: Ticket,
-    ) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut tickets = self.tickets.write().unwrap();
-            if !tickets.contains_key(id) {
-                return Err(AppError::NotFound(format!("Ticket {} not found", id)));
-            }
-            tickets.insert(id.to_string(), ticket);
-            Ok(())
-        })
-    }
-
-    fn delete_ticket<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), AppError>> {
-        Box::pin(async move {
-            let mut tickets = self.tickets.write().unwrap();
-            tickets
-                .remove(id)
-                .ok_or_else(|| AppError::NotFound(format!("Ticket {} not found", id)))?;
-            Ok(())
-        })
-    }
-
-    fn list_tickets<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Ticket>, AppError>> {
-        Box::pin(async move {
-            let tickets = self.tickets.read().unwrap();
-            Ok(tickets.values().cloned().collect())
-        })
+    async fn get_group_by_id(&self, group_id: &str) -> Result<Option<Group>> {
+        let map = self.groups.lock().unwrap();
+        Ok(map.get(group_id).cloned())
     }
 }

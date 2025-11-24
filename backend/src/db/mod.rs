@@ -1,54 +1,62 @@
-pub mod inmemory;
+use std::any::Any;
+
+use crate::models::*;
+use anyhow::Result;
+use async_trait::async_trait;
+
 pub mod arangodb;
+pub mod inmemory;
 
-use crate::{error::AppError, models::{Group, Project, Ticket, User}, utils::BoxFuture};
-
-// Individual repository traits
-pub trait UsersRepo: Send + Sync {
-    fn get_user<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<User, AppError>>;
-    fn create_user<'a>(&'a self, user: User) -> BoxFuture<'a, Result<(), AppError>>;
-    fn update_user<'a>(&'a self, id: &'a str, user: User) -> BoxFuture<'a, Result<(), AppError>>;
-    fn delete_user<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), AppError>>;
-    fn list_users<'a>(&'a self) -> BoxFuture<'a, Result<Vec<User>, AppError>>;
+/// Transaction trait object: async commit/abort plus downcast helper.
+/// Implementors MUST implement `as_any` to allow downcasting.
+#[async_trait]
+pub trait Transaction: Send + Sync {
+    async fn commit(&mut self) -> Result<()>;
+    async fn abort(&mut self) -> Result<()>;
+    fn as_any(&mut self) -> &mut dyn Any;
 }
 
-pub trait ProjectsRepo: Send + Sync {
-    fn get_project<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Project, AppError>>;
-    fn create_project<'a>(&'a self, project: Project) -> BoxFuture<'a, Result<(), AppError>>;
-    fn update_project<'a>(&'a self, id: &'a str, project: Project) -> BoxFuture<'a, Result<(), AppError>>;
-    fn delete_project<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), AppError>>;
-    fn list_projects<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Project>, AppError>>;
-}
+pub type BoxTransaction = Box<dyn Transaction>;
 
-pub trait GroupsRepo: Send + Sync {
-    fn get_group<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Group, AppError>>;
-    fn create_group<'a>(&'a self, group: Group) -> BoxFuture<'a, Result<(), AppError>>;
-    fn update_group<'a>(&'a self, id: &'a str, group: Group) -> BoxFuture<'a, Result<(), AppError>>;
-    fn delete_group<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), AppError>>;
-    fn list_groups<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Group>, AppError>>;
-}
+// ------------ DATABASE INTERFACE ------------
 
-pub trait TicketsRepo: Send + Sync {
-    fn get_ticket<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<Ticket, AppError>>;
-    fn create_ticket<'a>(&'a self, ticket: Ticket) -> BoxFuture<'a, Result<(), AppError>>;
-    fn update_ticket<'a>(&'a self, id: &'a str, ticket: Ticket) -> BoxFuture<'a, Result<(), AppError>>;
-    fn delete_ticket<'a>(&'a self, id: &'a str) -> BoxFuture<'a, Result<(), AppError>>;
-    fn list_tickets<'a>(&'a self) -> BoxFuture<'a, Result<Vec<Ticket>, AppError>>;
-}
-
-// Main database interface that provides access to all repositories
+#[async_trait]
 pub trait DatabaseInterface: Send + Sync {
-    // Access to individual repositories
-    fn users(&self) -> &dyn UsersRepo;
-    fn projects(&self) -> &dyn ProjectsRepo;
-    fn groups(&self) -> &dyn GroupsRepo;
-    fn tickets(&self) -> &dyn TicketsRepo;
-    
-    // Transaction support (optional but recommended)
-    fn begin_transaction<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>>;
-    fn commit_transaction<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>>;
-    fn rollback_transaction<'a>(&'a self) -> BoxFuture<'a, Result<(), AppError>>;
+    /// Begin a server-side transaction. Return `None` if the backend doesn't support transactions.
+    async fn begin_transaction(&self) -> Result<Option<BoxTransaction>>;
 
-    // Initialization (called on app start, can do migrations, db creation)
-    fn initialize(&self) -> BoxFuture<'_, Result<(), AppError>>;
+    /// Create a user (optionally inside tx)
+    async fn create_user(&self, user: User, tx: Option<&mut BoxTransaction>) -> Result<()>;
+
+    /// Create a group (optionally inside tx)
+    async fn create_group(&self, group: Group, tx: Option<&mut BoxTransaction>) -> Result<()>;
+
+    /// Add principal (user or group) to group (optionally inside tx)
+    async fn add_principal_to_group(
+        &self,
+        principal_id: &str,
+        group_id: &str,
+        tx: Option<&mut BoxTransaction>,
+    ) -> Result<()>;
+
+    /// List users
+    async fn get_users_list(&self) -> Result<Vec<User>>;
+
+    /// List groups
+    async fn get_groups_list(&self) -> Result<Vec<Group>>;
+
+    /// Get direct user principals in group (returns principal ids like "u:alice")
+    async fn get_users_in_group(&self, group_id: &str) -> Result<Vec<String>>;
+
+    /// Get direct group principals in group (returns principal ids like "g:admins")
+    async fn get_groups_in_group(&self, group_id: &str) -> Result<Vec<String>>;
+
+    /// Modify user by ID (replace the full User struct)
+    async fn modify_user(&self, user: User, tx: Option<&mut BoxTransaction>) -> Result<()>;
+
+    /// Get user by ID
+    async fn get_user_by_id(&self, user_id: &str) -> Result<Option<User>>;
+
+    /// Get group by ID
+    async fn get_group_by_id(&self, group_id: &str) -> Result<Option<Group>>;
 }

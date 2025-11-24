@@ -6,21 +6,17 @@ pub mod error;
 pub mod middleware;
 pub mod models;
 pub mod schema;
+pub mod services;
 pub mod state;
 pub mod test;
 pub mod utils;
 pub mod validation;
-pub mod services;
 
 use std::sync::Arc;
 
 use crate::{
     api::v1::ws::ws_handler,
-    db::{
-        DatabaseInterface,
-        arangodb::{ArangoDatabase, connect_or_create_db_no_auth},
-        inmemory::InMemoryDatabase,
-    },
+    db::{DatabaseInterface, arangodb::ArangoDb, inmemory::InMemoryDb},
     middleware::auth::Auth,
     state::AppState,
 };
@@ -36,8 +32,6 @@ use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_swagger_ui::SwaggerUi;
 
-
-
 // Uncomment on build if you want swagger UI, currently enabling this makes IDE fail.
 // use utoipauto::utoipauto;
 // #[utoipauto]
@@ -48,10 +42,7 @@ struct ApiDoc;
 pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
     let mainrt = Router::new()
         // Health check and stats
-        .route(
-            "/register",
-            post(api::v1::authentication::login::register),
-        )
+        .route("/register", post(api::v1::authentication::login::register))
         .route("/login", post(api::v1::authentication::login::login))
         .nest(
             "/v1",
@@ -74,10 +65,7 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
         .nest("/api", mainrt.into())
         .route("/health", get(health_check))
         .split_for_parts();
-    let router = router.merge(
-        SwaggerUi::new("/swagger-ui")
-            .url("/api-docs/openapi.json", api),
-    );
+    let router = router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api));
 
     router.into_make_service()
 }
@@ -88,8 +76,8 @@ pub fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::Error>
     Ok(AppState::new(
         config,
         auth,
-        Arc::new(InMemoryDatabase::new()),
-        None
+        Arc::new(InMemoryDb::new()),
+        None,
     ))
 }
 
@@ -116,11 +104,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if config.database_connection_string.starts_with("http") {
         info!("Using ArangoDB as database backend");
-        let conn =
-            arangors::Connection::establish_without_auth(config.database_connection_string.clone())
+        let wrapper =
+            ArangoDb::connect_anon(&config.database_connection_string, &config.database_name)
                 .await?;
-        let db = connect_or_create_db_no_auth(&conn, &config.database_name).await?;
-        let wrapper = ArangoDatabase::new(db);
         database = Some(Arc::new(wrapper));
     }
 
@@ -129,15 +115,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = AppState::new(
         config.clone(),
         auth,
-        database.unwrap_or(Arc::new(InMemoryDatabase::new())),
-        None
+        database.unwrap_or(Arc::new(InMemoryDb::new())),
+        None,
     );
     let shared_state = Arc::new(app_state);
-
-    // Init the database
-    info!("  Database initialization...");
-    shared_state.db.initialize().await?;
-    info!("  Database initialization complete");
 
     // Build the application router
     let app = create_app(shared_state);

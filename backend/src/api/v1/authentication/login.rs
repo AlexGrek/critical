@@ -18,7 +18,7 @@ use std::sync::Arc;
 pub async fn register(
     State(app_state): State<Arc<AppState>>,
     Json(req): Json<RegisterRequest>,
-) -> Result<Created, AppError>{
+) -> Result<Created, AppError> {
     if !app_state.runtime_config.user_login_allowed {
         return Err(AppError::Authentication(
             "Only admin can create new users".to_string(),
@@ -34,14 +34,14 @@ pub async fn register(
 
     let uid = user.username.clone();
 
-    app_state.db.users().create_user(user.into()).await?;
+    app_state.db.create_user(user.into(), None).await?;
 
     log::info!(
         "Register event -> {}",
         format!("User with ID {:?} created: {}", &uid, &req.user)
     );
 
-    Ok(Created{})
+    Ok(Created {})
 }
 
 pub async fn login(
@@ -50,23 +50,24 @@ pub async fn login(
 ) -> Result<impl IntoResponse, AppError> {
     let user = app_state
         .db
-        .users()
-        .get_user(&req.user)
+        .get_user_by_id(&req.user)
         .await
         .map_err(|_e| AppError::Authorization("Unauthorized".to_string()))?;
 
+    let true_user = user.ok_or(AppError::Authorization("Unauthorized".to_string()))?;
+
     if !app_state
         .auth
-        .verify_password(&req.password, &user.password_hash)?
+        .verify_password(&req.password, &true_user.password_hash)?
     {
         return Err(AppError::Authorization("Unauthorized".to_string()));
     }
 
-    let token = app_state.auth.create_token(&user.username)?;
+    let token = app_state.auth.create_token(&true_user.id)?;
 
     log::info!(
         "Auth event -> {}",
-        format!("User logged in: {}", &user.username)
+        format!("User logged in: {}", &true_user.id)
     );
 
     Ok(Json(LoginResponse { token: token.0 }))

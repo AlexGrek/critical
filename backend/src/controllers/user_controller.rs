@@ -12,7 +12,7 @@ impl UserController {
     }
 
     pub async fn validate_user(&self, username: &str) -> bool {
-        let user_res = self.db.users().get_user(username).await;
+        let user_res = self.db.get_user_by_id(username).await;
         user_res.is_ok()
     }   
 }
