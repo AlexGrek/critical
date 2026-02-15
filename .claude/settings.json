@@ -10,7 +10,8 @@
       "Bash(docker compose down:*)",
       "Bash(./target/debug/cr1t:*)",
       "Bash(rustc:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

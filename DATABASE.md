@@ -121,13 +121,31 @@ Permission checks resolve through the membership graph — a user has a permissi
 
 ---
 
+### `projects` — Document Collection
+
+| Key Field | Key Format       | Rust Struct |
+| --------- | ---------------- | ----------- |
+| `_key`    | project ID       | `Project`   |
+
+Managed via gitops API (`/api/v1/global/projects`). Auto-created on startup.
+
+---
+
+## Gitops / CRD Collections
+
+The gitops API (`/api/v1/global/{kind}`) supports **any** kind string as a collection name (CRD-style). Collections beyond the built-in ones above are auto-created on first access. All gitops operations use generic AQL queries against `serde_json::Value` documents.
+
+**Special handling by kind:**
+- `users`: `password` field in request is hashed to `password_hash`; `password_hash` stripped from responses.
+
+---
+
 ## Planned Collections (Not Yet Persisted)
 
 Models defined in [models.rs](shared/src/models.rs) but no DB operations implemented:
 
 | Planned Collection | Rust Struct | Key Type     |
 | ------------------ | ----------- | ------------ |
-| projects           | `Project`   | `uuid::Uuid` |
 | tickets            | `Ticket`    | `i64`        |
 
 `TicketGroup` is embedded within `Project`, not a separate collection.
@@ -144,7 +162,7 @@ ArangoDB auto-indexes `_key`, and auto-indexes `_from`/`_to` on edge collections
 
 ## Transactions
 
-All four active collections (`users`, `groups`, `memberships`, `permissions`) participate in server-side transactions with `wait_for_sync: true`.
+All five active collections (`users`, `groups`, `memberships`, `permissions`, `projects`) participate in server-side transactions with `wait_for_sync: true`.
 
 ---
 

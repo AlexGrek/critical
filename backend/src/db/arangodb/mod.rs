@@ -7,7 +7,7 @@ use arangors::document::Document;
 use arangors::transaction::{
     Transaction as ArangoInnerTx, TransactionCollections, TransactionSettings,
 };
-use serde_json::json;
+use serde_json::{Value, json};
 
 use crit_shared::models::*;
 
@@ -53,6 +53,7 @@ pub struct ArangoDb {
     pub groups: Collection<ReqwestClient>,
     pub memberships: Collection<ReqwestClient>,
     pub permissions: Collection<ReqwestClient>,
+    pub projects: Collection<ReqwestClient>,
 }
 
 impl ArangoDb {
@@ -76,11 +77,13 @@ impl ArangoDb {
         let _ = db.create_collection("groups").await;
         let _ = db.create_edge_collection("memberships").await;
         let _ = db.create_collection("permissions").await;
+        let _ = db.create_collection("projects").await;
 
         let users = db.collection("users").await.map_err(|e| anyhow!(e.to_string()))?;
         let groups = db.collection("groups").await.map_err(|e| anyhow!(e.to_string()))?;
         let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
         let permissions = db.collection("permissions").await.map_err(|e| anyhow!(e.to_string()))?;
+        let projects = db.collection("projects").await.map_err(|e| anyhow!(e.to_string()))?;
 
         let instance = Self {
             conn,
@@ -89,6 +92,7 @@ impl ArangoDb {
             groups,
             memberships,
             permissions,
+            projects,
         };
 
         instance.seed_permissions().await?;
@@ -147,6 +151,14 @@ impl ArangoDb {
                 .map_err(|e| anyhow!(e.to_string()))?,
         };
 
+        let projects = match db.collection("projects").await {
+            Ok(collection) => collection,
+            Err(_) => db
+                .create_collection("projects")
+                .await
+                .map_err(|e| anyhow!(e.to_string()))?,
+        };
+
         Ok(Self {
             conn,
             db,
@@ -154,6 +166,7 @@ impl ArangoDb {
             groups,
             memberships,
             permissions,
+            projects,
         })
     }
 
@@ -186,6 +199,10 @@ impl ArangoDb {
             .collection("permissions")
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
+        let projects = db
+            .collection("projects")
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
 
         Ok(Self {
             conn,
@@ -194,6 +211,7 @@ impl ArangoDb {
             groups,
             memberships,
             permissions,
+            projects,
         })
     }
 
@@ -230,6 +248,7 @@ impl ArangoDb {
                 "groups".to_string(),
                 "memberships".to_string(),
                 "permissions".to_string(),
+                "projects".to_string(),
             ])
             .build();
 
@@ -561,5 +580,124 @@ impl ArangoDb {
             .map_err(|e| anyhow!(e.to_string()))?;
 
         Ok(result)
+    }
+
+    //
+    // ------------------- GENERIC DOCUMENT OPERATIONS (GITOPS) --------------------
+    //
+
+    /// Ensure a collection exists, creating it if needed. Returns the collection name for use in AQL.
+    pub async fn ensure_collection(&self, collection: &str) -> Result<()> {
+        // Try to get it; if it fails, create it (ignore race conditions).
+        if self.db.collection(collection).await.is_err() {
+            let _ = self.db.create_collection(collection).await;
+        }
+        Ok(())
+    }
+
+    pub async fn generic_list(&self, collection: &str) -> Result<Vec<Value>> {
+        let query = "FOR doc IN @@col RETURN doc";
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+        ]);
+        let docs: Vec<Value> = self
+            .db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(docs)
+    }
+
+    pub async fn generic_get(&self, collection: &str, key: &str) -> Result<Option<Value>> {
+        let query = r#"
+            LET doc = DOCUMENT(@@col, @key)
+            FILTER doc != null
+            RETURN doc
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("key", Value::String(key.to_string())),
+        ]);
+        let result: Vec<Value> = self
+            .db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(result.into_iter().next())
+    }
+
+    pub async fn generic_create(&self, collection: &str, doc: Value) -> Result<()> {
+        let query = r#"INSERT @doc INTO @@col"#;
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("doc", doc),
+        ]);
+        self.db
+            .aql_bind_vars::<Value>(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn generic_upsert(&self, collection: &str, key: &str, doc: Value) -> Result<()> {
+        let query = r#"
+            UPSERT { _key: @key }
+            INSERT @doc
+            UPDATE @doc
+            IN @@col
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("key", Value::String(key.to_string())),
+            ("doc", doc),
+        ]);
+        self.db
+            .aql_bind_vars::<Value>(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(())
+    }
+
+    pub async fn generic_update(&self, collection: &str, key: &str, doc: Value) -> Result<()> {
+        let query = r#"
+            LET existing = DOCUMENT(@@col, @key)
+            FILTER existing != null
+            REPLACE existing WITH @doc IN @@col
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("key", Value::String(key.to_string())),
+            ("doc", doc),
+        ]);
+        let result: Vec<Value> = self
+            .db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        if result.is_empty() {
+            return Err(anyhow!("document not found: {}/{}", collection, key));
+        }
+        Ok(())
+    }
+
+    pub async fn generic_delete(&self, collection: &str, key: &str) -> Result<()> {
+        let query = r#"
+            LET existing = DOCUMENT(@@col, @key)
+            FILTER existing != null
+            REMOVE existing IN @@col
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("key", Value::String(key.to_string())),
+        ]);
+        let result: Vec<Value> = self
+            .db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        if result.is_empty() {
+            return Err(anyhow!("document not found: {}/{}", collection, key));
+        }
+        Ok(())
     }
 }

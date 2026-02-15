@@ -49,6 +49,17 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
             "/v1",
             Router::new()
                 .route("/ws", get(ws_handler))
+                .route(
+                    "/global/{kind}",
+                    get(api::v1::gitops::list_objects).post(api::v1::gitops::create_object),
+                )
+                .route(
+                    "/global/{kind}/{id}",
+                    get(api::v1::gitops::get_object)
+                        .post(api::v1::gitops::upsert_object)
+                        .put(api::v1::gitops::update_object)
+                        .delete(api::v1::gitops::delete_object),
+                )
                 .layer(from_fn_with_state(
                     shared_state.clone(),
                     middleware::jwt_auth_middleware,
