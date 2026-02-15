@@ -30,17 +30,23 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 │     users      │         │  memberships   │         │     groups     │
 │  (Document)    │         │  (Edge)        │         │  (Document)    │
 ├────────────────┤         ├────────────────┤         ├────────────────┤
-│ _key (u_xxx)   │◄────────│ principal      │         │ _key (g_xxx)   │
-│                │         │ group          │────────▶│                │
+│ _key (u_xxx)   │◄─_from──│ _from          │         │ _key (g_xxx)   │
+│                │         │ _to            │──_to───▶│                │
+│                │         │ principal      │         │                │
+│                │         │ group          │         │                │
 │                │         │ _key           │         │                │
 │                │         │ (principal::   │         │                │
 │                │         │     group)     │         │                │
 └────────────────┘         └────────────────┘         └────────────────┘
                                   ▲
-                                  │
-                           groups can also
-                           be principals
-                           (nested groups)
+                                  │                   ┌────────────────┐
+                           groups can also            │  permissions   │
+                           be principals              │  (Document)    │
+                           (nested groups)            ├────────────────┤
+                                                      │ _key (perm     │
+                                                      │   name)        │
+                                                      │ principals[]   │
+                                                      └────────────────┘
 ```
 
 ### Membership Graph
@@ -79,21 +85,43 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 |-----------|------------|-------------|
 | `_key` | `{principal}::{group}` composite | `GroupMembership` |
 
-**Edges**: `principal` (u_ or g_) → `group` (g_)
+**Edge fields**: `_from` (`users/{id}` or `groups/{id}`) → `_to` (`groups/{id}`). Also stores `principal` and `group` as plain string fields for backward-compatible queries.
+
+Native graph traversal is supported via `_from`/`_to` (e.g. `FOR v IN 1..10 OUTBOUND "users/u_alice" memberships`).
 
 **Key AQL queries**:
 - Users in group: `FOR m IN memberships FILTER m.group == @group FILTER LIKE(m.principal, "u_%") RETURN m.principal`
 - Sub-groups in group: `FOR m IN memberships FILTER m.group == @group FILTER LIKE(m.principal, "g:%") RETURN m.principal`
+- All groups for user (recursive): `FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships RETURN v._key`
+
+### `permissions` — Document Collection
+
+| Key Field | Key Format | Rust Struct |
+|-----------|------------|-------------|
+| `_key` | permission name (e.g. `adm_user_manager`) | `GlobalPermission` |
+
+**Fields**: `principals` (`Vec<String>`) — list of user/group IDs granted this permission.
+
+**Defined super-permissions**:
+
+| Permission | Description |
+|------------|-------------|
+| `adm_user_manager` | Create, edit, delete, disable, impersonate users |
+| `adm_project_manager` | Full access to all projects |
+| `usr_create_projects` | User-level permission to create projects |
+| `adm_config_editor` | Admin-level core configuration editor |
+
+Permission checks resolve through the membership graph — a user has a permission if they or any of their groups (including nested groups) appear in that permission's `principals` array.
 
 ## Indexes
 
-No explicit indexes defined. ArangoDB auto-indexes `_key`. Candidates for manual indexes:
+ArangoDB auto-indexes `_key`, and auto-indexes `_from`/`_to` on edge collections. No additional explicit indexes defined. Candidates for manual indexes:
 - `memberships.principal`
 - `memberships.group`
 
 ## Transactions
 
-All three active collections participate in server-side transactions with `wait_for_sync: true`.
+All four active collections (`users`, `groups`, `memberships`, `permissions`) participate in server-side transactions with `wait_for_sync: true`.
 
 ## Conventions
 

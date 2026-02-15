@@ -52,6 +52,7 @@ pub struct ArangoDb {
     pub users: Collection<ReqwestClient>,
     pub groups: Collection<ReqwestClient>,
     pub memberships: Collection<ReqwestClient>,
+    pub permissions: Collection<ReqwestClient>,
 }
 
 impl ArangoDb {
@@ -74,18 +75,25 @@ impl ArangoDb {
         let _ = db.create_collection("users").await;
         let _ = db.create_collection("groups").await;
         let _ = db.create_edge_collection("memberships").await;
+        let _ = db.create_collection("permissions").await;
 
         let users = db.collection("users").await.map_err(|e| anyhow!(e.to_string()))?;
         let groups = db.collection("groups").await.map_err(|e| anyhow!(e.to_string()))?;
         let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
+        let permissions = db.collection("permissions").await.map_err(|e| anyhow!(e.to_string()))?;
 
-        Ok(Self {
+        let instance = Self {
             conn,
             db,
             users,
             groups,
             memberships,
-        })
+            permissions,
+        };
+
+        instance.seed_permissions().await?;
+
+        Ok(instance)
     }
 
     pub async fn connect_anon(url: &str, db_name: &str) -> Result<Self> {
@@ -131,12 +139,21 @@ impl ArangoDb {
                 .map_err(|e| anyhow!(e.to_string()))?,
         };
 
+        let permissions = match db.collection("permissions").await {
+            Ok(collection) => collection,
+            Err(_) => db
+                .create_collection("permissions")
+                .await
+                .map_err(|e| anyhow!(e.to_string()))?,
+        };
+
         Ok(Self {
             conn,
             db,
             users,
             groups,
             memberships,
+            permissions,
         })
     }
 
@@ -165,6 +182,10 @@ impl ArangoDb {
             .collection("memberships")
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
+        let permissions = db
+            .collection("permissions")
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
 
         Ok(Self {
             conn,
@@ -172,7 +193,30 @@ impl ArangoDb {
             users,
             groups,
             memberships,
+            permissions,
         })
+    }
+
+    //
+    // ------------------- SEED / BOOTSTRAP --------------------
+    //
+
+    /// Ensure all super-permissions exist and that u_root has every one of them.
+    async fn seed_permissions(&self) -> Result<()> {
+        use super_permissions::*;
+
+        let all = [
+            ADM_USER_MANAGER,
+            ADM_PROJECT_MANAGER,
+            USR_CREATE_PROJECTS,
+            ADM_CONFIG_EDITOR,
+        ];
+
+        for perm in all {
+            self.grant_permission(perm, "u_root").await?;
+        }
+
+        Ok(())
     }
 
     //
@@ -185,6 +229,7 @@ impl ArangoDb {
                 "users".to_string(),
                 "groups".to_string(),
                 "memberships".to_string(),
+                "permissions".to_string(),
             ])
             .build();
 
@@ -253,8 +298,17 @@ impl ArangoDb {
         tx: Option<&mut ArangoTx>,
     ) -> Result<()> {
         let key = format!("{}::{}", principal_id, group_id);
+        let from_collection = if principal_id.starts_with("g_") {
+            "groups"
+        } else {
+            "users"
+        };
+        let from = format!("{}/{}", from_collection, principal_id);
+        let to = format!("groups/{}", group_id);
         let body = json!({
             "_key": key,
+            "_from": from,
+            "_to": to,
             "principal": principal_id,
             "group": group_id,
         });
@@ -381,5 +435,131 @@ impl ArangoDb {
             }
             Err(e) => Err(anyhow!(e.to_string())),
         }
+    }
+
+    //
+    // ------------------- PERMISSION OPERATIONS --------------------
+    //
+
+    pub async fn has_permission(&self, user_id: &str, permission: &str) -> Result<bool> {
+        let query = r#"
+            LET perm = DOCUMENT("permissions", @permission)
+            FILTER perm != null
+
+            LET user_principals = UNION_DISTINCT(
+                [@user],
+                (FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships
+                    RETURN v._key)
+            )
+
+            RETURN LENGTH(INTERSECTION(user_principals, perm.principals)) > 0
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            ("user", serde_json::Value::String(user_id.to_string())),
+            (
+                "permission",
+                serde_json::Value::String(permission.to_string()),
+            ),
+        ]);
+
+        let result: Vec<bool> = self
+            .db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        Ok(result.first().copied().unwrap_or(false))
+    }
+
+    pub async fn grant_permission(&self, permission: &str, principal: &str) -> Result<()> {
+        let query = r#"
+            UPSERT { _key: @permission }
+            INSERT { _key: @permission, principals: [@principal] }
+            UPDATE { principals: UNION_DISTINCT(OLD.principals, [@principal]) }
+            IN permissions
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            (
+                "permission",
+                serde_json::Value::String(permission.to_string()),
+            ),
+            (
+                "principal",
+                serde_json::Value::String(principal.to_string()),
+            ),
+        ]);
+
+        self.db
+            .aql_bind_vars::<serde_json::Value>(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn revoke_permission(&self, permission: &str, principal: &str) -> Result<()> {
+        let query = r#"
+            LET perm = DOCUMENT("permissions", @permission)
+            FILTER perm != null
+            UPDATE perm WITH {
+                principals: REMOVE_VALUE(perm.principals, @principal)
+            } IN permissions
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            (
+                "permission",
+                serde_json::Value::String(permission.to_string()),
+            ),
+            (
+                "principal",
+                serde_json::Value::String(principal.to_string()),
+            ),
+        ]);
+
+        self.db
+            .aql_bind_vars::<serde_json::Value>(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        Ok(())
+    }
+
+    pub async fn get_permission(&self, permission: &str) -> Result<Option<GlobalPermission>> {
+        match self.permissions.document::<GlobalPermission>(permission).await {
+            Ok(doc) => Ok(Some(doc.document)),
+            Err(arangors::ClientError::Arango(ref e)) if e.code() == 404 => Ok(None),
+            Err(arangors::ClientError::Arango(ref e)) if e.code() == 1202 => Ok(None),
+            Err(e) => Err(anyhow!(e.to_string())),
+        }
+    }
+
+    pub async fn get_user_permissions(&self, user_id: &str) -> Result<Vec<String>> {
+        let query = r#"
+            LET user_principals = UNION_DISTINCT(
+                [@user],
+                (FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships
+                    RETURN v._key)
+            )
+
+            FOR perm IN permissions
+                FILTER LENGTH(INTERSECTION(user_principals, perm.principals)) > 0
+                RETURN perm._key
+        "#;
+
+        let vars = std::collections::HashMap::from([(
+            "user",
+            serde_json::Value::String(user_id.to_string()),
+        )]);
+
+        let result: Vec<String> = self
+            .db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        Ok(result)
     }
 }

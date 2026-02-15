@@ -94,6 +94,26 @@ pub struct Group {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GroupMembership {
+    #[serde(rename = "_key")]
+    pub id: String,
+    #[serde(rename = "_from")]
+    pub from: String,
+    #[serde(rename = "_to")]
+    pub to: String,
     pub principal: PrincipalId,
     pub group: PrincipalId,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GlobalPermission {
+    #[serde(rename = "_key")]
+    pub id: String,
+    pub principals: Vec<PrincipalId>,
+}
+
+pub mod super_permissions {
+    pub const ADM_USER_MANAGER: &str = "adm_user_manager";
+    pub const ADM_PROJECT_MANAGER: &str = "adm_project_manager";
+    pub const USR_CREATE_PROJECTS: &str = "usr_create_projects";
+    pub const ADM_CONFIG_EDITOR: &str = "adm_config_editor";
 }

@@ -103,7 +103,7 @@ Stack architecture: nginx gateway (:8080) routes `/api/*` to the backend and `/*
 - **Always update `DATABASE.md`** when making schema changes (new collections, key changes, new edges/indexes)
 
 ### Database Layer (`backend/src/db/`)
-- **`DatabaseInterface` trait** (`src/db/mod.rs`): async trait with `Transaction` support, defines all DB operations (CRUD for users, groups, memberships)
+- **`DatabaseInterface` trait** (`src/db/mod.rs`): async trait with `Transaction` support, defines all DB operations (CRUD for users, groups, memberships, permissions)
 - **`ArangoDb`** (`src/db/arangodb/mod.rs`): sole implementation using `arangors` crate
 - `connect_basic` auto-creates the database and collections on first connection (idempotent — silently ignores "already exists" errors)
 - **No migration system**: ArangoDB is schemaless; Rust structs define the application-level schema, not a DB-enforced one
