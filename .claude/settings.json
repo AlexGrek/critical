@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(cargo test:*)",
+      "Bash(make test:*)",
+      "Bash(command -v docker:*)",
+      "Bash(docker info:*)",
+      "Bash(docker compose up:*)",
+      "Bash(docker compose down:*)"
+    ]
+  }
+}

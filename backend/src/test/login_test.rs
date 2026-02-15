@@ -13,7 +13,7 @@ mod tests {
     async fn test_health_check() {
         // 1. Create a TestServer from the application router.
         // This creates an in-memory server, avoiding actual networking setup.
-        let state = create_mock_shared_state().unwrap();
+        let state = create_mock_shared_state().await.unwrap();
         let server =
             TestServer::new(create_app(Arc::new(state))).expect("Failed to create TestServer");
 
@@ -38,7 +38,7 @@ mod tests {
     #[tokio::test]
     async fn test_user_registration_and_login() {
         // GIVEN: A fresh application instance with an empty state
-        let state = create_mock_shared_state().unwrap();
+        let state = create_mock_shared_state().await.unwrap();
         let server =
             TestServer::new(create_app(Arc::new(state))).expect("Failed to create TestServer");
 
@@ -79,7 +79,7 @@ mod tests {
     #[tokio::test]
     async fn test_invalid_login_credentials() {
         // GIVEN: A server with a registered user
-        let state = create_mock_shared_state().unwrap();
+        let state = create_mock_shared_state().await.unwrap();
         let server =
             TestServer::new(create_app(Arc::new(state))).expect("Failed to create TestServer");
 

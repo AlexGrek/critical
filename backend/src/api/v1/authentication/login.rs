@@ -1,14 +1,33 @@
-use crate::{
-    error::AppError,
-    schema::{Created, LoginRequest, LoginResponse, RegisterRequest, User},
-    state::AppState,
-    validation::naming::validate_username,
-};
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use axum::{
     extract::{Json, State},
     response::IntoResponse,
 };
-use std::sync::Arc;
+use chrono::Utc;
+
+use crate::{
+    error::AppError,
+    models,
+    schema::{Created, LoginRequest, LoginResponse, RegisterRequest, User},
+    state::AppState,
+    validation::naming::validate_username,
+};
+
+impl From<User> for models::User {
+    fn from(src: User) -> Self {
+        let mut metadata = HashMap::new();
+        metadata.insert("registered_at".to_string(), Utc::now().to_rfc3339());
+
+        Self {
+            id: format!("u_{}", src.username),
+            password_hash: src.password_hash,
+            metadata,
+            ..Self::default()
+        }
+    }
+}
 
 #[utoipa::path(
     get,

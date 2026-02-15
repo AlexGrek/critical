@@ -8,7 +8,6 @@ use arangors::transaction::{
     Transaction as ArangoInnerTx, TransactionCollections, TransactionSettings,
 };
 use async_trait::async_trait;
-use log::Log;
 use serde_json::json;
 
 use crate::db::*;
@@ -67,27 +66,28 @@ pub struct ArangoDb {
 
 impl ArangoDb {
     pub async fn connect_basic(url: &str, user: &str, pass: &str, db_name: &str) -> Result<Self> {
-        // establish connection using an API Key
         let conn = Connection::establish_basic_auth(url, user, pass)
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        // obtain database handle
-        let db = conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?;
+        // obtain or create database
+        let db = match conn.db(db_name).await {
+            Ok(db) => db,
+            Err(_) => {
+                // ignore create error (e.g. race condition with parallel tests)
+                let _ = conn.create_database(db_name).await;
+                conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?
+            }
+        };
 
-        // obtain collections (ensure these collections exist beforehand)
-        let users = db
-            .collection("users")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        let groups = db
-            .collection("groups")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        let memberships = db
-            .collection("memberships")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        // obtain or create collections (ignore create errors for race conditions)
+        let _ = db.create_collection("users").await;
+        let _ = db.create_collection("groups").await;
+        let _ = db.create_edge_collection("memberships").await;
+
+        let users = db.collection("users").await.map_err(|e| anyhow!(e.to_string()))?;
+        let groups = db.collection("groups").await.map_err(|e| anyhow!(e.to_string()))?;
+        let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
 
         Ok(Self {
             conn,
@@ -398,30 +398,14 @@ impl DatabaseInterface for ArangoDb {
     }
 
     async fn get_user_by_id(&self, user_id: &str) -> Result<Option<User>> {
-        println!("Getting user {} by id", user_id);
-        let id = if user_id.starts_with("_") {
-            user_id
+        let id = if user_id.starts_with("u_") {
+            user_id.to_string()
         } else {
-            &format!("u_{}", user_id)
+            format!("u_{}", user_id)
         };
-        match self.users.document::<User>(id).await {
+        match self.users.document::<User>(&id).await {
             Ok(doc) => Ok(Some(doc.document)),
-            Err(arangors::ClientError::Arango(it)) => {
-                let error = it;
-                let message = error.message().to_string();
-                if error.code() == 404 {
-                    let all = self.get_users_list().await?;
-                    println!("All users: {:?}", all);
-                    println!("User not found, but that's OK");
-                    return Ok(None);
-                }
-                println!(
-                    "Something went wrong, {} :: {}",
-                    error.code(),
-                    error.message()
-                );
-                Err(anyhow!(message))
-            } // document not found
+            Err(arangors::ClientError::Arango(ref e)) if e.code() == 404 => Ok(None),
             Err(e) => Err(anyhow!(e.to_string())),
         }
     }

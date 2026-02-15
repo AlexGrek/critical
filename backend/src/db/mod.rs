@@ -5,7 +5,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 pub mod arangodb;
-pub mod inmemory;
 
 /// Transaction trait object: async commit/abort plus downcast helper.
 /// Implementors MUST implement `as_any` to allow downcasting.

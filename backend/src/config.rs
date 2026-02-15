@@ -15,6 +15,8 @@ pub struct AppConfig {
     pub jwt_secret: String,
     pub database_connection_string: String,
     pub database_name: String,
+    pub database_user: String,
+    pub database_password: String,
     pub client_api_keys: Vec<String>,
     pub management_token: String,
     pub host: String,
@@ -51,6 +53,12 @@ impl AppConfig {
         let database_name =
             env::var("DB_NAME").unwrap_or_else(|_| "unnamed".to_string());
 
+        let database_user =
+            env::var("DB_USER").unwrap_or_else(|_| "root".to_string());
+
+        let database_password =
+            env::var("DB_PASSWORD").unwrap_or_else(|_| String::new());
+
         let client_api_keys = env::var("CLIENT_API_KEYS")
             .unwrap_or_else(|_| String::new())
             .split(':')
@@ -67,11 +75,13 @@ impl AppConfig {
         Ok(Self {
             jwt_secret,
             database_connection_string,
+            database_name,
+            database_user,
+            database_password,
             client_api_keys,
             host,
             port,
             management_token,
-            database_name
         })
     }
 }

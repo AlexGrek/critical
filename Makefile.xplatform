@@ -3,7 +3,7 @@
 
 # Configuration
 BINARY_NAME := crit
-SOURCE_DIR := backend
+SOURCE_DIR := .
 BUILD_DIR := build/crit-cli
 DOCKER_IMAGE := ghcr.io/cross-rs/cross:x86_64-unknown-linux-gnu
 
@@ -84,7 +84,7 @@ setup-targets: ## Add required Rust targets
 clean: ## Clean build directory
 	@echo "$(BLUE)[INFO]$(NC) Cleaning build directory..."
 	@rm -rf $(BUILD_DIR)
-	@cd $(SOURCE_DIR) && cargo clean
+	@cargo clean
 	@echo "$(GREEN)[SUCCESS]$(NC) Build directory cleaned"
 
 # Create build directories
@@ -102,8 +102,7 @@ define build-target
 build-$(2)-$(3): ## Build for $(2)/$(3)
 	@echo "$(BLUE)[INFO]$(NC) Building for $(2)/$(3) ($(1))..."
 	@mkdir -p $(BUILD_DIR)/$(2)/$(3)
-	@cd $(SOURCE_DIR) && \
-		if [ "$(1)" = "x86_64-apple-darwin" ] || [ "$(1)" = "aarch64-apple-darwin" ]; then \
+	@if [ "$(1)" = "x86_64-apple-darwin" ] || [ "$(1)" = "aarch64-apple-darwin" ]; then \
 			if [ "$$(uname)" = "Darwin" ]; then \
 				echo "$(YELLOW)[INFO]$(NC) Building natively on macOS..."; \
 				cargo build $(CARGO_BUILD_FLAGS) --target $(1); \
@@ -118,12 +117,11 @@ build-$(2)-$(3): ## Build for $(2)/$(3)
 			echo "$(YELLOW)[INFO]$(NC) Cross-compiling for $(1)..."; \
 			cross build $(CARGO_BUILD_FLAGS) --target $(1); \
 		fi
-	@cd $(SOURCE_DIR) && \
-		if [ "$(3)" = "windows" ]; then \
-			cp target/$(1)/release/crit-cli.exe ../$(BUILD_DIR)/$(2)/$(3)/$(BINARY_NAME).exe; \
-		else \
-			cp target/$(1)/release/crit-cli ../$(BUILD_DIR)/$(2)/$(3)/$(BINARY_NAME); \
-		fi
+	@if [ "$(3)" = "windows" ]; then \
+		cp target/$(1)/release/crit-cli.exe $(BUILD_DIR)/$(2)/$(3)/$(BINARY_NAME).exe; \
+	else \
+		cp target/$(1)/release/crit-cli $(BUILD_DIR)/$(2)/$(3)/$(BINARY_NAME); \
+	fi
 	@echo "$(GREEN)[SUCCESS]$(NC) Built $(2)/$(3) -> $(BUILD_DIR)/$(2)/$(3)/$(BINARY_NAME)"
 endef
 
@@ -162,7 +160,7 @@ build-unix: build-linux build-darwin ## Build Unix targets (Linux + macOS)
 .PHONY: test-build
 test-build: ## Test build on current platform
 	@echo "$(BLUE)[INFO]$(NC) Testing build on current platform..."
-	@cd $(SOURCE_DIR) && cargo build $(CARGO_BUILD_FLAGS)
+	@cargo build $(CARGO_BUILD_FLAGS)
 	@echo "$(GREEN)[SUCCESS]$(NC) Test build completed"
 
 # Verify all binaries
@@ -213,7 +211,7 @@ archive: ## Create release archives
 .PHONY: dev
 dev: ## Quick development build
 	@echo "$(BLUE)[INFO]$(NC) Building for development..."
-	@cd $(SOURCE_DIR) && cargo build --bin crit-cli
+	@cargo build --bin crit-cli
 	@echo "$(GREEN)[SUCCESS]$(NC) Development build completed"
 
 # Release build (all platforms with archives)

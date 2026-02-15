@@ -1,11 +1,40 @@
-# Detect container runtime (podman preferred, fallback to docker)
-CONTAINER ?= $(shell (command -v podman >/dev/null 2>&1 && echo podman) || echo docker)
-COMPOSE ?= $(shell (command -v podman-compose >/dev/null 2>&1 && echo podman-compose) || echo docker compose)
+# Detect container runtime (docker preferred, fallback to podman)
+COMPOSE ?= $(shell (command -v docker >/dev/null 2>&1 && echo "docker compose") || echo podman-compose)
 
-.PHONY: run-db stop-db reset-db logs-db
+.PHONY: dev run run-fresh test run-db stop-db reset-db logs-db wait-db
+
+dev:
+	@echo ">>> Building workspace (dev)..."
+	cargo build
+
+wait-db:
+	@echo ">>> Waiting for ArangoDB to be ready..."
+	@for i in $$(seq 1 30); do \
+		curl -sf -u root:devpassword http://localhost:8529/_api/version >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done
+	@curl -sf -u root:devpassword http://localhost:8529/_api/version >/dev/null 2>&1 || { echo ">>> ArangoDB failed to start"; exit 1; }
+	@echo ">>> ArangoDB is ready"
+
+run:
+	@echo ">>> Starting ArangoDB (persistent)..."
+	@$(COMPOSE) up -d
+	@$(MAKE) wait-db
+	@echo ">>> Building and running backend..."
+	@trap '$(COMPOSE) stop; echo ">>> ArangoDB stopped."' EXIT; \
+		cd backend && cargo run
+
+run-fresh: reset-db run
+
+test:
+	@echo ">>> Starting ephemeral ArangoDB..."
+	@$(COMPOSE) up -d
+	@$(MAKE) wait-db
+	@echo ">>> Running tests..."
+	@trap '$(COMPOSE) down -v; echo ">>> Ephemeral ArangoDB removed."' EXIT; \
+		cargo test
 
 run-db:
-	@echo ">>> Using container runtime: $(CONTAINER)"
 	@echo ">>> Starting ArangoDB dev instance..."
 	$(COMPOSE) up -d
 

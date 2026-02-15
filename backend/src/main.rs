@@ -4,7 +4,7 @@ pub mod controllers;
 pub mod db;
 pub mod error;
 pub mod middleware;
-pub mod models;
+pub use crit_shared::models;
 pub mod schema;
 pub mod services;
 pub mod state;
@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use crate::{
     api::v1::ws::ws_handler,
-    db::{DatabaseInterface, arangodb::ArangoDb, inmemory::InMemoryDb},
+    db::arangodb::ArangoDb,
     middleware::auth::Auth,
     state::AppState,
 };
@@ -70,13 +70,14 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
     router.into_make_service()
 }
 
-pub fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::Error>> {
+pub async fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::Error>> {
     let config = config::AppConfig::from_env()?;
     let auth = Auth::new(config.jwt_secret.as_bytes());
+    let db = ArangoDb::connect_basic(&config.database_connection_string, &config.database_user, &config.database_password, &config.database_name).await?;
     Ok(AppState::new(
         config,
         auth,
-        Arc::new(InMemoryDb::new()),
+        Arc::new(db),
         None,
     ))
 }
@@ -100,22 +101,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("  Client API keys: {:?}", config.client_api_keys);
     info!("  Management token: {}", config.management_token);
 
-    let mut database: Option<Arc<dyn DatabaseInterface>> = None;
-
-    if config.database_connection_string.starts_with("http") {
-        info!("Using ArangoDB as database backend");
-        let wrapper =
-            ArangoDb::connect_anon(&config.database_connection_string, &config.database_name)
-                .await?;
-        database = Some(Arc::new(wrapper));
-    }
+    let db = ArangoDb::connect_basic(&config.database_connection_string, &config.database_user, &config.database_password, &config.database_name).await?;
 
     // Create app state
     let auth = Auth::new(config.jwt_secret.as_bytes());
     let app_state = AppState::new(
         config.clone(),
         auth,
-        database.unwrap_or(Arc::new(InMemoryDb::new())),
+        Arc::new(db),
         None,
     );
     let shared_state = Arc::new(app_state);

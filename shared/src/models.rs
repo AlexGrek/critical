@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::schema;
 use bitflags::bitflags;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -58,20 +57,6 @@ pub struct User {
     pub deactivated: bool,
     pub personal: PersonalInfo,
     pub metadata: HashMap<String, String>,
-}
-
-impl From<crate::schema::User> for User {
-    fn from(src: schema::User) -> Self {
-        let mut metadata = HashMap::new();
-        metadata.insert("registered_at".to_string(), Utc::now().to_rfc3339());
-
-        Self {
-            id: format!("u_{}", src.username),
-            password_hash: src.password_hash,
-            metadata,
-            ..Self::default()
-        }
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
