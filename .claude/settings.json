@@ -11,7 +11,8 @@
       "Bash(./target/debug/cr1t:*)",
       "Bash(rustc:*)",
       "Bash(cargo check:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(cargo add:*)"
     ]
   }
 }
