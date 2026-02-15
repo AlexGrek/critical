@@ -105,7 +105,10 @@ Stack architecture: nginx gateway (:8080) routes `/api/*` to the backend and `/*
 ### Database Layer (`backend/src/db/`)
 - **`DatabaseInterface` trait** (`src/db/mod.rs`): async trait with `Transaction` support, defines all DB operations (CRUD for users, groups, memberships)
 - **`ArangoDb`** (`src/db/arangodb/mod.rs`): sole implementation using `arangors` crate
-- `connect_basic` auto-creates the database and collections on first connection
+- `connect_basic` auto-creates the database and collections on first connection (idempotent — silently ignores "already exists" errors)
+- **No migration system**: ArangoDB is schemaless; Rust structs define the application-level schema, not a DB-enforced one
+- Adding `Option<T>` or `#[serde(default)]` fields is safe — old documents deserialize fine. Adding required fields without defaults breaks deserialization of old documents. Renames require manual data fixup.
+- Adding a new collection requires a `create_collection` call in both `connect_basic` and `connect_anon`, plus a new field on the `ArangoDb` struct
 
 ### Routing
 - `/health` — health check (unauthenticated)

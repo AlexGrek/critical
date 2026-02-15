@@ -4,7 +4,24 @@
 > **Default DB Name**: `unnamed` (configurable via `DB_NAME` env var)
 > **Connection**: `http://localhost:8529` (configurable via `DB_CONNECTION_STRING`)
 
-Collections are auto-created on first connection via `ArangoDb::connect_basic()`. No migration files — schema is derived from Rust types in `shared/src/models.rs`.
+Collections are auto-created on first connection via `ArangoDb::connect_basic()`. There is no migration system — schema is defined by Rust types in `shared/src/models.rs`, and ArangoDB itself is schemaless (documents are JSON with no DB-enforced structure).
+
+## Schema Evolution
+
+There are no migration files, no versioning, and no automated schema diffing. The Rust structs in `shared/src/models.rs` define the **application-level** schema, not a DB-enforced one.
+
+**On startup**, `connect_basic` creates collections if they don't exist (idempotent `create_collection` calls that silently ignore "already exists" errors). Existing collections and documents are never altered.
+
+**How struct changes affect existing data:**
+
+| Change | Effect | Action needed |
+|--------|--------|---------------|
+| Add `Option<T>` field | Old documents deserialize with `None` | None |
+| Add field with `#[serde(default)]` | Old documents get the default value | None |
+| Add required field (no default) | Old documents fail to deserialize | Manual backfill or add default |
+| Remove a field | Old documents keep the extra field in DB, ignored on read | None (orphaned data remains) |
+| Rename a field | Old documents have the old field name, new writes use the new name | Manual data fixup |
+| Add a new collection | Must add `create_collection` call in `connect_basic` and `connect_anon`, plus a field on `ArangoDb` | Code change required |
 
 ## Entity-Relationship Diagram
 
