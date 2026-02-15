@@ -6,7 +6,8 @@ TAG         ?= latest
 PLATFORMS   ?= linux/amd64,linux/arm64
 
 .PHONY: build build-api build-frontend build-push push-api push-frontend \
-        up down logs status reset wait
+        up down logs status reset wait \
+        helm-deploy helm-status helm-uninstall helm-template
 
 # --- Build (local, current arch only) ---
 
@@ -73,3 +74,25 @@ wait:
 	@curl -sf http://localhost:$${GATEWAY_PORT:-8080}/health >/dev/null 2>&1 \
 		|| { echo ">>> Services failed to start"; exit 1; }
 	@echo ">>> All services healthy"
+
+# --- Helm ---
+
+HELM_RELEASE ?= critical
+HELM_NS      ?= critical-dev
+HELM_CHART   ?= helm/critical
+HELM_VALUES  ?= helm/values-dev.yaml
+
+helm-deploy:
+	@echo ">>> Deploying $(HELM_RELEASE) to namespace $(HELM_NS)..."
+	helm upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
+		--namespace $(HELM_NS) --create-namespace \
+		-f $(HELM_VALUES)
+
+helm-status:
+	helm status $(HELM_RELEASE) -n $(HELM_NS)
+
+helm-uninstall:
+	helm uninstall $(HELM_RELEASE) -n $(HELM_NS)
+
+helm-template:
+	helm template $(HELM_RELEASE) $(HELM_CHART) -f $(HELM_VALUES)

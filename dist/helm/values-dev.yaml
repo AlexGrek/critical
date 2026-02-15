@@ -1,0 +1,23 @@
+# Values overlay for critical-dev environment
+# Usage: helm upgrade --install critical helm/critical -f helm/values-dev.yaml -n critical-dev
+
+ingress:
+  hosts:
+    - host: critical-dev.alexgr.space
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: frontend
+    - host: api.critical-dev.alexgr.space
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api
+  tls:
+    - secretName: critical-dev-tls
+      hosts:
+        - critical-dev.alexgr.space
+        - api.critical-dev.alexgr.space

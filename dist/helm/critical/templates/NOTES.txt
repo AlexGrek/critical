@@ -1,0 +1,32 @@
+Critical has been deployed!
+
+{{- if .Values.ingress.enabled }}
+Access your application at:
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}
+{{- end }}
+{{- else }}
+To access the application, use port-forwarding:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "critical.fullname" . }}-frontend 8080:80
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "critical.fullname" . }}-api 3069:80
+{{- end }}
+
+{{- if .Values.arangodb.enabled }}
+
+ArangoDB is deployed as part of this release.
+To access the ArangoDB web UI:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "critical.fullname" . }}-arangodb 8529:{{ .Values.arangodb.port }}
+  Then open http://localhost:8529
+{{- else }}
+
+Using external ArangoDB at: {{ include "critical.dbConnectionString" . }}
+{{- end }}
+
+{{- if and .Values.secrets.create (not .Values.existingSecret) }}
+
+WARNING: Secrets are created from values.yaml defaults.
+For production, use an externally managed secret:
+  secrets:
+    create: false
+  existingSecret: "my-production-secret"
+{{- end }}

@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "critical.fullname" . }}-api
+  labels:
+    {{- include "critical.labels" . | nindent 4 }}
+    {{- include "critical.api.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "critical.api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "critical.api.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.arangodb.enabled }}
+      initContainers:
+        - name: wait-for-arangodb
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until wget -qO- http://{{ include "critical.fullname" . }}-arangodb:{{ .Values.arangodb.port }}/_api/version; do
+                echo "Waiting for ArangoDB..."
+                sleep 2
+              done
+      {{- end }}
+      containers:
+        - name: api
+          image: {{ include "critical.api.image" . }}
+          imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.api.port }}
+              protocol: TCP
+          env:
+            - name: DB_CONNECTION_STRING
+              value: {{ include "critical.dbConnectionString" . | quote }}
+            - name: DB_NAME
+              value: {{ .Values.config.dbName | quote }}
+            - name: DB_USER
+              value: {{ .Values.config.dbUser | quote }}
+            - name: PORT
+              value: {{ .Values.api.port | quote }}
+            - name: HOST
+              value: "0.0.0.0"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "critical.secretName" . }}
+                  key: DB_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "critical.secretName" . }}
+                  key: JWT_SECRET
+            - name: MGMT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "critical.secretName" . }}
+                  key: MGMT_TOKEN
+            - name: ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "critical.secretName" . }}
+                  key: ROOT_PASSWORD
+          {{- with .Values.api.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.api.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.api.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

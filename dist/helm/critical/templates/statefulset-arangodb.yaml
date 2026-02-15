@@ -1,0 +1,104 @@
+{{- if .Values.arangodb.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "critical.fullname" . }}-arangodb
+  labels:
+    {{- include "critical.labels" . | nindent 4 }}
+    {{- include "critical.arangodb.selectorLabels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "critical.fullname" . }}-arangodb
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "critical.arangodb.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "critical.arangodb.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: arangodb
+          image: "{{ .Values.arangodb.image.repository }}:{{ .Values.arangodb.image.tag }}"
+          imagePullPolicy: {{ .Values.arangodb.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.arangodb.port }}
+              protocol: TCP
+          env:
+            - name: ARANGO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "critical.secretName" . }}
+                  key: DB_PASSWORD
+            - name: ARANGO_STORAGE_ENGINE
+              value: rocksdb
+          livenessProbe:
+            httpGet:
+              path: /_api/version
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /_api/version
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          {{- with .Values.arangodb.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if .Values.arangodb.persistence.enabled }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/arangodb3
+            - name: apps
+              mountPath: /var/lib/arangodb3-apps
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.arangodb.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - {{ .Values.arangodb.persistence.accessMode }}
+        {{- if .Values.arangodb.persistence.storageClass }}
+        storageClassName: {{ .Values.arangodb.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.arangodb.persistence.size }}
+    - metadata:
+        name: apps
+      spec:
+        accessModes:
+          - {{ .Values.arangodb.persistence.accessMode }}
+        {{- if .Values.arangodb.persistence.storageClass }}
+        storageClassName: {{ .Values.arangodb.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: 1Gi
+  {{- end }}
+{{- end }}

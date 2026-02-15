@@ -1,0 +1,18 @@
+{{- if .Values.arangodb.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "critical.fullname" . }}-arangodb
+  labels:
+    {{- include "critical.labels" . | nindent 4 }}
+    {{- include "critical.arangodb.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.arangodb.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "critical.arangodb.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,152 @@
+# Default values for Critical
+# This is a YAML-formatted file.
+
+# --- API ---
+api:
+  replicaCount: 1
+  image:
+    repository: grekodocker/cr1t-api
+    pullPolicy: Always
+    # Overrides the image tag whose default is the chart appVersion
+    tag: ""
+  port: 3069
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# --- Frontend ---
+frontend:
+  replicaCount: 1
+  image:
+    repository: grekodocker/cr1t-frontend
+    pullPolicy: Always
+    tag: ""
+  port: 3000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  livenessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# --- ArangoDB (optional — set enabled: false to use external DB) ---
+arangodb:
+  enabled: true
+  image:
+    repository: arangodb
+    tag: "3.12"
+    pullPolicy: IfNotPresent
+  port: 8529
+  persistence:
+    enabled: true
+    # storageClass: ""  # Use default storage class
+    accessMode: ReadWriteOnce
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+
+# --- Secrets ---
+# Option 1: Chart creates a Secret from these values (good for dev)
+# Option 2: Set existingSecret to reference an externally managed Secret
+secrets:
+  create: true
+  dbPassword: "changeme"
+  jwtSecret: "change-me-in-production"
+  mgmtToken: "change-me-in-production"
+  rootPassword: "changeme"
+
+# Use an existing Secret instead of creating one.
+# The Secret must contain keys: DB_PASSWORD, JWT_SECRET, MGMT_TOKEN, ROOT_PASSWORD
+existingSecret: ""
+
+# --- Config (non-secret environment) ---
+config:
+  dbName: "critical"
+  dbUser: "root"
+  # When arangodb.enabled=false, set this to your external DB URL.
+  # When arangodb.enabled=true, this is auto-generated (http://<release>-arangodb:8529).
+  dbConnectionString: ""
+
+# --- Ingress ---
+ingress:
+  enabled: true
+  className: traefik
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    # Main app — frontend + API on shared host
+    - host: critical-dev.alexgr.space
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: frontend
+    # Direct API access (CLI, external consumers)
+    - host: api.critical-dev.alexgr.space
+      paths:
+        - path: /
+          pathType: Prefix
+          service: api
+  tls:
+    - secretName: critical-dev-tls
+      hosts:
+        - critical-dev.alexgr.space
+        - api.critical-dev.alexgr.space
+
+# --- Common ---
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: false
+  annotations: {}
+  name: ""
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

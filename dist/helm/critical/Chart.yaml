@@ -1,0 +1,15 @@
+apiVersion: v2
+name: critical
+description: A Helm chart for Critical — project management and ticketing system
+type: application
+
+version: 0.1.0
+appVersion: "latest"
+
+keywords:
+  - project-management
+  - ticketing
+  - arangodb
+
+maintainers:
+  - name: Critical Team
