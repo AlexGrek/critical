@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use axum::{
     extract::{Json, State},
+    http::{HeaderMap, HeaderValue, header},
     response::IntoResponse,
 };
 use chrono::Utc;
@@ -82,12 +83,44 @@ pub async fn login(
         return Err(AppError::Authorization("Unauthorized".to_string()));
     }
 
-    let token = app_state.auth.create_token(&true_user.id)?;
+    let (token_str, exp) = app_state.auth.create_token(&true_user.id)?;
 
     log::info!(
         "Auth event -> {}",
         format!("User logged in: {}", &true_user.id)
     );
 
-    Ok(Json(LoginResponse { token: token.0 }))
+    // Calculate max-age from expiration timestamp
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs() as usize;
+    let max_age = exp.saturating_sub(now);
+
+    let cookie = format!(
+        "token={}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age={}",
+        token_str, max_age
+    );
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&cookie).map_err(|_| {
+            AppError::Internal(anyhow::anyhow!("Failed to build Set-Cookie header"))
+        })?,
+    );
+
+    Ok((headers, Json(LoginResponse { token: token_str })))
+}
+
+pub async fn logout() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    // Expire the token cookie immediately
+    headers.insert(
+        header::SET_COOKIE,
+        HeaderValue::from_static(
+            "token=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
+        ),
+    );
+    (headers, axum::http::StatusCode::NO_CONTENT)
 }

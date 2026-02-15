@@ -6,9 +6,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::AppError;
 
-// Token expiration time (e.g., 7 days)
-const ONE_WEEK: usize = 60 * 60 * 24 * 7;
-
 pub struct AuthenticatedUser(pub String);
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -22,6 +19,7 @@ pub struct Claims {
 pub struct Auth {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
+    expiry_seconds: usize,
 }
 
 impl std::fmt::Debug for Auth {
@@ -34,13 +32,14 @@ impl std::fmt::Debug for Auth {
 }
 
 impl Auth {
-    /// Creates a new Auth instance with the given JWT secret.
-    pub fn new(jwt_secret: &[u8]) -> Self {
+    /// Creates a new Auth instance with the given JWT secret and expiry in days.
+    pub fn new(jwt_secret: &[u8], expiry_days: u64) -> Self {
         let encoding_key = EncodingKey::from_secret(jwt_secret);
         let decoding_key = DecodingKey::from_secret(jwt_secret);
         Auth {
             encoding_key,
             decoding_key,
+            expiry_seconds: (expiry_days * 86400) as usize,
         }
     }
 
@@ -56,14 +55,13 @@ impl Auth {
         verify(password, hash).map_err(AppError::BcryptError)
     }
 
-    /// Creates a new JWT token for the given user email.
+    /// Creates a new JWT token for the given user ID.
     pub fn create_token(&self, user_email: &str) -> Result<(String, usize), AppError> {
-        // Calculate expiration time
         let expiration_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .unwrap() // Safe to unwrap unless system time is before epoch
+            .unwrap()
             .as_secs() as usize
-            + ONE_WEEK;
+            + self.expiry_seconds;
 
         let claims = Claims {
             sub: user_email.to_owned(), // Subject is the user's email

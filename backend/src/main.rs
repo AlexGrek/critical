@@ -44,6 +44,7 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
         // Health check and stats
         .route("/register", post(api::v1::authentication::login::register))
         .route("/login", post(api::v1::authentication::login::login))
+        .route("/logout", post(api::v1::authentication::login::logout))
         .nest(
             "/v1",
             Router::new()
@@ -72,7 +73,7 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
 
 pub async fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::Error>> {
     let config = config::AppConfig::from_env()?;
-    let auth = Auth::new(config.jwt_secret.as_bytes());
+    let auth = Auth::new(config.jwt_secret.as_bytes(), config.jwt_expiry_days);
     let db = ArangoDb::connect_basic(&config.database_connection_string, &config.database_user, &config.database_password, &config.database_name).await?;
     Ok(AppState::new(
         config,
@@ -104,7 +105,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let db = ArangoDb::connect_basic(&config.database_connection_string, &config.database_user, &config.database_password, &config.database_name).await?;
 
     // Seed root account if it doesn't exist
-    let auth = Auth::new(config.jwt_secret.as_bytes());
+    let auth = Auth::new(config.jwt_secret.as_bytes(), config.jwt_expiry_days);
     if db.get_user_by_id("u_root").await?.is_none() {
         let password_hash = auth.hash_password(&config.root_password)?;
         let root_user = crit_shared::models::User {

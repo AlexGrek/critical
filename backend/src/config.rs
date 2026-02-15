@@ -22,6 +22,7 @@ pub struct AppConfig {
     pub host: String,
     pub port: u16,
     pub root_password: String,
+    pub jwt_expiry_days: u64,
 }
 
 impl AppConfig {
@@ -70,6 +71,10 @@ impl AppConfig {
         let root_password = env::var("ROOT_PASSWORD")
             .unwrap_or_else(|_| "changeme".to_string());
 
+        let jwt_expiry_days = env::var("JWT_EXPIRY_DAYS")
+            .unwrap_or_else(|_| "90".to_string())
+            .parse::<u64>()?;
+
         let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
 
         let port = env::var("PORT")
@@ -87,6 +92,7 @@ impl AppConfig {
             port,
             management_token,
             root_password,
+            jwt_expiry_days,
         })
     }
 }
