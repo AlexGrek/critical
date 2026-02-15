@@ -60,9 +60,9 @@ jobs:
       - name: Build
         run: |
           if [ "${{ matrix.cross }}" = "true" ]; then
-            cross build --release --bin cr1t --target ${{ matrix.target }}
+            cross build --release -p crit-cli --target ${{ matrix.target }}
           else
-            cargo build --release --bin cr1t --target ${{ matrix.target }}
+            cargo build --release -p crit-cli --target ${{ matrix.target }}
           fi
 
       - name: Package
