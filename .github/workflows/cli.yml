@@ -16,7 +16,49 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.version }}
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: bump
+        run: |
+          # Get latest cli tag (format: cli/v0.1.0), default to 0.0.0
+          LATEST_TAG=$(git tag -l 'cli/v*' --sort=-v:refname | head -n1)
+          if [ -z "$LATEST_TAG" ]; then
+            CURRENT="0.0.0"
+          else
+            CURRENT="${LATEST_TAG#cli/v}"
+          fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
+
+          # Check last commit message for MAJOR/MINOR keywords
+          COMMIT_MSG=$(git log -1 --pretty=%B)
+          if echo "$COMMIT_MSG" | grep -q "MAJOR"; then
+            MAJOR=$((MAJOR + 1))
+            MINOR=0
+            PATCH=0
+          elif echo "$COMMIT_MSG" | grep -q "MINOR"; then
+            MINOR=$((MINOR + 1))
+            PATCH=0
+          else
+            PATCH=$((PATCH + 1))
+          fi
+
+          VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=cli/v$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bumping $CURRENT -> $VERSION"
+
   build:
+    needs: version
     strategy:
       matrix:
         include:
@@ -76,3 +118,42 @@ jobs:
           name: ${{ matrix.artifact }}
           path: staging/
           retention-days: 30
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create release archives
+        run: |
+          mkdir -p release
+          for dir in artifacts/cr1t-*; do
+            name=$(basename "$dir")
+            if ls "$dir"/*.exe >/dev/null 2>&1; then
+              (cd "$dir" && zip "../../release/${name}.zip" cr1t.exe)
+            else
+              (cd "$dir" && tar -czf "../../release/${name}.tar.gz" cr1t)
+            fi
+          done
+          cp artifacts/cr1t-linux-amd64/crit-cli-installer.sh release/
+
+      - name: Create tag
+        run: |
+          git tag ${{ needs.version.outputs.tag }}
+          git push origin ${{ needs.version.outputs.tag }}
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: cr1t ${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          files: release/*
