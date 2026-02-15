@@ -1,0 +1,78 @@
+name: CLI Build
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "cli/**"
+      - "shared/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "dist/cli/**"
+      - ".github/workflows/cli.yml"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: cr1t-linux-amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: cr1t-linux-arm64
+            cross: true
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: cr1t-darwin-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: cr1t-darwin-arm64
+          - target: x86_64-pc-windows-gnu
+            os: ubuntu-latest
+            artifact: cr1t-windows-amd64
+            cross: true
+            ext: .exe
+
+    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.artifact }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Install cross
+        if: matrix.cross
+        run: cargo install cross --locked
+
+      - name: Build
+        run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            cross build --release --bin cr1t --target ${{ matrix.target }}
+          else
+            cargo build --release --bin cr1t --target ${{ matrix.target }}
+          fi
+
+      - name: Package
+        run: |
+          mkdir -p staging
+          cp target/${{ matrix.target }}/release/cr1t${{ matrix.ext }} staging/
+          cp dist/cli/crit-cli-installer.sh staging/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: staging/
+          retention-days: 30
