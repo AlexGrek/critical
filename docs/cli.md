@@ -50,17 +50,26 @@ cr1t context use production
 
 Contexts work like kubeconfigs — authenticate against multiple servers and switch between them.
 
+**Contexts are created automatically by `cr1t login`.** The context name is derived from the server URL by stripping the scheme and replacing `/` and `:` with `-`. For example:
+
+| Server URL | Context name |
+|------------|--------------|
+| `https://critical-dev.example.com` | `critical-dev.example.com` |
+| `http://localhost:3742` | `localhost-3742` |
+
+Logging in to the same URL again updates the existing context (upsert). Each login also sets the new context as current.
+
 **Context file**: `~/.cr1tical/context.yaml`
 
 ```yaml
+current: critical-dev.example.com
 contexts:
-  dev:
+  - name: critical-dev.example.com
     url: https://critical-dev.example.com
     token: <jwt>
-  production:
+  - name: critical.example.com
     url: https://critical.example.com
     token: <jwt>
-current: dev
 ```
 
 ## Key Files
