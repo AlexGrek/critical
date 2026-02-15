@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use crate::{
     api::v1::ws::ws_handler,
-    db::{DatabaseInterface, arangodb::ArangoDb},
+    db::ArangoDb,
     middleware::auth::Auth,
     state::AppState,
 };

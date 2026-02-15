@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{controllers::{group_controller::GroupController, project_controller::ProjectController, ticket_controller::TicketController, user_controller::UserController}, db::DatabaseInterface};
+use crate::{controllers::{group_controller::GroupController, project_controller::ProjectController, ticket_controller::TicketController, user_controller::UserController}, db::ArangoDb};
 pub mod user_controller;
 pub mod project_controller;
 pub mod group_controller;
@@ -13,9 +13,8 @@ pub struct Controller {
     pub ticket: TicketController,
 }
 
-
 impl Controller {
-    pub fn new(db: Arc<dyn DatabaseInterface>) -> Self {
+    pub fn new(db: Arc<ArangoDb>) -> Self {
         Self {
             user: UserController::new(db.clone()),
             project: ProjectController::new(db.clone()),
@@ -24,4 +23,3 @@ impl Controller {
         }
     }
 }
-

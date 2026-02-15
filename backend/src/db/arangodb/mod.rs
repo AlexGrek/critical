@@ -7,16 +7,14 @@ use arangors::document::Document;
 use arangors::transaction::{
     Transaction as ArangoInnerTx, TransactionCollections, TransactionSettings,
 };
-use async_trait::async_trait;
 use serde_json::json;
 
-use crate::db::*;
+use crit_shared::models::*;
 
 //
 // ------------------- TRANSACTION WRAPPER --------------------
 //
 
-// Concrete transaction wrapper that delegates to arangors' Transaction.
 pub struct ArangoTx {
     inner: ArangoInnerTx<ReqwestClient>,
 }
@@ -25,12 +23,8 @@ impl ArangoTx {
     pub fn new(inner: ArangoInnerTx<ReqwestClient>) -> Self {
         Self { inner }
     }
-}
 
-#[async_trait]
-impl Transaction for ArangoTx {
-    async fn commit(&mut self) -> Result<()> {
-        // arangors Transaction provides `commit().await`
+    pub async fn commit(&mut self) -> Result<()> {
         self.inner
             .commit()
             .await
@@ -38,16 +32,12 @@ impl Transaction for ArangoTx {
         Ok(())
     }
 
-    async fn abort(&mut self) -> Result<()> {
+    pub async fn abort(&mut self) -> Result<()> {
         self.inner
             .abort()
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
         Ok(())
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
     }
 }
 
@@ -97,13 +87,14 @@ impl ArangoDb {
             memberships,
         })
     }
+
     pub async fn connect_anon(url: &str, db_name: &str) -> Result<Self> {
         // establish connection anonymously
         let conn = Connection::establish_without_auth(url)
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        // obtain database handle\
+        // obtain database handle
         let db = match conn.db(db_name).await {
             Ok(db) => db,
             Err(_) => {
@@ -116,7 +107,6 @@ impl ArangoDb {
         };
 
         // obtain or create collections
-        // Create users collection if it doesn't exist
         let users = match db.collection("users").await {
             Ok(collection) => collection,
             Err(_) => db
@@ -125,7 +115,6 @@ impl ArangoDb {
                 .map_err(|e| anyhow!(e.to_string()))?,
         };
 
-        // Create groups collection if it doesn't exist
         let groups = match db.collection("groups").await {
             Ok(collection) => collection,
             Err(_) => db
@@ -134,7 +123,6 @@ impl ArangoDb {
                 .map_err(|e| anyhow!(e.to_string()))?,
         };
 
-        // Create memberships edge collection if it doesn't exist
         let memberships = match db.collection("memberships").await {
             Ok(collection) => collection,
             Err(_) => db
@@ -151,6 +139,7 @@ impl ArangoDb {
             memberships,
         })
     }
+
     /// Connect to ArangoDB (JWT auth) and prepare collection handles.
     pub async fn connect_jwt(
         url: &str,
@@ -158,15 +147,12 @@ impl ArangoDb {
         password: &str,
         db_name: &str,
     ) -> Result<Self> {
-        // establish connection
         let conn = Connection::establish_jwt(url, username, password)
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        // obtain database handle
         let db = conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?;
 
-        // obtain collections (ensure these collections exist beforehand)
         let users = db
             .collection("users")
             .await
@@ -188,16 +174,12 @@ impl ArangoDb {
             memberships,
         })
     }
-}
 
-//
-// ------------------- DATABASE INTERFACE IMPL --------------------
-//
+    //
+    // ------------------- DATABASE OPERATIONS --------------------
+    //
 
-#[async_trait]
-impl DatabaseInterface for ArangoDb {
-    async fn begin_transaction(&self) -> Result<Option<BoxTransaction>> {
-        // Build transaction settings: declare write collections.
+    pub async fn begin_transaction(&self) -> Result<ArangoTx> {
         let collections = TransactionCollections::builder()
             .write(vec![
                 "users".to_string(),
@@ -211,29 +193,20 @@ impl DatabaseInterface for ArangoDb {
             .wait_for_sync(true)
             .build();
 
-        // Begin transaction
         let tx = self
             .db
             .begin_transaction(settings)
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        Ok(Some(Box::new(ArangoTx::new(tx))))
+        Ok(ArangoTx::new(tx))
     }
 
-    async fn create_user(&self, user: User, tx: Option<&mut BoxTransaction>) -> Result<()> {
-        // wrap into Document
+    pub async fn create_user(&self, user: User, tx: Option<&mut ArangoTx>) -> Result<()> {
         let doc = Document::new(user);
 
         if let Some(tr) = tx {
-            // downcast to ArangoTx to use transactional collection
-            let ar = tr
-                .as_any()
-                .downcast_mut::<ArangoTx>()
-                .ok_or_else(|| anyhow!("transaction is not ArangoTx"))?;
-
-            // get transactional collection handle and create document
-            let col = ar
+            let col = tr
                 .inner
                 .collection("users")
                 .await
@@ -242,7 +215,6 @@ impl DatabaseInterface for ArangoDb {
                 .await
                 .map_err(|e| anyhow!(e.to_string()))?;
         } else {
-            // no transaction: use cached collection
             self.users
                 .create_document(doc, Default::default())
                 .await
@@ -252,15 +224,11 @@ impl DatabaseInterface for ArangoDb {
         Ok(())
     }
 
-    async fn create_group(&self, group: Group, tx: Option<&mut BoxTransaction>) -> Result<()> {
+    pub async fn create_group(&self, group: Group, tx: Option<&mut ArangoTx>) -> Result<()> {
         let doc = Document::new(group);
 
         if let Some(tr) = tx {
-            let ar = tr
-                .as_any()
-                .downcast_mut::<ArangoTx>()
-                .ok_or_else(|| anyhow!("transaction is not ArangoTx"))?;
-            let col = ar
+            let col = tr
                 .inner
                 .collection("groups")
                 .await
@@ -278,13 +246,12 @@ impl DatabaseInterface for ArangoDb {
         Ok(())
     }
 
-    async fn add_principal_to_group(
+    pub async fn add_principal_to_group(
         &self,
         principal_id: &str,
         group_id: &str,
-        tx: Option<&mut BoxTransaction>,
+        tx: Option<&mut ArangoTx>,
     ) -> Result<()> {
-        // membership document body
         let key = format!("{}::{}", principal_id, group_id);
         let body = json!({
             "_key": key,
@@ -293,11 +260,7 @@ impl DatabaseInterface for ArangoDb {
         });
 
         if let Some(tr) = tx {
-            let ar = tr
-                .as_any()
-                .downcast_mut::<ArangoTx>()
-                .ok_or_else(|| anyhow!("transaction is not ArangoTx"))?;
-            let col = ar
+            let col = tr
                 .inner
                 .collection("memberships")
                 .await
@@ -315,8 +278,7 @@ impl DatabaseInterface for ArangoDb {
         Ok(())
     }
 
-    async fn get_users_list(&self) -> Result<Vec<User>> {
-        // Use AQL to fetch all user docs
+    pub async fn get_users_list(&self) -> Result<Vec<User>> {
         let query = "FOR u IN users RETURN u";
         let users: Vec<User> = self
             .db
@@ -326,7 +288,7 @@ impl DatabaseInterface for ArangoDb {
         Ok(users)
     }
 
-    async fn get_groups_list(&self) -> Result<Vec<Group>> {
+    pub async fn get_groups_list(&self) -> Result<Vec<Group>> {
         let query = "FOR g IN groups RETURN g";
         let groups: Vec<Group> = self
             .db
@@ -336,7 +298,7 @@ impl DatabaseInterface for ArangoDb {
         Ok(groups)
     }
 
-    async fn get_users_in_group(&self, group_id: &str) -> Result<Vec<String>> {
+    pub async fn get_users_in_group(&self, group_id: &str) -> Result<Vec<String>> {
         let query = r#"
             FOR m IN memberships
                 FILTER m.group == @group
@@ -357,7 +319,7 @@ impl DatabaseInterface for ArangoDb {
         Ok(res)
     }
 
-    async fn get_groups_in_group(&self, group_id: &str) -> Result<Vec<String>> {
+    pub async fn get_groups_in_group(&self, group_id: &str) -> Result<Vec<String>> {
         let query = r#"
             FOR m IN memberships
                 FILTER m.group == @group
@@ -378,15 +340,11 @@ impl DatabaseInterface for ArangoDb {
         Ok(res)
     }
 
-    async fn modify_user(&self, user: User, tx: Option<&mut BoxTransaction>) -> Result<()> {
+    pub async fn modify_user(&self, user: User, tx: Option<&mut ArangoTx>) -> Result<()> {
         let key = user.id.clone();
         let doc = Document::new(user);
         if let Some(tr) = tx {
-            let ar = tr
-                .as_any()
-                .downcast_mut::<ArangoTx>()
-                .ok_or_else(|| anyhow!("transaction is not ArangoTx"))?;
-            let col = ar.inner.collection("users").await?;
+            let col = tr.inner.collection("users").await?;
             col.replace_document(&key, doc, Default::default(), None)
                 .await?;
         } else {
@@ -397,7 +355,7 @@ impl DatabaseInterface for ArangoDb {
         Ok(())
     }
 
-    async fn get_user_by_id(&self, user_id: &str) -> Result<Option<User>> {
+    pub async fn get_user_by_id(&self, user_id: &str) -> Result<Option<User>> {
         let id = if user_id.starts_with("u_") {
             user_id.to_string()
         } else {
@@ -410,7 +368,7 @@ impl DatabaseInterface for ArangoDb {
         }
     }
 
-    async fn get_group_by_id(&self, group_id: &str) -> Result<Option<Group>> {
+    pub async fn get_group_by_id(&self, group_id: &str) -> Result<Option<Group>> {
         match self.groups.document::<Group>(group_id).await {
             Ok(doc) => Ok(Some(doc.document)),
             Err(arangors::ClientError::Arango(it)) => {
@@ -420,7 +378,7 @@ impl DatabaseInterface for ArangoDb {
                     return Ok(None);
                 }
                 Err(anyhow!(message))
-            } // document not found
+            }
             Err(e) => Err(anyhow!(e.to_string())),
         }
     }

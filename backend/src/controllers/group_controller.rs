@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use crate::db::DatabaseInterface;
+use crate::db::ArangoDb;
 
 pub struct GroupController {
-    pub db: Arc<dyn DatabaseInterface>,
+    pub db: Arc<ArangoDb>,
 }
 
 impl GroupController {
-    pub fn new(db: Arc<dyn DatabaseInterface>) -> Self {
+    pub fn new(db: Arc<ArangoDb>) -> Self {
         Self { db }
     }
 }

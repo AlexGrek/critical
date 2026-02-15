@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     config::{AppConfig, RuntimeConfig},
     controllers::Controller,
-    db::DatabaseInterface,
+    db::ArangoDb,
     middleware::auth::Auth, services::offloadmq::OffloadClient,
 };
 
@@ -12,13 +12,13 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub auth: Arc<Auth>,
     pub controller: Arc<Controller>,
-    pub db: Arc<dyn DatabaseInterface>,
+    pub db: Arc<ArangoDb>,
     pub runtime_config: Arc<RuntimeConfig>,
     pub offloadmq: Arc<Option<OffloadClient>>,
 }
 
 impl AppState {
-    pub fn new(config: AppConfig, auth: Auth, database: Arc<dyn DatabaseInterface>, offloadmq: Option<OffloadClient>) -> Self {
+    pub fn new(config: AppConfig, auth: Auth, database: Arc<ArangoDb>, offloadmq: Option<OffloadClient>) -> Self {
         Self {
             config: Arc::new(config),
             auth: Arc::new(auth),
