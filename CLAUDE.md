@@ -80,6 +80,10 @@ make -f Makefile.xplatform release       # Full release with archives
   - `PORT`, `HOST`, `JWT_SECRET`, `MGMT_TOKEN`, `CLIENT_API_KEYS`
 - Re-exports models from `crit-shared` via `pub use crit_shared::models` in `main.rs`
 
+### Database Schema
+- See [`DATABASE.md`](DATABASE.md) for collection definitions, relationships, edge graphs, and conventions
+- **Always update `DATABASE.md`** when making schema changes (new collections, key changes, new edges/indexes)
+
 ### Database Layer (`backend/src/db/`)
 - **`DatabaseInterface` trait** (`src/db/mod.rs`): async trait with `Transaction` support, defines all DB operations (CRUD for users, groups, memberships)
 - **`ArangoDb`** (`src/db/arangodb/mod.rs`): sole implementation using `arangors` crate

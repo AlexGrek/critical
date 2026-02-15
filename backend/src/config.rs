@@ -21,6 +21,7 @@ pub struct AppConfig {
     pub management_token: String,
     pub host: String,
     pub port: u16,
+    pub root_password: String,
 }
 
 impl AppConfig {
@@ -66,6 +67,9 @@ impl AppConfig {
             .map(|s| s.to_string())
             .collect();
 
+        let root_password = env::var("ROOT_PASSWORD")
+            .unwrap_or_else(|_| "changeme".to_string());
+
         let host = env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string());
 
         let port = env::var("PORT")
@@ -82,6 +86,7 @@ impl AppConfig {
             host,
             port,
             management_token,
+            root_password,
         })
     }
 }
