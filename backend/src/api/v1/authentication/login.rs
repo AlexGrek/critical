@@ -56,10 +56,7 @@ pub async fn register(
 
     app_state.db.create_user(user.into(), None).await?;
 
-    log::info!(
-        "Register event -> {}",
-        format!("User with ID {:?} created: {}", &uid, &req.user)
-    );
+    log::info!("Register event -> User with ID {:?} created: {}", &uid, &req.user);
 
     Ok(Created {})
 }
@@ -85,10 +82,7 @@ pub async fn login(
 
     let (token_str, exp) = app_state.auth.create_token(&true_user.id)?;
 
-    log::info!(
-        "Auth event -> {}",
-        format!("User logged in: {}", &true_user.id)
-    );
+    log::info!("Auth event -> User logged in: {}", &true_user.id);
 
     // Calculate max-age from expiration timestamp
     let now = std::time::SystemTime::now()

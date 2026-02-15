@@ -1,10 +1,8 @@
-# Disclaimer
-
-This text is AI-generated and not revewed by humans yet. **Do not trust it**
-
 # crit-cli
 
-A powerful command-line tool built with Rust, supporting multiple platforms and architectures.
+A full-stack project management and ticketing system with a Rust backend, React TypeScript frontend, and ArangoDB database.
+
+Full documentation: [`docs/`](docs/README.md)
 
 ## 🚀 Quick Start
 

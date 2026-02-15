@@ -22,6 +22,7 @@ pub struct ContextFile {
 }
 
 impl ContextFile {
+    #[allow(dead_code)]
     pub fn current_context(&self) -> Option<&ContextEntry> {
         let name = self.current.as_ref()?;
         self.contexts.iter().find(|c| &c.name == name)
@@ -73,6 +74,7 @@ pub fn save(ctx: &ContextFile) -> Result<()> {
     save_to(ctx, &config_path()?)
 }
 
+#[allow(dead_code)]
 pub fn require_current() -> Result<ContextEntry> {
     let ctx = load()?;
     match ctx.current_context() {
