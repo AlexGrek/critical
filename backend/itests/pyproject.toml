@@ -1,0 +1,13 @@
+[project]
+name = "itests"
+version = "0.1.0"
+description = "Integration tests for Critical backend API"
+dependencies = [
+    "pytest",
+    "requests",
+    "websockets",
+]
+requires-python = ">=3.10"
+
+[tool.pdm]
+distribution = false

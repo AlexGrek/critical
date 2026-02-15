@@ -12,7 +12,9 @@
       "Bash(rustc:*)",
       "Bash(cargo check:*)",
       "Bash(git stash:*)",
-      "Bash(cargo add:*)"
+      "Bash(cargo add:*)",
+      "Bash(curl:*)",
+      "Bash(source:*)"
     ]
   }
 }

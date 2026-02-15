@@ -663,6 +663,7 @@ impl ArangoDb {
             LET existing = DOCUMENT(@@col, @key)
             FILTER existing != null
             REPLACE existing WITH @doc IN @@col
+            RETURN NEW
         "#;
         let vars = std::collections::HashMap::from([
             ("@col", Value::String(collection.to_string())),
@@ -685,6 +686,7 @@ impl ArangoDb {
             LET existing = DOCUMENT(@@col, @key)
             FILTER existing != null
             REMOVE existing IN @@col
+            RETURN OLD
         "#;
         let vars = std::collections::HashMap::from([
             ("@col", Value::String(collection.to_string())),

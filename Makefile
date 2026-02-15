@@ -54,7 +54,7 @@ test:
 		echo ">>> Running CLI integration tests..." && \
 		cargo test -p crit-cli --test cli_test -- --include-ignored && \
 		echo ">>> [3/3] Running Python API integration tests..." && \
-		python3 -m pytest backend/itests/ -v && \
+		cd backend/itests && pdm run pytest tests/ -v && cd ../.. && \
 		echo ">>> All tests passed."
 
 # Rust unit tests + backend integration tests (via axum-test, no backend process needed)
@@ -91,7 +91,7 @@ test-api:
 		trap 'kill $$BACKEND_PID 2>/dev/null; $(COMPOSE) down -v; echo ">>> Cleaned up."' EXIT && \
 		$(MAKE) wait-backend && \
 		echo ">>> Running Python API tests..." && \
-		python3 -m pytest backend/itests/ -v && \
+		cd backend/itests && pdm run pytest tests/ -v && cd ../.. && \
 		echo ">>> API tests passed."
 
 # --- DB management ---
