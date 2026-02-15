@@ -11,14 +11,14 @@ Critical (crit-cli) is a full-stack project management and ticketing system with
 Cargo workspace with three crates:
 - **`shared/`** (`crit-shared`) — shared library with domain models, used by both backend and CLI
 - **`backend/`** (`axum-api`) — Axum web server
-- **`cli/`** (`crit-cli`) — CLI tool (placeholder)
+- **`cli/`** (`crit-cli`) — gitops-style CLI tool (binary: `cr1t`), a full alternative to the frontend
 
 ## Build & Development Commands
 
 ### Workspace (Rust)
 ```bash
 cargo build                 # Build all workspace crates
-cargo build --bin crit-cli  # Build CLI only
+cargo build --bin cr1t      # Build CLI only
 cargo build --bin axum-api  # Build backend only
 cargo test                  # Run all Rust tests (requires ArangoDB running)
 cargo test test_name        # Run a single test
@@ -115,6 +115,20 @@ make -f Makefile.xplatform release       # Full release with archives
 - API proxy configured in `vite.config.ts` pointing to `http://localhost:8080`
 - UI toolkit in `app/toolkit/` (buttons, modals, typography)
 - Routes in `app/routes/` (dashboard, auth, projects, tickets, pipelines)
+
+### CLI (`cli/`)
+- **Binary name**: `cr1t` (gitops-style, similar to `kubectl`)
+- **Purpose**: Full-featured CLI alternative to the frontend for managing projects, tickets, pipelines, etc.
+- **Auth**: Authenticates via long-lived JWT stored in `~/.cr1tical/context.yaml`
+- **Context system**: Supports multiple server contexts (like kubeconfigs) — switch with `cr1t context use <name>`
+- **Current commands**: `login`, `context list`, `context use`
+- **Future login methods**: Only username/password for now; additional methods (API keys, SSO, etc.) planned
+- **Registration**: Not supported from CLI — users must register via the frontend or API
+- **Key files**:
+  - `src/main.rs` — clap-based CLI entrypoint and command routing
+  - `src/context.rs` — context file load/save (`~/.cr1tical/context.yaml`)
+  - `src/api.rs` — HTTP client calls to the backend API
+  - `src/commands/` — command implementations (one file per command group)
 
 ### State Management (`backend/src/state.rs`)
 - `AppState` holds config, auth, DB interface (`Arc<dyn DatabaseInterface>`), and optional services

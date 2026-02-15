@@ -25,7 +25,44 @@ wget -qO- https://critical.dcommunity.space/install.sh | bash
 ### Usage
 
 ```bash
-crit [options] ...
+cr1t [command] [options]
+```
+
+## CLI (`cr1t`)
+
+`cr1t` is a gitops-style CLI (similar to `kubectl`) that serves as a full alternative to the web frontend. It communicates with the Critical backend API over HTTP.
+
+### Authentication
+
+Login with username and password. The JWT is stored in `~/.cr1tical/context.yaml` and reused for subsequent commands.
+
+```bash
+# Interactive login (prompts for URL, username, password)
+cr1t login
+
+# Non-interactive
+cr1t login --url https://critical.example.com --user alice
+```
+
+Registration is not supported from the CLI. Use the web frontend or API directly.
+
+> **Note:** Additional login methods (API keys, SSO, etc.) are planned for future releases.
+
+### Context Management
+
+Contexts work like kubeconfigs — you can authenticate against multiple servers and switch between them.
+
+```bash
+cr1t context list           # Show all contexts
+cr1t context use <name>     # Switch active context
+```
+
+Context file location: `~/.cr1tical/context.yaml`
+
+### Building the CLI
+
+```bash
+cargo build --bin cr1t      # Development build
 ```
 
 ## 🛠️ Development

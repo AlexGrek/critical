@@ -3,5 +3,17 @@ name = "crit-cli"
 version = "0.1.0"
 edition = "2024"
 
+[[bin]]
+name = "cr1t"
+path = "src/main.rs"
+
 [dependencies]
 crit-shared = { path = "../shared" }
+clap = { version = "4", features = ["derive"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["full"] }
+dirs = "6"
+rpassword = "7"
+anyhow = "1"
