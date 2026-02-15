@@ -54,7 +54,16 @@ pub async fn register(
 
     let uid = user.username.clone();
 
-    app_state.db.create_user(user.into(), None).await?;
+    let user_model: models::User = user.into();
+    let user_id = user_model.id.clone();
+    app_state.db.create_user(user_model, None).await?;
+
+    // Grant default permissions to new users
+    app_state
+        .db
+        .grant_permission(models::super_permissions::USR_CREATE_PROJECTS, &user_id)
+        .await
+        .map_err(|e| AppError::Internal(e))?;
 
     log::info!("Register event -> User with ID {:?} created: {}", &uid, &req.user);
 

@@ -491,6 +491,32 @@ impl ArangoDb {
         Ok(result.first().copied().unwrap_or(false))
     }
 
+    /// Get all principal IDs for a user: the user's own ID plus all group IDs
+    /// reachable through the membership graph (up to 10 levels deep).
+    pub async fn get_user_principals(&self, user_id: &str) -> Result<Vec<String>> {
+        let query = r#"
+            LET user_principals = UNION_DISTINCT(
+                [@user],
+                (FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships
+                    RETURN v._key)
+            )
+            RETURN user_principals
+        "#;
+
+        let vars = std::collections::HashMap::from([(
+            "user",
+            serde_json::Value::String(user_id.to_string()),
+        )]);
+
+        let result: Vec<Vec<String>> = self
+            .db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        Ok(result.into_iter().next().unwrap_or_default())
+    }
+
     pub async fn grant_permission(&self, permission: &str, principal: &str) -> Result<()> {
         let query = r#"
             UPSERT { _key: @permission }

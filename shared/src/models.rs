@@ -39,6 +39,16 @@ pub struct AccessControlList {
     pub principals: Vec<String>,
 }
 
+impl AccessControlStore {
+    /// Check if any of the given principals has the required permission in this ACL.
+    pub fn check_permission(&self, principals: &[String], required: Permissions) -> bool {
+        self.list.iter().any(|acl| {
+            acl.permissions.contains(required)
+                && acl.principals.iter().any(|p| principals.contains(p))
+        })
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct PersonalInfo {
     pub name: String,

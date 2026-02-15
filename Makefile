@@ -39,6 +39,22 @@ run-fresh: reset-db run
 
 # --- Test targets ---
 
+# --- Internal: start backend in background, wait for it, set trap for cleanup ---
+# Usage: eval "$(call start-backend)" inside a shell block
+# After this, BACKEND_PID is set and trap ensures cleanup of both backend and DB.
+define _start_backend
+	cargo build --bin axum-api && \
+	(cd backend && cargo run >/dev/null 2>&1) & BACKEND_PID=$$!; \
+	trap 'kill $$BACKEND_PID 2>/dev/null; wait $$BACKEND_PID 2>/dev/null; $(COMPOSE) down -v; echo ">>> Cleaned up."' EXIT; \
+	echo ">>> Waiting for backend..."; \
+	for i in $$(seq 1 30); do \
+		curl -sf $(BACKEND_URL)/health >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done; \
+	curl -sf $(BACKEND_URL)/health >/dev/null 2>&1 || { echo ">>> Backend failed to start"; exit 1; }; \
+	echo ">>> Backend is ready"
+endef
+
 # Run everything: Rust unit/integration tests, CLI integration tests, Python API tests
 test:
 	@echo ">>> Starting ephemeral ArangoDB..."
@@ -48,9 +64,7 @@ test:
 		echo ">>> [1/3] Running Rust unit & backend integration tests..." && \
 		cargo test -p axum-api -p crit-cli && \
 		echo ">>> [2/3] Starting backend for CLI & API integration tests..." && \
-		cd backend && cargo run &>/dev/null & BACKEND_PID=$$! && cd .. && \
-		trap 'kill $$BACKEND_PID 2>/dev/null; $(COMPOSE) down -v; echo ">>> Cleaned up."' EXIT && \
-		$(MAKE) wait-backend && \
+		$(_start_backend) && \
 		echo ">>> Running CLI integration tests..." && \
 		cargo test -p crit-cli --test cli_test -- --include-ignored && \
 		echo ">>> [3/3] Running Python API integration tests..." && \
@@ -73,9 +87,7 @@ test-cli:
 	@$(MAKE) wait-db
 	@echo ">>> Starting backend..."
 	@trap '$(COMPOSE) down -v; echo ">>> Ephemeral ArangoDB removed."' EXIT; \
-		cd backend && cargo run &>/dev/null & BACKEND_PID=$$! && cd .. && \
-		trap 'kill $$BACKEND_PID 2>/dev/null; $(COMPOSE) down -v; echo ">>> Cleaned up."' EXIT && \
-		$(MAKE) wait-backend && \
+		$(_start_backend) && \
 		echo ">>> Running CLI integration tests..." && \
 		cargo test -p crit-cli --test cli_test -- --include-ignored -- --test-threads=1 && \
 		echo ">>> CLI tests passed."
@@ -87,9 +99,7 @@ test-api:
 	@$(MAKE) wait-db
 	@echo ">>> Starting backend..."
 	@trap '$(COMPOSE) down -v; echo ">>> Ephemeral ArangoDB removed."' EXIT; \
-		cd backend && cargo run &>/dev/null & BACKEND_PID=$$! && cd .. && \
-		trap 'kill $$BACKEND_PID 2>/dev/null; $(COMPOSE) down -v; echo ">>> Cleaned up."' EXIT && \
-		$(MAKE) wait-backend && \
+		$(_start_backend) && \
 		echo ">>> Running Python API tests..." && \
 		cd backend/itests && pdm run pytest tests/ -v && cd ../.. && \
 		echo ">>> API tests passed."

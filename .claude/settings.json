@@ -14,7 +14,8 @@
       "Bash(git stash:*)",
       "Bash(cargo add:*)",
       "Bash(curl:*)",
-      "Bash(source:*)"
+      "Bash(source:*)",
+      "Bash(cargo clean:*)"
     ]
   }
 }

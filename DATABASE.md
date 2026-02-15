@@ -179,4 +179,34 @@ All five active collections (`users`, `groups`, `memberships`, `permissions`, `p
 
 ---
 
+## Authorization (Gitops API)
+
+The gitops API enforces permission checks based on the collection kind. Unauthorized access returns **404** (hides resource existence) rather than 401/403.
+
+### Rules by Kind
+
+| Collection | Read Access | Write Access |
+|------------|-------------|--------------|
+| `users`, `groups` | All authenticated users | `adm_user_manager` super-permission |
+| `projects` | `adm_project_manager` OR project ACL with READ | Create: `adm_project_manager` or `usr_create_projects`. Update/delete: `adm_project_manager` OR project ACL with WRITE |
+| Other kinds | All authenticated users | All authenticated users (TODO: ACL inheritance) |
+
+### ACL Permission Bits (Projects)
+
+Projects embed an `acl: AccessControlStore` with fine-grained permission entries:
+
+| Permission | Bit Value | Description |
+|------------|-----------|-------------|
+| FETCH | 1 | Read individual project |
+| LIST | 2 | See project in listings |
+| NOTIFY | 4 | Receive notifications |
+| CREATE | 8 | Create child resources |
+| MODIFY | 16 | Update/delete project |
+| READ (composite) | 7 | FETCH + LIST + NOTIFY |
+| WRITE (composite) | 31 | CREATE + MODIFY + READ |
+
+ACL checks resolve through the user's principals (user ID + all group IDs via membership graph, up to 10 levels).
+
+---
+
 *Last updated: 2026-02-15*
