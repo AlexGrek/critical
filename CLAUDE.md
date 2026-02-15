@@ -135,7 +135,24 @@ make -f Makefile.xplatform release       # Full release with archives
 - Shared via `Arc<AppState>` across all routes
 
 ### Testing
-- All tests require ArangoDB running (use `make test` for ephemeral instance)
-- `backend/src/test/` contains Rust integration tests (e.g., `login_test.rs`)
+
+Three test categories, all orchestrated via Makefile with ephemeral ArangoDB:
+
+| Type | Location | Needs DB | Needs backend | Command |
+|------|----------|----------|---------------|---------|
+| Rust unit + backend integration | `backend/src/test/`, CLI unit tests | yes | no (axum-test) | `make test-unit` |
+| CLI integration | `cli/tests/cli_test.rs` | yes | yes | `make test-cli` |
+| Python API integration | `backend/itests/` | yes | yes | `make test-api` |
+
+```bash
+make test                   # Run ALL test types (DB + backend started automatically)
+make test-unit              # Rust unit + backend tests only (starts ephemeral DB)
+make test-cli               # CLI integration tests (starts DB + backend)
+make test-api               # Python API tests (starts DB + backend)
+```
+
+- `make test` orchestrates: start DB → Rust tests → start backend → CLI tests → Python tests → cleanup
+- Each target starts its own ephemeral ArangoDB and tears it down on exit
 - `create_mock_shared_state()` in `main.rs` is async — connects to ArangoDB from `.env`
-- `backend/itests/` contains Python-based integration tests (pytest)
+- CLI integration tests use `assert_cmd` to run `cr1t` binary with temp `HOME` for isolation
+- Python itests use `pytest` with `requests` library against `localhost:3742`

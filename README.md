@@ -65,6 +65,23 @@ Context file location: `~/.cr1tical/context.yaml`
 cargo build --bin cr1t      # Development build
 ```
 
+## Testing
+
+All test targets start an ephemeral ArangoDB container and clean up on exit.
+
+```bash
+make test                   # Run ALL tests (Rust + CLI + Python API)
+make test-unit              # Rust unit & backend integration tests only
+make test-cli               # CLI integration tests (starts backend automatically)
+make test-api               # Python API integration tests (starts backend automatically)
+```
+
+| Type | Location | What it tests |
+|------|----------|---------------|
+| Rust unit + backend | `backend/src/test/`, CLI `#[cfg(test)]` | Backend API via axum-test, context management |
+| CLI integration | `cli/tests/cli_test.rs` | `cr1t` binary end-to-end against real backend |
+| Python API | `backend/itests/` | HTTP API + WebSocket via pytest |
+
 ## 🛠️ Development
 
 ### Prerequisites
