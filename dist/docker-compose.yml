@@ -1,0 +1,54 @@
+services:
+  arangodb:
+    image: arangodb:3.12
+    environment:
+      ARANGO_ROOT_PASSWORD: ${DB_PASSWORD:-changeme}
+      ARANGO_STORAGE_ENGINE: rocksdb
+    volumes:
+      - arango_data:/var/lib/arangodb3
+      - arango_apps:/var/lib/arangodb3-apps
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8529/_api/version", "-u", "root:${DB_PASSWORD:-changeme}"]
+      interval: 10s
+      timeout: 3s
+      start_period: 10s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    image: grekodocker/cr1t-api:${TAG:-latest}
+    depends_on:
+      arangodb:
+        condition: service_healthy
+    environment:
+      DB_CONNECTION_STRING: http://arangodb:8529
+      DB_NAME: ${DB_NAME:-critical}
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD:-changeme}
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      MGMT_TOKEN: ${MGMT_TOKEN:-change-me-in-production}
+      ROOT_PASSWORD: ${ROOT_PASSWORD:-changeme}
+      PORT: "3069"
+      HOST: "0.0.0.0"
+    restart: unless-stopped
+
+  frontend:
+    image: grekodocker/cr1t-frontend:${TAG:-latest}
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  gateway:
+    image: nginx:alpine
+    ports:
+      - "${GATEWAY_PORT:-8080}:8080"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - api
+      - frontend
+    restart: unless-stopped
+
+volumes:
+  arango_data:
+  arango_apps:

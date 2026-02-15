@@ -57,6 +57,22 @@ make -f Makefile.xplatform build-all     # Build for all 9 target platforms
 make -f Makefile.xplatform release       # Full release with archives
 ```
 
+### Docker / Deployment (`dist/`)
+```bash
+cd dist
+make build                  # Build API + frontend images locally (current arch)
+make build-push             # Build multi-arch (amd64+arm64) and push to Docker Hub
+make up                     # Start full stack (API + frontend + ArangoDB + nginx gateway)
+make down                   # Stop stack
+make logs                   # Tail all service logs
+make status                 # Show running containers
+make reset                  # Tear down + remove volumes
+```
+
+Images: `grekodocker/cr1t-api`, `grekodocker/cr1t-frontend` (Docker Hub, multi-arch)
+
+Stack architecture: nginx gateway (:8080) routes `/api/*` to the backend and `/*` to the frontend SSR server. See [`dist/README.md`](dist/README.md) for env vars and details.
+
 ## Architecture
 
 ### Shared Library (`shared/`)
