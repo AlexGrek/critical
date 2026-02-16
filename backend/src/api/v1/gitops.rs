@@ -7,7 +7,7 @@ use axum::{
 };
 use serde_json::{Value, json};
 
-use crate::{controllers::gitops_controller::GitopsController, error::AppError, middleware::auth::AuthenticatedUser, state::AppState};
+use crate::{error::AppError, middleware::auth::AuthenticatedUser, state::AppState};
 
 /// Validate that a kind string is a safe collection name (alphanumeric + underscores).
 fn validate_kind(kind: &str) -> Result<(), AppError> {
@@ -34,13 +34,13 @@ pub async fn list_objects(
     validate_kind(&kind)?;
     state.db.ensure_collection(&kind).await?;
 
-    let gitops = &state.controller.gitops;
+    let ctrl = state.controller.for_kind(&kind);
     let docs = state.db.generic_list(&kind).await?;
 
     let mut filtered = Vec::new();
     for doc in docs {
-        if gitops.can_read(&user_id, &kind, Some(&doc)).await? {
-            filtered.push(GitopsController::to_external(&kind, doc));
+        if ctrl.can_read(&user_id, Some(&doc)).await? {
+            filtered.push(ctrl.to_external(doc));
         }
     }
 
@@ -63,22 +63,20 @@ pub async fn create_object(
         .ok_or_else(|| AppError::bad_request("missing 'id' field in request body"))?
         .to_string();
 
-    let gitops = &state.controller.gitops;
+    let ctrl = state.controller.for_kind(&kind);
 
-    let allowed = gitops.can_write(&user_id, &kind, None).await?;
+    let allowed = ctrl.can_write(&user_id, None).await?;
     log::debug!("[HANDLER] create_object: can_write={}, user={}, kind={}, id={}", allowed, user_id, kind, id);
     if !allowed {
         log::debug!("[HANDLER] create_object: DENIED, returning 404");
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
     }
 
-    if kind == "projects" {
-        GitopsController::ensure_creator_in_acl(&mut body, &user_id);
-    }
+    ctrl.prepare_create(&mut body, &user_id);
 
     state.db.ensure_collection(&kind).await?;
 
-    let doc = GitopsController::to_internal(&kind, body, &state.auth)?;
+    let doc = ctrl.to_internal(body, &state.auth)?;
     state
         .db
         .generic_create(&kind, doc)
@@ -103,14 +101,14 @@ pub async fn get_object(
 ) -> Result<impl IntoResponse, AppError> {
     validate_kind(&kind)?;
 
-    let gitops = &state.controller.gitops;
+    let ctrl = state.controller.for_kind(&kind);
     let doc = state.db.generic_get(&kind, &id).await?;
     match doc {
         Some(d) => {
-            if !gitops.can_read(&user_id, &kind, Some(&d)).await? {
+            if !ctrl.can_read(&user_id, Some(&d)).await? {
                 return Err(AppError::not_found(format!("{}/{}", kind, id)));
             }
-            Ok(Json(GitopsController::to_external(&kind, d)))
+            Ok(Json(ctrl.to_external(d)))
         }
         None => Err(AppError::not_found(format!("{}/{}", kind, id))),
     }
@@ -129,20 +127,20 @@ pub async fn upsert_object(
         obj.insert("id".to_string(), Value::String(id.clone()));
     }
 
-    let gitops = &state.controller.gitops;
+    let ctrl = state.controller.for_kind(&kind);
     let existing = state.db.generic_get(&kind, &id).await?;
 
-    if !gitops.can_write(&user_id, &kind, existing.as_ref()).await? {
+    if !ctrl.can_write(&user_id, existing.as_ref()).await? {
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
     }
 
-    if kind == "projects" && existing.is_none() {
-        GitopsController::ensure_creator_in_acl(&mut body, &user_id);
+    if existing.is_none() {
+        ctrl.prepare_create(&mut body, &user_id);
     }
 
     state.db.ensure_collection(&kind).await?;
 
-    let doc = GitopsController::to_internal(&kind, body, &state.auth)?;
+    let doc = ctrl.to_internal(body, &state.auth)?;
     state.db.generic_upsert(&kind, &id, doc).await?;
 
     Ok(Json(json!({ "id": id })))
@@ -161,15 +159,15 @@ pub async fn update_object(
         obj.insert("id".to_string(), Value::String(id.clone()));
     }
 
-    let gitops = &state.controller.gitops;
+    let ctrl = state.controller.for_kind(&kind);
     let existing = state.db.generic_get(&kind, &id).await?;
     let existing = existing.ok_or_else(|| AppError::not_found(format!("{}/{}", kind, id)))?;
 
-    if !gitops.can_write(&user_id, &kind, Some(&existing)).await? {
+    if !ctrl.can_write(&user_id, Some(&existing)).await? {
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
     }
 
-    let doc = GitopsController::to_internal(&kind, body, &state.auth)?;
+    let doc = ctrl.to_internal(body, &state.auth)?;
     state
         .db
         .generic_update(&kind, &id, doc)
@@ -194,11 +192,11 @@ pub async fn delete_object(
 ) -> Result<impl IntoResponse, AppError> {
     validate_kind(&kind)?;
 
-    let gitops = &state.controller.gitops;
+    let ctrl = state.controller.for_kind(&kind);
     let existing = state.db.generic_get(&kind, &id).await?;
     let existing = existing.ok_or_else(|| AppError::not_found(format!("{}/{}", kind, id)))?;
 
-    if !gitops.can_write(&user_id, &kind, Some(&existing)).await? {
+    if !ctrl.can_write(&user_id, Some(&existing)).await? {
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
     }
 

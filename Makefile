@@ -40,11 +40,14 @@ run-fresh: reset-db run
 # --- Test targets ---
 
 # --- Internal: start backend in background, wait for it, set trap for cleanup ---
-# Usage: eval "$(call start-backend)" inside a shell block
+# Usage: $(_start_backend) inside a shell block
 # After this, BACKEND_PID is set and trap ensures cleanup of both backend and DB.
+# NOTE: We run the binary directly (not `cargo run`) so that BACKEND_PID points to
+# the actual axum-api process. `cargo run` spawns a child, and killing cargo doesn't
+# reliably kill the child — leaving orphaned backend processes that block future runs.
 define _start_backend
 	cargo build --bin axum-api && \
-	(cd backend && cargo run >/dev/null 2>&1) & BACKEND_PID=$$!; \
+	(cd backend && ../target/debug/axum-api) > /dev/null 2>&1 & BACKEND_PID=$$!; \
 	trap 'kill $$BACKEND_PID 2>/dev/null; wait $$BACKEND_PID 2>/dev/null; $(COMPOSE) down -v; echo ">>> Cleaned up."' EXIT; \
 	echo ">>> Waiting for backend..."; \
 	for i in $$(seq 1 30); do \
