@@ -1,0 +1,14 @@
+{
+  "testUser": {
+    "username": "testuser",
+    "password": "TestPassword123!"
+  },
+  "admin": {
+    "username": "admin",
+    "password": "AdminPassword123!"
+  },
+  "newUser": {
+    "username": "newuser",
+    "password": "NewPassword123!"
+  }
+}
