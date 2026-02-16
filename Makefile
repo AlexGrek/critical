@@ -6,7 +6,7 @@ BACKEND_URL ?= http://localhost:$(BACKEND_PORT)
 .PHONY: dev dev-api dev-frontend run run-fresh test test-unit test-cli test-api run-db stop-db reset-db logs-db wait-db wait-backend
 
 dev:
-	@$(MAKE) dev-api & $(MAKE) dev-frontend & wait
+	@$(MAKE) run-db & $(MAKE) dev-api & $(MAKE) dev-frontend & wait
 
 dev-api:
 	@echo ">>> Starting backend (cargo watch)..."

@@ -151,9 +151,8 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
 - **React 19** with **React Router 7.5** (SSR enabled)
 - **TailwindCSS 4** for styling
 - **Vite 6** as build tool
-- API proxy configured in `vite.config.ts` pointing to `http://localhost:8080`
-- UI toolkit in `app/toolkit/` (buttons, modals, typography)
-- Routes in `app/routes/` (dashboard, auth, projects, tickets, pipelines)
+- See [`frontend/README.md`](frontend/README.md) for routes, setup, and architecture
+- **Current routes**: `/` (home), `/sign-in`, `/sign-up`, `/ui-gallery` (component showcase)
 
 ### CLI (`cli/`)
 - **Binary name**: `cr1t` (gitops-style, similar to `kubectl`)
