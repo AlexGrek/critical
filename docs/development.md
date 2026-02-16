@@ -29,7 +29,7 @@ Frontend (separate terminal):
 ```bash
 cd frontend
 npm install
-npm run dev                 # Dev server on port 5173 (proxies API to localhost:8080)
+npm run dev                 # Dev server on port 5173 (proxies API to localhost:3742)
 ```
 
 ### Frontend

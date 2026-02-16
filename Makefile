@@ -6,7 +6,14 @@ BACKEND_URL ?= http://localhost:$(BACKEND_PORT)
 .PHONY: dev dev-api dev-frontend run run-fresh test test-unit test-cli test-api run-db stop-db reset-db logs-db wait-db wait-backend
 
 dev:
-	@$(MAKE) run-db & $(MAKE) dev-api & $(MAKE) dev-frontend & wait
+	@bash -c ' \
+		set -m; \
+		trap "kill %1 %2 %3 2>/dev/null; wait 2>/dev/null; echo \">>> Development environment stopped.\"" EXIT INT TERM; \
+		$(MAKE) run-db & \
+		$(MAKE) dev-api & \
+		$(MAKE) dev-frontend & \
+		wait \
+	'
 
 dev-api:
 	@echo ">>> Starting backend (cargo watch)..."

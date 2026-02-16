@@ -21,7 +21,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   let res: Response;
   try {
-    res = await fetch("http://localhost:8080/api/login", {
+    res = await fetch("http://localhost:3742/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user, password }),

@@ -45,7 +45,7 @@ Cargo workspace with three crates plus a frontend:
 
 - **React 19** with **React Router 7.5** (SSR enabled)
 - **TailwindCSS 4** for styling, **Vite 6** as build tool
-- API proxy in `vite.config.ts` → `http://localhost:8080`
+- API proxy in `vite.config.ts` → `http://localhost:3742`
 - UI toolkit in `app/toolkit/` (buttons, modals, typography)
 - Routes in `app/routes/` (dashboard, auth, projects, tickets, pipelines)
 
@@ -70,4 +70,4 @@ Cargo workspace with three crates plus a frontend:
 [ arangodb ]
 ```
 
-All traffic enters through nginx on port 8080. `/api/*` routes to the Rust backend, everything else to the React SSR frontend.
+All traffic enters through nginx on port 3742. `/api/*` routes to the Rust backend, everything else to the React SSR frontend.

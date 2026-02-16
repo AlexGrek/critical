@@ -2,6 +2,8 @@
 
 `cr1t` is a gitops-style CLI (similar to `kubectl`) that serves as a full alternative to the web frontend. It communicates with the Critical backend API over HTTP.
 
+**Development guide**: See [`cli/README.md`](../cli/README.md) for local development, building, testing, and login flow details.
+
 ## Installation
 
 ```bash

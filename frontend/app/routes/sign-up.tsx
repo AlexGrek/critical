@@ -27,7 +27,7 @@ export async function action({ request }: Route.ActionArgs) {
   // Register
   let registerRes: Response;
   try {
-    registerRes = await fetch("http://localhost:8080/api/register", {
+    registerRes = await fetch("http://localhost:3742/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user, password }),
@@ -48,7 +48,7 @@ export async function action({ request }: Route.ActionArgs) {
   // Auto-login after successful registration
   let loginRes: Response;
   try {
-    loginRes = await fetch("http://localhost:8080/api/login", {
+    loginRes = await fetch("http://localhost:3742/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ user, password }),

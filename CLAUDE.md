@@ -37,7 +37,7 @@ make test                   # Start ephemeral ArangoDB, run tests, tear down DB 
 ### Frontend (React Router + Vite)
 ```bash
 cd frontend
-npm run dev                 # Dev server on port 5173 (proxies API to localhost:8080)
+npm run dev                 # Dev server on port 5173 (proxies API to localhost:3742)
 npm run build               # Production build
 npm run typecheck           # react-router typegen && tsc
 npm start                   # Serve production build
@@ -73,7 +73,7 @@ make reset                  # Tear down + remove volumes
 
 Images: `grekodocker/cr1t-api`, `grekodocker/cr1t-frontend` (Docker Hub, multi-arch)
 
-Stack architecture: nginx gateway (:8080) routes `/api/*` to the backend and `/*` to the frontend SSR server. See [`dist/README.md`](dist/README.md) for env vars and details.
+Stack architecture: nginx gateway (:3742) routes `/api/*` to the backend and `/*` to the frontend SSR server. See [`dist/README.md`](dist/README.md) for env vars and details.
 
 ## Architecture
 

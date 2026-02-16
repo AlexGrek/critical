@@ -6,7 +6,7 @@ React 19 + React Router 7.5 single-page application for the Critical project man
 
 ```bash
 npm install
-npm run dev         # Dev server on port 5173 (proxies API to localhost:8080)
+npm run dev         # Dev server on port 5173 (proxies API to localhost:3742)
 npm run build       # Production build
 npm run typecheck   # react-router typegen && tsc
 npm start           # Serve production build
@@ -42,7 +42,7 @@ All routes are defined in [`app/routes.ts`](app/routes.ts):
 ## Development
 
 - **HMR enabled**: Changes auto-reload without losing state
-- **API proxy**: Requests to `/api/*` are proxied to `http://localhost:8080` (see `vite.config.ts`)
+- **API proxy**: Requests to `/api/*` are proxied to `http://localhost:3742` (see `vite.config.ts`)
 - **TypeScript**: Full type safety with React Router's type generation
 
 ## Creating New Routes
@@ -116,7 +116,7 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   try {
-    const res = await fetch("http://localhost:8080/api/example", {
+    const res = await fetch("http://localhost:3742/api/example", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
@@ -167,7 +167,7 @@ import { Button, Input, Modal, LogoCritical, ThemeCombobox } from "~/components"
 Requests to `/api/*` are automatically proxied to the backend:
 
 ```typescript
-// In dev: http://localhost:5173/api/users → http://localhost:8080/api/users
+// In dev: http://localhost:5173/api/users → http://localhost:3742/api/users
 const res = await fetch("/api/v1/global/users", {
   method: "GET",
   headers: {
