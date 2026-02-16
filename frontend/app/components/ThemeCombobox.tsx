@@ -6,14 +6,14 @@ import {
   ListboxOptions,
   Transition,
 } from "@headlessui/react";
-import { Check, ChevronDown, Moon, Sun, Eye } from "lucide-react";
+import { Check, ChevronDown, Moon, Sun, Eye, Heart, Flame } from "lucide-react";
 import { useTheme, type Theme } from "~/contexts/ThemeContext";
 
 type ThemeOption = {
   value: Theme;
   label: string;
   description: string;
-  icon: typeof Sun | typeof Moon | typeof Eye;
+  icon: typeof Sun | typeof Moon | typeof Eye | typeof Heart | typeof Flame;
 };
 
 const themes: ThemeOption[] = [
@@ -30,9 +30,21 @@ const themes: ThemeOption[] = [
     icon: Moon,
   },
   {
+    value: "barbie",
+    label: "Barbie",
+    description: "Pink-focused light theme",
+    icon: Heart,
+  },
+  {
+    value: "orange",
+    label: "Orange",
+    description: "Orange-tinted dark theme",
+    icon: Flame,
+  },
+  {
     value: "grayscale",
     label: "Grayscale",
-    description: "Low contrast, eye-saving mode",
+    description: "Neutral gray, no color tint",
     icon: Eye,
   },
 ];

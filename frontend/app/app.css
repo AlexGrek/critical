@@ -1,22 +1,27 @@
 @import "tailwindcss";
 
+/* Use class-based dark mode so theme switcher (light/dark/grayscale) controls styles,
+   not the OS preference. Without this, Tailwind v4 defaults to prefers-color-scheme
+   and light/dark would both follow system theme. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   /* Typography */
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
 
-  /* Custom Color Palette */
-  --color-primary-50: #f0f9ff;
-  --color-primary-100: #e0f2fe;
-  --color-primary-200: #bae6fd;
-  --color-primary-300: #7dd3fc;
-  --color-primary-400: #38bdf8;
-  --color-primary-500: #0ea5e9;
-  --color-primary-600: #0284c7;
-  --color-primary-700: #0369a1;
-  --color-primary-800: #075985;
-  --color-primary-900: #0c4a6e;
-  --color-primary-950: #082f49;
+  /* Custom Color Palette - green primary for dark theme feel */
+  --color-primary-50: #ecfdf5;
+  --color-primary-100: #d1fae5;
+  --color-primary-200: #a7f3d0;
+  --color-primary-300: #6ee7b7;
+  --color-primary-400: #34d399;
+  --color-primary-500: #10b981;
+  --color-primary-600: #059669;
+  --color-primary-700: #047857;
+  --color-primary-800: #065f46;
+  --color-primary-900: #064e3b;
+  --color-primary-950: #022c22;
 
   --color-accent-50: #faf5ff;
   --color-accent-100: #f3e8ff;
@@ -66,45 +71,95 @@ body {
 
 /* Theme-specific styles */
 html.light,
-html:not(.dark):not(.grayscale) {
+html:not(.dark):not(.grayscale):not(.barbie):not(.orange) {
   background-color: #ffffff;
   color: #111827;
   color-scheme: light;
 }
 
+/* Barbie: pink-focused light theme */
+html.barbie {
+  background-color: #fdf2f8;
+  color: #831843;
+  color-scheme: light;
+  --color-primary-50: #fdf2f8;
+  --color-primary-100: #fce7f3;
+  --color-primary-200: #fbcfe8;
+  --color-primary-300: #f9a8d4;
+  --color-primary-400: #f472b6;
+  --color-primary-500: #ec4899;
+  --color-primary-600: #db2777;
+  --color-primary-700: #be185d;
+  --color-primary-800: #9d174d;
+  --color-primary-900: #831843;
+  --color-primary-950: #500724;
+}
+
+/* Orange dark: orange-tinted dark theme (uses .dark for layout) */
+html.orange {
+  background-color: #0f0a05;
+  color: #fff7ed;
+  color-scheme: dark;
+  --color-gray-950: #0a0704;
+  --color-gray-900: #141008;
+  --color-gray-800: #1e180d;
+  --color-gray-700: #352a14;
+  --color-gray-600: #4a3c1f;
+  --color-gray-500: #6b5a32;
+  --color-gray-400: #a3936d;
+  --color-gray-300: #c9bc9e;
+  --color-gray-200: #e5dfcf;
+  --color-gray-100: #f2efe5;
+  --color-gray-50: #faf8f4;
+  --color-primary-50: #fff7ed;
+  --color-primary-100: #ffedd5;
+  --color-primary-200: #fed7aa;
+  --color-primary-300: #fdba74;
+  --color-primary-400: #fb923c;
+  --color-primary-500: #f97316;
+  --color-primary-600: #ea580c;
+  --color-primary-700: #c2410c;
+  --color-primary-800: #9a3412;
+  --color-primary-900: #7c2d12;
+  --color-primary-950: #431407;
+}
+
+/* Green-tinted dark theme: primary is green; override grays so surfaces/borders match */
 html.dark {
-  background-color: #030712;
-  color: #f9fafb;
+  background-color: #07120e;
+  color: #ecfdf5;
   color-scheme: dark;
+  --color-gray-950: #050a08;
+  --color-gray-900: #0f1412;
+  --color-gray-800: #1a231e;
+  --color-gray-700: #2d3a34;
+  --color-gray-600: #3d4d45;
+  --color-gray-500: #5c6b62;
+  --color-gray-400: #9caa9f;
+  --color-gray-300: #c5cfc7;
+  --color-gray-200: #dde5df;
+  --color-gray-100: #ecf3ee;
+  --color-gray-50: #f4f9f5;
 }
 
+/* Grayscale = truly neutral gray, no blue/green tint. Uses .dark for layout;
+   overrides with neutral grays and full grayscale filter. */
 html.grayscale {
-  background-color: #1f2937;
-  color: #f3f4f6;
+  background-color: #0a0a0a;
+  color: #e5e5e5;
   color-scheme: dark;
-  filter: grayscale(100%) contrast(0.95);
+  filter: grayscale(100%) contrast(0.98);
 }
 
-/* Grayscale theme adjustments for better readability */
 html.grayscale .bg-gradient-subtle {
-  background-color: #374151;
+  background-color: #171717;
 }
 
-html.grayscale button,
-html.grayscale input,
-html.grayscale select,
-html.grayscale textarea {
-  /* Remove the grayscale filter from interactive elements for better visibility */
-  filter: none;
-  border-color: #4b5563;
-}
-
-html.grayscale button:hover {
-  background-color: #4b5563;
-}
-
-html.grayscale button:focus {
-  outline: 2px solid #9ca3af;
+html.grayscale button:focus,
+html.grayscale input:focus,
+html.grayscale select:focus,
+html.grayscale textarea:focus {
+  outline: 2px solid #737373;
   outline-offset: 2px;
 }
 
