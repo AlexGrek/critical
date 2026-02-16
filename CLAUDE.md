@@ -103,8 +103,7 @@ Stack architecture: nginx gateway (:8080) routes `/api/*` to the backend and `/*
 - **Always update `DATABASE.md`** when making schema changes (new collections, key changes, new edges/indexes)
 
 ### Database Layer (`backend/src/db/`)
-- **`DatabaseInterface` trait** (`src/db/mod.rs`): async trait with `Transaction` support, defines all DB operations (CRUD for users, groups, memberships, permissions)
-- **`ArangoDb`** (`src/db/arangodb/mod.rs`): sole implementation using `arangors` crate
+- **`ArangoDb`** (`src/db/arangodb/mod.rs`): database layer using `arangors` crate (no trait abstraction — direct struct usage)
 - `connect_basic` auto-creates the database and collections on first connection (idempotent — silently ignores "already exists" errors)
 - **No migration system**: ArangoDB is schemaless; Rust structs define the application-level schema, not a DB-enforced one
 - Adding `Option<T>` or `#[serde(default)]` fields is safe — old documents deserialize fine. Adding required fields without defaults breaks deserialization of old documents. Renames require manual data fixup.
@@ -123,7 +122,22 @@ Stack architecture: nginx gateway (:8080) routes `/api/*` to the backend and `/*
 - Three auth strategies: JWT, management token, API key
 
 ### Controllers (`backend/src/controllers/`)
-- `user_controller`, `group_controller`, `project_controller`, `ticket_controller`
+
+Controllers use a **trait-based dispatch** pattern for the generic gitops API (`/v1/global/{kind}/...`).
+
+- **`KindController` trait** (`gitops_controller.rs`): Defines per-kind authorization and document transformation. Every resource kind must implement this trait. Methods:
+  - `can_read(user_id, doc)` / `can_write(user_id, doc)` — authorization checks
+  - `to_internal(body, auth)` / `to_external(doc)` — convert between external API format and internal ArangoDB format
+  - `prepare_create(body, user_id)` — pre-creation hook (e.g. inject creator ACL for projects)
+- **Dispatch**: `Controller::for_kind(kind)` in `mod.rs` returns `&dyn KindController`, matching `"users"` → `UserController`, `"groups"` → `GroupController`, `"projects"` → `ProjectController`, and falling back to `DefaultKindController` (fully permissive) for unknown kinds.
+- **Shared helpers** (`gitops_controller.rs`): `standard_to_internal()`, `standard_to_external()`, `rename_id_to_key()`, `rename_key_to_id()`, `parse_acl()` — reused by all controller implementations.
+
+**When adding a new resource kind:**
+1. Create a new controller file in `controllers/` with a struct holding `Arc<ArangoDb>`
+2. Implement `KindController` for it (use `#[async_trait]`)
+3. Add the controller as a field on `Controller` in `mod.rs`
+4. Add a match arm in `Controller::for_kind()`
+5. No changes needed in the gitops route handlers — dispatch is automatic
 
 ### Services (`backend/src/services/`)
 - `github.rs` — GitHub integration
@@ -152,7 +166,7 @@ Stack architecture: nginx gateway (:8080) routes `/api/*` to the backend and `/*
   - `src/commands/` — command implementations (one file per command group)
 
 ### State Management (`backend/src/state.rs`)
-- `AppState` holds config, auth, DB interface (`Arc<dyn DatabaseInterface>`), and optional services
+- `AppState` holds config, auth, DB (`Arc<ArangoDb>`), controllers, and optional services
 - Shared via `Arc<AppState>` across all routes
 
 ### Testing

@@ -4,21 +4,15 @@ import random
 
 
 BASE = "http://localhost:3742/api"
-URL_REGISTER = f"{BASE}/register"
 URL_LOGIN = f"{BASE}/login"
 URL_GLOBAL = f"{BASE}/v1/global"
 
 
 @pytest.fixture(scope="module")
 def auth_token():
-    """Register a fresh user and return a JWT token."""
-    num = random.randint(100000, 999999)
-    user = f"gitops_itest{num}"
-    password = f"gitops_itest{num}"
-
-    requests.post(URL_REGISTER, json={"user": user, "password": password})
-    resp = requests.post(URL_LOGIN, json={"user": user, "password": password})
-    assert resp.status_code == 200, f"Login failed: {resp.text}"
+    """Login as root (has ADM_USER_MANAGER required for user CRUD)."""
+    resp = requests.post(URL_LOGIN, json={"user": "root", "password": "changeme"})
+    assert resp.status_code == 200, f"Root login failed: {resp.text}"
     return resp.json()["token"]
 
 
