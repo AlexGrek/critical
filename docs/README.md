@@ -4,6 +4,7 @@
 
 | Document | Description |
 |----------|-------------|
+| [Access Control](access-control.md) | Permissions, ACLs, and what each user role can do |
 | [Architecture](architecture.md) | System architecture, workspace structure, component overview |
 | [API](api.md) | Backend API routes, authentication, configuration |
 | [CLI](cli.md) | `cr1t` CLI usage, commands, context management |
