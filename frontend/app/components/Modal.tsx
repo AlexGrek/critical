@@ -29,7 +29,7 @@ const ModalContent = React.forwardRef<
       ref={ref}
       className={cn(
         "fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-        "w-[90vw] max-w-md",
+        "w-full max-w-lg min-w-96",
         "rounded-lg border border-gray-200 bg-white shadow-xl",
         "dark:border-gray-800 dark:bg-gray-900",
         "p-6",

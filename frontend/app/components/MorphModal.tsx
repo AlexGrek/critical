@@ -93,7 +93,7 @@ export default function MorphModal({
                   left: originRect.left,
                   width: originRect.width,
                   height: originRect.height,
-                  position: "absolute" as const,
+                  position: "fixed" as const,
                 }}
                 animate={{
                   top: "50%",
@@ -113,9 +113,9 @@ export default function MorphModal({
                   opacity: 0,
                 }}
                 transition={{
-                  type: "spring",
-                  stiffness: 300,
-                  damping: 30,
+                  type: "tween",
+                  duration: 0.25,
+                  ease: [0.4, 0, 0.2, 1],
                 }}
                 onClick={(e) => e.stopPropagation()}
               >
