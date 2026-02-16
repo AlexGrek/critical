@@ -3,9 +3,10 @@ dist/
 *.log
 .DS_Store
 
-# Cypress
-cypress/videos/
-cypress/screenshots/
+# Playwright
+test-results/
+playwright-report/
+playwright/.cache/
 
 # Dependencies
 package-lock.json

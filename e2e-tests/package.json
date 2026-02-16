@@ -1,7 +1,7 @@
 {
   "name": "critical-e2e-tests",
   "version": "1.0.0",
-  "description": "End-to-end tests for Critical project frontend",
+  "description": "End-to-end tests for Critical project frontend using Playwright",
   "private": true,
   "scripts": {
     "test": "playwright test",

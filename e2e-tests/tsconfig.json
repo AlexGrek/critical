@@ -9,7 +9,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["cypress", "node"]
+    "types": ["@playwright/test", "node"]
   },
-  "include": ["**/*.ts", "**/*.cy.ts"]
+  "include": ["**/*.ts", "**/*.spec.ts"]
 }
