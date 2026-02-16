@@ -62,4 +62,25 @@ impl KindController for UserController {
         }
         standard_to_external(doc)
     }
+
+    async fn after_delete(&self, key: &str, db: &ArangoDb) -> Result<(), AppError> {
+        log::debug!(
+            "[LIFECYCLE] UserController::after_delete: user={}",
+            key
+        );
+
+        // Remove user from all groups, get list of now-empty groups
+        let empty_groups = db.remove_principal_from_all_groups(key).await?;
+
+        // Cascade: delete any groups that became empty
+        for group_id in empty_groups {
+            log::debug!(
+                "[LIFECYCLE] UserController::after_delete: group {} is now empty, cascading",
+                group_id
+            );
+            super::group_controller::GroupController::cascade_delete_group(db, &group_id).await?;
+        }
+
+        Ok(())
+    }
 }

@@ -65,6 +65,12 @@ pub async fn register(
         .await
         .map_err(|e| AppError::Internal(e))?;
 
+    app_state
+        .db
+        .grant_permission(models::super_permissions::USR_CREATE_GROUPS, &user_id)
+        .await
+        .map_err(|e| AppError::Internal(e))?;
+
     log::info!("Register event -> User with ID {:?} created: {}", &uid, &req.user);
 
     Ok(Created {})

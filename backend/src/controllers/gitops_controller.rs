@@ -28,9 +28,37 @@ pub trait KindController: Send + Sync {
     /// Convert an internal ArangoDB document to the external gitops representation.
     fn to_external(&self, doc: Value) -> Value;
 
+    /// Check if a user can create a new document of this kind.
+    /// Receives the request body so controllers can inspect the target resource
+    /// (e.g. MembershipController checks the target group's ACL).
+    /// Default delegates to can_write(user_id, None).
+    async fn can_create(&self, user_id: &str, _body: &Value) -> Result<bool, AppError> {
+        self.can_write(user_id, None).await
+    }
+
     /// Prepare a document body before creation (e.g. inject creator ACL).
     /// Default is a no-op.
     fn prepare_create(&self, _body: &mut Value, _user_id: &str) {}
+
+    /// Called after a document is successfully created. Used for post-creation
+    /// setup (e.g. inserting creator as group member).
+    /// Default is a no-op.
+    async fn after_create(&self, _key: &str, _user_id: &str, _db: &ArangoDb) -> Result<(), AppError> {
+        Ok(())
+    }
+
+    /// Called after a document is deleted. Used for cascade cleanup.
+    /// Default is a no-op.
+    async fn after_delete(&self, _key: &str, _db: &ArangoDb) -> Result<(), AppError> {
+        Ok(())
+    }
+
+    /// Called after a document is updated/upserted. Used for post-update checks
+    /// (e.g. empty-group deletion).
+    /// Default is a no-op.
+    async fn after_update(&self, _key: &str, _db: &ArangoDb) -> Result<(), AppError> {
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------------------

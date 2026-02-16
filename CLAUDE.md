@@ -127,9 +127,13 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
 
 - **`KindController` trait** (`gitops_controller.rs`): Defines per-kind authorization and document transformation. Every resource kind must implement this trait. Methods:
   - `can_read(user_id, doc)` / `can_write(user_id, doc)` — authorization checks
+  - `can_create(user_id, body)` — authorization for new document creation (default delegates to `can_write(user_id, None)`; override when the request body is needed for auth, e.g. MembershipController checks the target group's ACL)
   - `to_internal(body, auth)` / `to_external(doc)` — convert between external API format and internal ArangoDB format
-  - `prepare_create(body, user_id)` — pre-creation hook (e.g. inject creator ACL for projects)
-- **Dispatch**: `Controller::for_kind(kind)` in `mod.rs` returns `&dyn KindController`, matching `"users"` → `UserController`, `"groups"` → `GroupController`, `"projects"` → `ProjectController`, and falling back to `DefaultKindController` (fully permissive) for unknown kinds.
+  - `prepare_create(body, user_id)` — pre-creation hook (e.g. inject creator ACL for projects and groups)
+  - `after_create(key, user_id, db)` — post-creation hook (e.g. insert creator as group member)
+  - `after_delete(key, db)` — post-deletion hook (e.g. cascade removal of memberships for users and groups)
+  - `after_update(key, db)` — post-update hook (e.g. empty-group auto-deletion; only fires on actual updates, NOT on upsert-creates)
+- **Dispatch**: `Controller::for_kind(kind)` in `mod.rs` returns `&dyn KindController`, matching `"users"` → `UserController`, `"groups"` → `GroupController`, `"projects"` → `ProjectController`, `"memberships"` → `MembershipController`, and falling back to `DefaultKindController` (fully permissive) for unknown kinds.
 - **Shared helpers** (`gitops_controller.rs`): `standard_to_internal()`, `standard_to_external()`, `rename_id_to_key()`, `rename_key_to_id()`, `parse_acl()` — reused by all controller implementations.
 
 **When adding a new resource kind:**

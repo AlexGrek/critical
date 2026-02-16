@@ -65,8 +65,8 @@ pub async fn create_object(
 
     let ctrl = state.controller.for_kind(&kind);
 
-    let allowed = ctrl.can_write(&user_id, None).await?;
-    log::debug!("[HANDLER] create_object: can_write={}, user={}, kind={}, id={}", allowed, user_id, kind, id);
+    let allowed = ctrl.can_create(&user_id, &body).await?;
+    log::debug!("[HANDLER] create_object: can_create={}, user={}, kind={}, id={}", allowed, user_id, kind, id);
     if !allowed {
         log::debug!("[HANDLER] create_object: DENIED, returning 404");
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
@@ -89,6 +89,8 @@ pub async fn create_object(
                 AppError::Internal(e)
             }
         })?;
+
+    ctrl.after_create(&id, &user_id, &state.db).await?;
 
     Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": id }))))
 }
@@ -129,12 +131,16 @@ pub async fn upsert_object(
 
     let ctrl = state.controller.for_kind(&kind);
     let existing = state.db.generic_get(&kind, &id).await?;
+    let is_update = existing.is_some();
 
-    if !ctrl.can_write(&user_id, existing.as_ref()).await? {
-        return Err(AppError::not_found(format!("{}/{}", kind, id)));
-    }
-
-    if existing.is_none() {
+    if is_update {
+        if !ctrl.can_write(&user_id, existing.as_ref()).await? {
+            return Err(AppError::not_found(format!("{}/{}", kind, id)));
+        }
+    } else {
+        if !ctrl.can_create(&user_id, &body).await? {
+            return Err(AppError::not_found(format!("{}/{}", kind, id)));
+        }
         ctrl.prepare_create(&mut body, &user_id);
     }
 
@@ -142,6 +148,12 @@ pub async fn upsert_object(
 
     let doc = ctrl.to_internal(body, &state.auth)?;
     state.db.generic_upsert(&kind, &id, doc).await?;
+
+    if is_update {
+        ctrl.after_update(&id, &state.db).await?;
+    } else {
+        ctrl.after_create(&id, &user_id, &state.db).await?;
+    }
 
     Ok(Json(json!({ "id": id })))
 }
@@ -181,6 +193,8 @@ pub async fn update_object(
             }
         })?;
 
+    ctrl.after_update(&id, &state.db).await?;
+
     Ok(Json(json!({ "id": id })))
 }
 
@@ -212,6 +226,8 @@ pub async fn delete_object(
                 AppError::Internal(e)
             }
         })?;
+
+    ctrl.after_delete(&id, &state.db).await?;
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }

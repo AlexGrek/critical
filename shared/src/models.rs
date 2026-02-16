@@ -100,6 +100,8 @@ pub struct Group {
     #[serde(rename = "_key")]
     pub id: PrincipalId,
     pub name: String,
+    #[serde(default)]
+    pub acl: AccessControlStore,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -126,4 +128,5 @@ pub mod super_permissions {
     pub const ADM_PROJECT_MANAGER: &str = "adm_project_manager";
     pub const USR_CREATE_PROJECTS: &str = "usr_create_projects";
     pub const ADM_CONFIG_EDITOR: &str = "adm_config_editor";
+    pub const USR_CREATE_GROUPS: &str = "usr_create_groups";
 }

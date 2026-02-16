@@ -85,6 +85,8 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 | --------- | ----------------------------- | ----------- |
 | `_key`    | `g_` prefix (e.g. `g_admins`) | `Group`     |
 
+**Fields**: `name` (String), `acl` (AccessControlStore, `#[serde(default)]` — backward-compatible with legacy documents without ACL).
+
 ### `memberships` — Edge Collection
 
 | Key Field | Key Format                       | Rust Struct       |
@@ -116,6 +118,7 @@ Native graph traversal is supported via `_from`/`_to` (e.g. `FOR v IN 1..10 OUTB
 | `adm_project_manager` | Full access to all projects |
 | `usr_create_projects` | User-level permission to create projects |
 | `adm_config_editor` | Admin-level core configuration editor |
+| `usr_create_groups` | User-level permission to create groups (granted by default on registration) |
 
 Permission checks resolve through the membership graph — a user has a permission if they or any of their groups (including nested groups) appear in that permission's `principals` array.
 
@@ -187,13 +190,14 @@ The gitops API enforces permission checks based on the collection kind. Unauthor
 
 | Collection | Read Access | Write Access |
 |------------|-------------|--------------|
-| `users`, `groups` | All authenticated users | `adm_user_manager` super-permission |
+| `users` | All authenticated users | `adm_user_manager` super-permission |
+| `groups` | `adm_user_manager` OR group ACL with READ | Create: `adm_user_manager` or `usr_create_groups`. Update/delete: `adm_user_manager` OR group ACL with MODIFY |
 | `projects` | `adm_project_manager` OR project ACL with READ | Create: `adm_project_manager` or `usr_create_projects`. Update/delete: `adm_project_manager` OR project ACL with WRITE |
 | Other kinds | All authenticated users | All authenticated users (TODO: ACL inheritance) |
 
-### ACL Permission Bits (Projects)
+### ACL Permission Bits (Projects & Groups)
 
-Projects embed an `acl: AccessControlStore` with fine-grained permission entries:
+Projects and groups embed an `acl: AccessControlStore` with fine-grained permission entries:
 
 | Permission | Bit Value | Description |
 |------------|-----------|-------------|
@@ -207,6 +211,14 @@ Projects embed an `acl: AccessControlStore` with fine-grained permission entries
 
 ACL checks resolve through the user's principals (user ID + all group IDs via membership graph, up to 10 levels).
 
+### Group Lifecycle
+
+- **Creator ACL**: When a group is created, the creator is automatically added to the group's ACL with ROOT permissions.
+- **Creator membership**: The creator is also automatically added as a member of the group (via a membership edge). This ensures newly created groups have at least one member.
+- **Membership ACL**: Adding or removing members from a group requires MODIFY permission on the group's ACL (or `adm_user_manager` super-permission).
+- **Empty-group deletion**: When a group update results in zero members, the group is automatically deleted.
+- **Cascade deletion**: Deleting a user or group removes it from all parent groups. If any parent group becomes empty, it is recursively deleted.
+
 ---
 
-*Last updated: 2026-02-15*
+*Last updated: 2026-02-16*

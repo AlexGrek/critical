@@ -227,6 +227,7 @@ impl ArangoDb {
             ADM_USER_MANAGER,
             ADM_PROJECT_MANAGER,
             USR_CREATE_PROJECTS,
+            USR_CREATE_GROUPS,
             ADM_CONFIG_EDITOR,
         ];
 
@@ -411,6 +412,91 @@ impl ArangoDb {
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
         Ok(res)
+    }
+
+    /// Remove a principal from all groups it belongs to.
+    /// Returns the list of group IDs that became empty after removal.
+    pub async fn remove_principal_from_all_groups(&self, principal_id: &str) -> Result<Vec<String>> {
+        // Step 1: Find all groups this principal belongs to
+        let find_query = r#"
+            FOR m IN memberships
+                FILTER m.principal == @principal
+                RETURN m.group
+        "#;
+        let vars = std::collections::HashMap::from([(
+            "principal",
+            serde_json::Value::String(principal_id.to_string()),
+        )]);
+        let affected_groups: Vec<String> = self
+            .db
+            .aql_bind_vars(find_query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        // Step 2: Remove all membership edges for this principal
+        let remove_query = r#"
+            FOR m IN memberships
+                FILTER m.principal == @principal
+                REMOVE m IN memberships
+        "#;
+        let vars = std::collections::HashMap::from([(
+            "principal",
+            serde_json::Value::String(principal_id.to_string()),
+        )]);
+        self.db
+            .aql_bind_vars::<serde_json::Value>(remove_query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        // Step 3: Check which of the affected groups are now empty
+        let mut empty_groups = Vec::new();
+        for group_id in &affected_groups {
+            let count = self.count_group_members(group_id).await?;
+            if count == 0 {
+                empty_groups.push(group_id.clone());
+            }
+        }
+
+        Ok(empty_groups)
+    }
+
+    /// Count the number of members in a group.
+    pub async fn count_group_members(&self, group_id: &str) -> Result<u64> {
+        let query = r#"
+            RETURN LENGTH(
+                FOR m IN memberships
+                    FILTER m.group == @group
+                    RETURN 1
+            )
+        "#;
+        let vars = std::collections::HashMap::from([(
+            "group",
+            serde_json::Value::String(group_id.to_string()),
+        )]);
+        let result: Vec<u64> = self
+            .db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(result.into_iter().next().unwrap_or(0))
+    }
+
+    /// Remove all membership edges where this group is the target (members OF this group).
+    pub async fn remove_all_members_of_group(&self, group_id: &str) -> Result<()> {
+        let query = r#"
+            FOR m IN memberships
+                FILTER m.group == @group
+                REMOVE m IN memberships
+        "#;
+        let vars = std::collections::HashMap::from([(
+            "group",
+            serde_json::Value::String(group_id.to_string()),
+        )]);
+        self.db
+            .aql_bind_vars::<serde_json::Value>(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(())
     }
 
     pub async fn modify_user(&self, user: User, tx: Option<&mut ArangoTx>) -> Result<()> {
