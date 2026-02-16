@@ -18,7 +18,8 @@
       "Bash(cargo clean:*)",
       "Bash(npm install:*)",
       "Bash(npm run typecheck:*)",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(cargo watch:*)"
     ]
   }
 }

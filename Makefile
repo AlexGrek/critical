@@ -3,11 +3,18 @@ COMPOSE ?= $(shell (command -v docker >/dev/null 2>&1 && echo "docker compose") 
 BACKEND_PORT ?= 3742
 BACKEND_URL ?= http://localhost:$(BACKEND_PORT)
 
-.PHONY: dev run run-fresh test test-unit test-cli test-api run-db stop-db reset-db logs-db wait-db wait-backend
+.PHONY: dev dev-api dev-frontend run run-fresh test test-unit test-cli test-api run-db stop-db reset-db logs-db wait-db wait-backend
 
 dev:
-	@echo ">>> Building workspace (dev)..."
-	cargo build
+	@$(MAKE) dev-api & $(MAKE) dev-frontend & wait
+
+dev-api:
+	@echo ">>> Starting backend (cargo watch)..."
+	cd backend && cargo watch -x run
+
+dev-frontend:
+	@echo ">>> Starting frontend dev server..."
+	cd frontend && npm run dev
 
 wait-db:
 	@echo ">>> Waiting for ArangoDB to be ready..."
