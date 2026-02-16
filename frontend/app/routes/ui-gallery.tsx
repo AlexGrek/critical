@@ -6,6 +6,7 @@ import {
   MorphModal,
   LogoCritical,
   LogoCriticalAnimated,
+  ThemeCombobox,
 } from "~/components";
 
 export function meta() {
@@ -33,7 +34,31 @@ export default function UiGallery() {
           <p className="text-gray-600 dark:text-gray-400">
             A showcase of all available UI components
           </p>
+
+          {/* Theme Switcher */}
+          <div className="flex justify-center pt-4">
+            <ThemeCombobox />
+          </div>
         </header>
+
+        {/* Theme Switcher Section */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            Theme Switcher
+          </h2>
+          <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
+            <h3 className="font-medium text-gray-900 dark:text-gray-50">
+              Color Theme Selector
+            </h3>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Choose between Light, Dark, and Grayscale (low contrast, eye-saving) modes.
+              Your preference is saved to localStorage and persists across sessions.
+            </p>
+            <div className="flex justify-start">
+              <ThemeCombobox />
+            </div>
+          </div>
+        </section>
 
         {/* Logos Section */}
         <section className="space-y-4">

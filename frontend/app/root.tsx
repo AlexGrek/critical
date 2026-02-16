@@ -9,6 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import { ThemeProvider } from "./contexts/ThemeContext";
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -31,6 +32,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  const theme = localStorage.getItem('critical-theme') ||
+                    (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+                  document.documentElement.classList.add(theme);
+                  document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'dark';
+                } catch (e) {}
+              })();
+            `,
+          }}
+        />
       </head>
       <body>
         {children}
@@ -42,7 +57,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <ThemeProvider>
+      <Outlet />
+    </ThemeProvider>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

@@ -61,12 +61,51 @@
 /* Base styles */
 html,
 body {
-  @apply bg-white dark:bg-gray-950 text-gray-900 dark:text-gray-50;
   font-family: var(--font-sans);
+}
 
-  @media (prefers-color-scheme: dark) {
-    color-scheme: dark;
-  }
+/* Theme-specific styles */
+html.light,
+html:not(.dark):not(.grayscale) {
+  background-color: #ffffff;
+  color: #111827;
+  color-scheme: light;
+}
+
+html.dark {
+  background-color: #030712;
+  color: #f9fafb;
+  color-scheme: dark;
+}
+
+html.grayscale {
+  background-color: #1f2937;
+  color: #f3f4f6;
+  color-scheme: dark;
+  filter: grayscale(100%) contrast(0.95);
+}
+
+/* Grayscale theme adjustments for better readability */
+html.grayscale .bg-gradient-subtle {
+  background-color: #374151;
+}
+
+html.grayscale button,
+html.grayscale input,
+html.grayscale select,
+html.grayscale textarea {
+  /* Remove the grayscale filter from interactive elements for better visibility */
+  filter: none;
+  border-color: #4b5563;
+}
+
+html.grayscale button:hover {
+  background-color: #4b5563;
+}
+
+html.grayscale button:focus {
+  outline: 2px solid #9ca3af;
+  outline-offset: 2px;
 }
 
 /* Keyframe animations */
