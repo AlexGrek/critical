@@ -15,7 +15,9 @@
       "Bash(cargo add:*)",
       "Bash(curl:*)",
       "Bash(source:*)",
-      "Bash(cargo clean:*)"
+      "Bash(cargo clean:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run typecheck:*)"
     ]
   }
 }

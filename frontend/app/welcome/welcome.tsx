@@ -1,8 +1,5 @@
-import MorphDropdown from "~/components/MorphDropdown";
 import logoDark from "./logo-dark.svg";
 import logoLight from "./logo-light.svg";
-import MorphingModal from "~/components/MorphingModal";
-import MorphModal from "~/toolkit/MorphModal";
 
 export function Welcome() {
   return (
@@ -10,16 +7,6 @@ export function Welcome() {
       <div className="flex-1 flex flex-col items-center gap-16 min-h-0">
         <header className="flex flex-col items-center gap-9">
           <div className="w-[500px] max-w-[100vw] p-4">
-            <MorphDropdown />
-            <MorphModal
-              trigger={<button className="px-4 py-2 bg-blue-600 text-white rounded">Launch</button>}
-            >
-              <div className="p-6 flex flex-col h-full justify-between">
-                <h2 className="text-lg font-semibold">Modal Title</h2>
-                <p className="text-gray-600 flex-grow">This is the modal content.</p>
-                <button className="mt-4 px-4 py-2 bg-red-500 text-white rounded">Close</button>
-              </div>
-            </MorphModal>
             <img
               src={logoLight}
               alt="React Router"
