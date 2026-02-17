@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use crate::db::ArangoDb;
 use crate::error::AppError;
 use crate::middleware::auth::Auth;
+use crate::validation::naming::validate_group_id;
 use crit_shared::models::{Permissions, super_permissions};
 
 use super::gitops_controller::{
@@ -143,7 +144,20 @@ impl KindController for GroupController {
         }
     }
 
-    fn to_internal(&self, body: Value, _auth: &Auth) -> Result<Value, AppError> {
+    fn to_internal(&self, mut body: Value, _auth: &Auth) -> Result<Value, AppError> {
+        // Validate and auto-prefix group ID
+        if let Some(obj) = body.as_object_mut() {
+            if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
+                // Validate (strips g_ prefix if present, validates, returns without prefix)
+                let validated_id = validate_group_id(id)
+                    .map_err(AppError::Validation)?;
+
+                // Add g_ prefix
+                let prefixed_id = format!("g_{}", validated_id);
+                obj.insert("id".to_string(), Value::String(prefixed_id));
+            }
+        }
+
         Ok(standard_to_internal(body))
     }
 

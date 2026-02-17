@@ -13,15 +13,23 @@ import { cn } from "~/lib/utils";
 
 interface MorphModalProps {
   trigger: ReactNode;
-  children: ReactNode;
+  children: ReactNode | ((close: () => void) => ReactNode);
   modalWidth?: number;
   modalHeight?: number;
   className?: string;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
  * A morphing modal that animates from the trigger element to a centered modal.
  * Uses Framer Motion for smooth transitions.
+ *
+ * Can be used in controlled or uncontrolled mode:
+ * - Uncontrolled: Just pass trigger and children, modal manages its own state
+ * - Controlled: Pass isOpen and onOpenChange to control from parent
+ *
+ * Children can be ReactNode or a render function that receives a close callback.
  */
 export default function MorphModal({
   trigger,
@@ -29,11 +37,17 @@ export default function MorphModal({
   modalWidth = 500,
   modalHeight = 400,
   className,
+  isOpen: controlledIsOpen,
+  onOpenChange,
 }: MorphModalProps) {
   const triggerRef = useRef<HTMLDivElement>(null);
   const [originRect, setOriginRect] = useState<DOMRect | null>(null);
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+
+  // Use controlled state if provided, otherwise use internal state
+  const isOpen = controlledIsOpen ?? internalIsOpen;
+  const setIsOpen = onOpenChange ?? setInternalIsOpen;
 
   useEffect(() => {
     setMounted(typeof document !== "undefined");
@@ -126,7 +140,9 @@ export default function MorphModal({
                   exit={{ opacity: 0 }}
                   transition={{ delay: 0.1 }}
                 >
-                  {children}
+                  {typeof children === "function"
+                    ? children(closeModal)
+                    : children}
                 </motion.div>
               </motion.div>
             </>

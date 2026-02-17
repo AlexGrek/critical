@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::db::ArangoDb;
 use crate::error::AppError;
 use crate::middleware::auth::Auth;
+use crate::validation::naming::validate_username;
 use crit_shared::models::super_permissions;
 
 use super::gitops_controller::{KindController, standard_to_external, rename_id_to_key};
@@ -45,6 +46,21 @@ impl KindController for UserController {
 
     fn to_internal(&self, mut body: Value, auth: &Auth) -> Result<Value, AppError> {
         if let Some(obj) = body.as_object_mut() {
+            // Validate and auto-prefix user ID
+            if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
+                // Strip u_ prefix if present (for backward compatibility)
+                let id_without_prefix = id.strip_prefix("u_").unwrap_or(id);
+
+                // Validate username
+                let validated_username = validate_username(id_without_prefix)
+                    .map_err(AppError::Validation)?;
+
+                // Add u_ prefix
+                let prefixed_id = format!("u_{}", validated_username);
+                obj.insert("id".to_string(), Value::String(prefixed_id));
+            }
+
+            // Hash password if provided
             if let Some(password) = obj.remove("password") {
                 if let Some(pw_str) = password.as_str() {
                     let hash = auth.hash_password(pw_str)?;

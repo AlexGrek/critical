@@ -52,7 +52,7 @@ export default function SignIn() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-950 px-4">
-      <div className="w-full max-w-sm space-y-8">
+      <div className="w-full max-w-112 space-y-8">
         <div className="flex flex-col items-center gap-2">
           <Link to="/">
             <LogoCriticalAnimated size="lg" />

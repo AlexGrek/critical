@@ -14,9 +14,14 @@ export default function Home() {
   return (
     <div className="space-y-8">
       <Welcome />
-      <div className="flex justify-center">
-        <Link to="/ui-gallery">
+      <div className="flex justify-center gap-4">
+        <Link to="/groups">
           <Button variant="primary" size="lg">
+            View Groups
+          </Button>
+        </Link>
+        <Link to="/ui-gallery">
+          <Button variant="secondary" size="lg">
             View UI Component Gallery
           </Button>
         </Link>

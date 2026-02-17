@@ -20,11 +20,11 @@
       "Bash(npm run typecheck:*)",
       "Bash(npx tsc:*)",
       "Bash(cargo watch:*)",
-      "Bash(npm run cy:run:*)",
-      "Bash(npx cypress:*)",
       "Bash(npm uninstall:*)",
       "Bash(npx playwright install:*)",
-      "Bash(npm run test:headed:*)"
+      "Bash(npm run test:headed:*)",
+      "Bash(npm run test:*)",
+      "Bash(git add:*)"
     ]
   }
 }

@@ -152,7 +152,13 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
 - **TailwindCSS 4** for styling
 - **Vite 6** as build tool
 - See [`frontend/README.md`](frontend/README.md) for routes, setup, and architecture
-- **Current routes**: `/` (home), `/sign-in`, `/sign-up`, `/ui-gallery` (component showcase)
+- **Current routes**:
+  - `/` (home)
+  - `/sign-in`, `/sign-up` (authentication)
+  - `/groups` (groups listing with ACL display)
+  - `/ui-gallery` (component showcase)
+- **Data fetching**: Uses React Router loaders for server-side data fetching
+- **API integration**: Fetches from `/api/v1/global/{kind}` endpoints with JWT authentication
 
 ### CLI (`cli/`)
 - **Binary name**: `cr1t` (gitops-style, similar to `kubectl`)
@@ -174,13 +180,16 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
 
 ### Testing
 
-Three test categories, all orchestrated via Makefile with ephemeral ArangoDB:
+Four test categories:
 
 | Type | Location | Needs DB | Needs backend | Command |
 |------|----------|----------|---------------|---------|
 | Rust unit + backend integration | `backend/src/test/`, CLI unit tests | yes | no (axum-test) | `make test-unit` |
 | CLI integration | `cli/tests/cli_test.rs` | yes | yes | `make test-cli` |
 | Python API integration | `backend/itests/` | yes | yes | `make test-api` |
+| Frontend E2E (Playwright) | `e2e-tests/e2e/` | yes | yes | see below |
+
+#### Backend/CLI/Python Tests
 
 ```bash
 make test                   # Run ALL test types (DB + backend started automatically)
@@ -194,3 +203,40 @@ make test-api               # Python API tests (starts DB + backend)
 - `create_mock_shared_state()` in `main.rs` is async — connects to ArangoDB from `.env`
 - CLI integration tests use `assert_cmd` to run `cr1t` binary with temp `HOME` for isolation
 - Python itests use `pytest` with `requests` library against `localhost:3742`
+
+#### Frontend E2E Tests (Playwright)
+
+Location: `e2e-tests/` directory contains Playwright tests (`.spec.ts`)
+
+**IMPORTANT**: These tests use **real API calls** to the actual dev server and database (not mocked).
+
+Prerequisites:
+```bash
+make run              # Terminal 1: Start backend + ArangoDB
+cd frontend && npm run dev  # Terminal 2: Start frontend dev server
+```
+
+Run tests:
+```bash
+cd e2e-tests
+npm install           # First time only
+
+npm run test          # All tests
+npm run test:headed   # With visible browser
+npm run test:debug    # Debug mode
+npm run test:chrome   # Chrome only
+npm run test:firefox  # Firefox only
+npm run test:webkit   # Safari/WebKit only
+```
+
+Test characteristics:
+- Creates **unique random users** per test run (`testuser_{timestamp}_{random}`) to avoid conflicts
+- Creates test data (groups, etc.) via real API calls before tests
+- Automatically cleans up created data after tests complete
+- Uses real ArangoDB database, not mocks
+- Multiple developers can run tests simultaneously without interference
+
+Current test files:
+- `auth.spec.ts` — Authentication flows
+- `home.spec.ts` — Home page
+- `groups.spec.ts` — Groups page (creation, display, ACL, real-time updates)
