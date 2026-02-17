@@ -23,6 +23,8 @@ All routes are defined in [`app/routes.ts`](app/routes.ts):
 | `/sign-up`    | [sign-up.tsx](app/routes/sign-up.tsx)       | Registration form (POST to `/api/register`, auto-login on success)  |
 | `/ui-gallery` | [ui-gallery.tsx](app/routes/ui-gallery.tsx) | Component showcase (buttons, inputs, modals, logos, theme switcher) |
 
+Other routes also exist, but not listed.
+
 ## Architecture
 
 - **Root layout**: [root.tsx](app/root.tsx) — HTML shell, theme loading script, error boundary
@@ -64,7 +66,7 @@ import { Button } from "~/components";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Dashboard - Critical" },
+    { title: "{!} Dashboard - Critical" },
     { name: "description", content: "Project dashboard" },
   ];
 }

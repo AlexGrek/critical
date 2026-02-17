@@ -431,6 +431,23 @@ console.log(message);`}</CodeBlock>
               <CardTitle>Password Input</CardTitle>
               <Input type="password" placeholder="Enter password..." />
             </Card>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Copyable Input</CardTitle>
+              <Input
+                copyable
+                placeholder="Text with copy button..."
+                defaultValue="Click the copy button!"
+              />
+            </Card>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Copyable Monospace</CardTitle>
+              <Input
+                copyable
+                monospace
+                placeholder="Code snippet..."
+                defaultValue="npm install @critical/ui"
+              />
+            </Card>
           </div>
         </section>
 

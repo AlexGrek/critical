@@ -271,3 +271,18 @@ html.grayscale textarea:focus {
     opacity: 1;
   }
 }
+
+@keyframes textFlash {
+  0% {
+    color: var(--color-primary-500);
+  }
+  100% {
+    color: currentColor;
+  }
+}
+
+@layer utilities {
+  .animate-text-flash {
+    animation: textFlash 0.6s ease-out;
+  }
+}
