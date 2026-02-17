@@ -43,13 +43,18 @@
   --spacing-xl: 2rem;
   --spacing-2xl: 3rem;
 
-  /* Border radius */
+  /* Border radius - base tokens */
   --radius-sm: 0.25rem;
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --radius-full: 9999px;
+
+  /* Component-specific radius (theme-dependent, set per theme below) */
+  --radius-component: var(--radius-md);      /* default: moderate roundness */
+  --radius-component-lg: var(--radius-lg);   /* default: larger elements */
+  --radius-component-xl: var(--radius-xl);   /* default: modals/cards */
 
   /* Shadows */
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
@@ -71,10 +76,15 @@ body {
 
 /* Theme-specific styles */
 html.light,
-html:not(.dark):not(.grayscale):not(.barbie):not(.orange) {
+html:not(.dark):not(.grayscale):not(.barbie):not(.orange):not(.fusion) {
   background-color: #ffffff;
   color: #111827;
   color-scheme: light;
+
+  /* Light theme: standard roundness */
+  --radius-component: var(--radius-md);
+  --radius-component-lg: var(--radius-lg);
+  --radius-component-xl: var(--radius-xl);
 }
 
 /* Barbie: pink-focused light theme */
@@ -93,6 +103,47 @@ html.barbie {
   --color-primary-800: #9d174d;
   --color-primary-900: #831843;
   --color-primary-950: #500724;
+
+  /* Barbie theme: VERY round - playful, soft, bubbly */
+  --radius-component: var(--radius-2xl);      /* 1rem = very round */
+  --radius-component-lg: var(--radius-full);  /* pill-shaped buttons */
+  --radius-component-xl: var(--radius-2xl);   /* large modals still 2xl (not full circle) */
+}
+
+/* Fusion light: light blue accent, slightly blue backgrounds, medium roundness */
+html.fusion {
+  background-color: #f0f9ff;
+  color: #0c4a6e;
+  color-scheme: light;
+  --color-primary-50: #f0f9ff;
+  --color-primary-100: #e0f2fe;
+  --color-primary-200: #bae6fd;
+  --color-primary-300: #7dd3fc;
+  --color-primary-400: #38bdf8;
+  --color-primary-500: #0ea5e9;
+  --color-primary-600: #0284c7;
+  --color-primary-700: #0369a1;
+  --color-primary-800: #075985;
+  --color-primary-900: #0c4a6e;
+  --color-primary-950: #082f49;
+
+  /* Slightly blue-tinted grays for surfaces in light mode */
+  --color-gray-50: #f8fafc;
+  --color-gray-100: #f1f5f9;
+  --color-gray-200: #e2e8f0;
+  --color-gray-300: #cbd5e1;
+  --color-gray-400: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-600: #475569;
+  --color-gray-700: #334155;
+  --color-gray-800: #1e293b;
+  --color-gray-900: #0f172a;
+  --color-gray-950: #020617;
+
+  /* Fusion: medium roundness (more than standard) */
+  --radius-component: var(--radius-lg);
+  --radius-component-lg: var(--radius-xl);
+  --radius-component-xl: var(--radius-2xl);
 }
 
 /* Orange dark: orange-tinted dark theme (uses .dark for layout) */
@@ -122,6 +173,11 @@ html.orange {
   --color-primary-800: #9a3412;
   --color-primary-900: #7c2d12;
   --color-primary-950: #431407;
+
+  /* Orange theme: VERY MINIMAL roundness - sharp, utilitarian */
+  --radius-component: var(--radius-sm);       /* 0.25rem = very minimal */
+  --radius-component-lg: var(--radius-sm);    /* even large elements minimal */
+  --radius-component-xl: var(--radius-sm);    /* modals also minimal */
 }
 
 /* Green-tinted dark theme: primary is green; override grays so surfaces/borders match */
@@ -140,6 +196,11 @@ html.dark {
   --color-gray-200: #dde5df;
   --color-gray-100: #ecf3ee;
   --color-gray-50: #f4f9f5;
+
+  /* Dark theme: standard roundness */
+  --radius-component: var(--radius-md);
+  --radius-component-lg: var(--radius-lg);
+  --radius-component-xl: var(--radius-xl);
 }
 
 /* Grayscale = truly neutral gray, no blue/green tint. Uses .dark for layout;
@@ -149,6 +210,11 @@ html.grayscale {
   color: #e5e5e5;
   color-scheme: dark;
   filter: grayscale(100%) contrast(0.98);
+
+  /* Grayscale theme: NO roundness - completely sharp, brutalist aesthetic */
+  --radius-component: 0.125rem;               /* 2px = almost no roundness */
+  --radius-component-lg: 0.125rem;            /* all elements sharp */
+  --radius-component-xl: 0.125rem;            /* modals also completely sharp */
 }
 
 html.grayscale .bg-gradient-subtle {

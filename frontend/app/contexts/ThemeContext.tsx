@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-export type Theme = "light" | "dark" | "grayscale" | "barbie" | "orange";
+export type Theme = "light" | "dark" | "grayscale" | "barbie" | "orange" | "fusion";
 
 interface ThemeContextType {
   theme: Theme;
@@ -17,7 +17,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return "light";
 
     const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-    if (stored && ["light", "dark", "grayscale", "barbie", "orange"].includes(stored)) {
+    if (stored && ["light", "dark", "grayscale", "barbie", "orange", "fusion"].includes(stored)) {
       return stored;
     }
 
@@ -38,7 +38,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
 
     // Remove all theme classes
-    root.classList.remove("light", "dark", "grayscale", "barbie", "orange");
+    root.classList.remove("light", "dark", "grayscale", "barbie", "orange", "fusion");
 
     // Add the current theme class. Grayscale and orange are dark variants.
     root.classList.add(theme);
@@ -47,7 +47,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Update color-scheme meta tag for better browser integration
-    const colorScheme = theme === "light" || theme === "barbie" ? "light" : "dark";
+    const colorScheme = theme === "light" || theme === "barbie" || theme === "fusion" ? "light" : "dark";
     root.style.colorScheme = colorScheme;
   }, [theme]);
 

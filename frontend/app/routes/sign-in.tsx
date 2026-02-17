@@ -5,7 +5,7 @@ import { LogoCriticalAnimated } from "~/components/LogoCritical";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Sign In - Critical" },
+    { title: "{!} Sign In - Critical" },
     { name: "description", content: "Sign in to your Critical account" },
   ];
 }
@@ -57,7 +57,7 @@ export default function SignIn() {
           <Link to="/">
             <LogoCriticalAnimated size="lg" />
           </Link>
-          <h1 className="text-2xl font-semibold text-white">Sign in</h1>
+          <h1 className="text-2xl font-semibold text-white">{"{!} "}Sign in</h1>
           <p className="text-sm text-gray-400">
             Enter your credentials to continue
           </p>
@@ -65,7 +65,7 @@ export default function SignIn() {
 
         <Form method="post" className="space-y-4">
           {actionData?.error && (
-            <div className="rounded-md bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            <div className="rounded-(--radius-component) bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
               {actionData.error}
             </div>
           )}

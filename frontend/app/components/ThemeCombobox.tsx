@@ -6,14 +6,14 @@ import {
   ListboxOptions,
   Transition,
 } from "@headlessui/react";
-import { Check, ChevronDown, Moon, Sun, Eye, Heart, Flame } from "lucide-react";
+import { Check, ChevronDown, Moon, Sun, Eye, Heart, Flame, Droplets } from "lucide-react";
 import { useTheme, type Theme } from "~/contexts/ThemeContext";
 
 type ThemeOption = {
   value: Theme;
   label: string;
   description: string;
-  icon: typeof Sun | typeof Moon | typeof Eye | typeof Heart | typeof Flame;
+  icon: typeof Sun | typeof Moon | typeof Eye | typeof Heart | typeof Flame | typeof Droplets;
 };
 
 const themes: ThemeOption[] = [
@@ -34,6 +34,12 @@ const themes: ThemeOption[] = [
     label: "Barbie",
     description: "Pink-focused light theme",
     icon: Heart,
+  },
+  {
+    value: "fusion",
+    label: "Fusion light",
+    description: "Light blue accent, slightly blue backgrounds, medium roundness",
+    icon: Droplets,
   },
   {
     value: "orange",
@@ -61,7 +67,7 @@ export function ThemeCombobox() {
       }}
     >
       <div className="relative w-full max-w-xs">
-        <ListboxButton className="relative w-full cursor-pointer rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-2.5 pl-10 pr-10 text-left text-sm text-gray-900 dark:text-gray-50 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-colors">
+        <ListboxButton className="relative w-full cursor-pointer rounded-(--radius-component) border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-2.5 pl-10 pr-10 text-left text-sm text-gray-900 dark:text-gray-50 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-colors">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3">
             <selectedTheme.icon
               className="h-5 w-5 text-gray-500 dark:text-gray-400"
@@ -82,7 +88,7 @@ export function ThemeCombobox() {
           leaveFrom="opacity-100"
           leaveTo="opacity-0"
         >
-          <ListboxOptions className="absolute z-50 mt-2 w-full min-w-[320px] overflow-hidden rounded-lg bg-white dark:bg-gray-900 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
+          <ListboxOptions className="absolute z-50 mt-2 w-full min-w-[320px] overflow-hidden rounded-(--radius-component) bg-white dark:bg-gray-900 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
             {themes.map((themeOption) => (
               <ListboxOption
                 key={themeOption.value}

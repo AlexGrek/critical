@@ -30,7 +30,7 @@ const ModalContent = React.forwardRef<
       className={cn(
         "fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
         "w-full max-w-lg min-w-96",
-        "rounded-lg border border-gray-200 bg-white shadow-xl",
+        "rounded-(--radius-component-xl) border border-gray-200 bg-white shadow-xl",
         "dark:border-gray-800 dark:bg-gray-900",
         "p-6",
         "focus:outline-none",
@@ -40,7 +40,7 @@ const ModalContent = React.forwardRef<
       {...props}
     >
       {children}
-      <Dialog.Close className="absolute top-4 right-4 rounded-sm opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:pointer-events-none dark:ring-offset-gray-950">
+      <Dialog.Close className="absolute top-4 right-4 rounded-(--radius-component) opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:pointer-events-none dark:ring-offset-gray-950">
         <X className="h-4 w-4 text-gray-500 dark:text-gray-400" />
         <span className="sr-only">Close</span>
       </Dialog.Close>

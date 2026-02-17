@@ -5,7 +5,7 @@ import { Button } from "~/components";
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Critical - Project Management" },
+    { title: "{!} Critical - Project Management" },
     { name: "description", content: "Welcome to Critical!" },
   ];
 }
@@ -13,6 +13,7 @@ export function meta({}: Route.MetaArgs) {
 export default function Home() {
   return (
     <div className="space-y-8">
+      <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50 text-center mb-4">{"{!} "}Critical - Project Management</h1>
       <Welcome />
       <div className="flex justify-center gap-4">
         <Link to="/groups">

@@ -31,9 +31,9 @@ const LogoCritical: React.FC<LogoCriticalProps> = ({
       )}
       {...props}
     >
-      <span className="text-white">{"{"}</span>
+      <span className="text-gray-900 dark:text-white">{"{"}</span>
       <span className="text-red-500">!</span>
-      <span className="text-white">{"}"}</span>
+      <span className="text-gray-900 dark:text-white">{"}"}</span>
     </div>
   );
 };
@@ -76,7 +76,7 @@ export const LogoCriticalAnimated: React.FC<LogoCriticalProps> = ({
       }}
     >
       <motion.span
-        className="text-white"
+        className="text-gray-900 dark:text-white"
         variants={{
           rest: { x: 0 },
           hover: { x: -spacing[size] }, // Move left bracket slightly left
@@ -96,7 +96,7 @@ export const LogoCriticalAnimated: React.FC<LogoCriticalProps> = ({
         !
       </motion.span>
       <motion.span
-        className="text-white"
+        className="text-gray-900 dark:text-white"
         variants={{
           rest: { x: 0 },
           hover: { x: spacing[size] }, // Move right bracket slightly right

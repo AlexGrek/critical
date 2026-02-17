@@ -1,6 +1,6 @@
 import type { Route } from "./+types/groups";
 import { useLoaderData, Link, useFetcher, useRevalidator } from "react-router";
-import { Button, MorphModal } from "~/components";
+import { Button, MorphModal, Card, CardTitle, CardDescription } from "~/components";
 import { useState, useEffect } from "react";
 
 // TypeScript types matching the Rust models
@@ -26,7 +26,7 @@ interface GroupsResponse {
 
 export function meta({}: Route.MetaArgs) {
   return [
-    { title: "Groups - Critical" },
+    { title: "{!} Groups - Critical" },
     { name: "description", content: "View all available groups" },
   ];
 }
@@ -161,7 +161,7 @@ export default function Groups() {
       <div className="max-w-6xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Groups</h1>
+            <h1 className="text-3xl font-bold text-white mb-2">{"{!} "}Groups</h1>
             <p className="text-gray-400">
               View and manage all groups in the system
             </p>
@@ -193,7 +193,7 @@ export default function Groups() {
                     <div className="flex-1 space-y-4">
                       {error && (
                         <div
-                          className="bg-red-500/10 border border-red-500/50 rounded-lg p-3 text-red-400 text-sm"
+                          className="bg-red-500/10 border border-red-500/50 rounded-(--radius-component) p-3 text-red-400 text-sm"
                           data-testid="create-group-error"
                         >
                           {error}
@@ -215,7 +215,7 @@ export default function Groups() {
                           onChange={(e) =>
                             setFormData({ ...formData, name: e.target.value })
                           }
-                          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-(--radius-component) text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                           placeholder="Enter group name"
                           required
                         />
@@ -237,7 +237,7 @@ export default function Groups() {
                             const value = e.target.value.toLowerCase();
                             setFormData({ ...formData, id: value });
                           }}
-                          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
+                          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-(--radius-component) text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
                           placeholder="my_group"
                           required
                         />
@@ -279,19 +279,19 @@ export default function Groups() {
         </div>
 
         {groups.length === 0 ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-lg p-12 text-center">
-            <p className="text-gray-400 text-lg">No groups found</p>
-            <p className="text-gray-500 text-sm mt-2">
+          <Card className="p-12 text-center">
+            <CardTitle className="text-lg">No groups found</CardTitle>
+            <CardDescription className="mt-2">
               Groups will appear here once they are created
-            </p>
-          </div>
+            </CardDescription>
+          </Card>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {groups.map((group) => (
-              <div
+              <Card
                 key={group.id}
                 data-testid={`group-card-${group.id}`}
-                className="bg-gray-900 border border-gray-800 rounded-lg p-6 hover:border-gray-700 transition-colors"
+                className="p-6 hover:border-gray-700 transition-colors"
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -317,7 +317,7 @@ export default function Groups() {
                           acl.principals.map((principal, idx) => (
                             <span
                               key={`${principal}-${idx}`}
-                              className="inline-flex items-center px-2 py-1 rounded text-xs font-mono bg-gray-800 text-gray-300"
+                              className="inline-flex items-center px-2 py-1 rounded-(--radius-component) text-xs font-mono bg-gray-800 text-gray-300"
                             >
                               {principal}
                             </span>
@@ -327,7 +327,7 @@ export default function Groups() {
                     </div>
                   )}
                 </div>
-              </div>
+              </Card>
             ))}
           </div>
         )}

@@ -97,7 +97,7 @@ export default function MorphModal({
               {/* Morphing Modal */}
               <motion.div
                 className={cn(
-                  "fixed z-50 rounded-xl overflow-hidden shadow-2xl",
+                  "fixed z-50 rounded-(--radius-component-xl) overflow-hidden shadow-2xl",
                   "bg-white dark:bg-gray-900",
                   "border border-gray-200 dark:border-gray-800",
                   className

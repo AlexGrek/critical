@@ -149,14 +149,20 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
 
 ### Frontend (`frontend/`)
 - **React 19** with **React Router 7.5** (SSR enabled)
-- **TailwindCSS 4** for styling
+- **TailwindCSS 4** for styling with **5 visual themes**: light, dark, barbie (very round), orange (very minimal), grayscale (no roundness)
 - **Vite 6** as build tool
 - See [`frontend/README.md`](frontend/README.md) for routes, setup, and architecture
+- **Theme system**: All components use theme-dependent CSS variables for colors and border radius
+  - Barbie theme: Very round edges (pill-shaped buttons, rounded cards)
+  - Orange theme: Very minimal roundness (sharp, utilitarian aesthetic)
+  - Grayscale theme: NO roundness (completely sharp, brutalist aesthetic)
+  - Light/Dark themes: Standard roundness
+  - CSS variables: `--radius-component`, `--radius-component-lg`, `--radius-component-xl`
 - **Current routes**:
   - `/` (home)
   - `/sign-in`, `/sign-up` (authentication)
   - `/groups` (groups listing with ACL display)
-  - `/ui-gallery` (component showcase)
+  - `/ui-gallery` (component showcase with theme switcher)
 - **Data fetching**: Uses React Router loaders for server-side data fetching
 - **API integration**: Fetches from `/api/v1/global/{kind}` endpoints with JWT authentication
 

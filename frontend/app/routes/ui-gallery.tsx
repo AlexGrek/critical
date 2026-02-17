@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Button,
   Input,
@@ -7,17 +7,60 @@ import {
   LogoCritical,
   LogoCriticalAnimated,
   ThemeCombobox,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  H1,
+  H2,
+  H3,
+  H4,
+  H5,
+  H6,
+  Paragraph,
+  CodeBlock,
+  InlineCode,
+  ScrollableLogWindow,
 } from "~/components";
 
 export function meta() {
   return [
-    { title: "UI Gallery - Critical" },
+    { title: "{!} UI Gallery - Critical" },
     { name: "description", content: "Component showcase for Critical UI" },
   ];
 }
 
 export default function UiGallery() {
   const [inputValue, setInputValue] = useState("");
+  const [logs, setLogs] = useState<string[]>([
+    "[INFO] Application started",
+    "[INFO] Connecting to database...",
+    "[SUCCESS] Database connection established",
+    "[INFO] Loading configuration...",
+    "[SUCCESS] Configuration loaded successfully",
+  ]);
+
+  // Simulate live log updates
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const newLogs = [
+        "[INFO] Processing request...",
+        "[DEBUG] Cache hit for key: user_123",
+        "[INFO] API call completed in 142ms",
+        "[WARNING] Rate limit at 80%",
+        "[ERROR] Connection timeout",
+        "[SUCCESS] Transaction committed",
+        "[INFO] Memory usage: 45%",
+        "[DEBUG] Query executed successfully",
+      ];
+      const randomLog = newLogs[Math.floor(Math.random() * newLogs.length)];
+      const timestamp = new Date().toLocaleTimeString();
+      setLogs((prev) => [...prev, `[${timestamp}] ${randomLog}`]);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-subtle dark:bg-gray-950 p-8">
@@ -29,7 +72,7 @@ export default function UiGallery() {
             <LogoCriticalAnimated size="lg" />
           </div>
           <h1 className="text-4xl font-bold text-gray-900 dark:text-gray-50">
-            UI Component Gallery
+            {"{!} "}UI Component Gallery
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             A showcase of all available UI components
@@ -46,18 +89,18 @@ export default function UiGallery() {
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
             Theme Switcher
           </h2>
-          <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-            <h3 className="font-medium text-gray-900 dark:text-gray-50">
-              Color Theme Selector
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Choose between Light, Dark, and Grayscale (low contrast, eye-saving) modes.
-              Your preference is saved to localStorage and persists across sessions.
-            </p>
-            <div className="flex justify-start">
+          <Card>
+            <CardHeader>
+              <CardTitle>Color Theme Selector</CardTitle>
+              <CardDescription>
+                Choose between Light, Dark, and Grayscale (low contrast, eye-saving) modes.
+                Your preference is saved to localStorage and persists across sessions.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
               <ThemeCombobox />
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </section>
 
         {/* Logos Section */}
@@ -66,30 +109,22 @@ export default function UiGallery() {
             Logos
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Static Logo (Small)
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Static Logo (Small)</CardTitle>
               <LogoCritical size="sm" />
-            </div>
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Static Logo (Medium)
-              </h3>
+            </Card>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Static Logo (Medium)</CardTitle>
               <LogoCritical size="md" />
-            </div>
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Static Logo (Large)
-              </h3>
+            </Card>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Static Logo (Large)</CardTitle>
               <LogoCritical size="lg" />
-            </div>
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Animated Logo (Hover)
-              </h3>
+            </Card>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Animated Logo (Hover)</CardTitle>
               <LogoCriticalAnimated size="md" />
-            </div>
+            </Card>
           </div>
         </section>
 
@@ -100,10 +135,8 @@ export default function UiGallery() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {/* Primary */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Primary
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Primary</CardTitle>
               <div className="space-y-2">
                 <Button variant="primary" size="sm">
                   Small Button
@@ -115,13 +148,11 @@ export default function UiGallery() {
                   Large Button
                 </Button>
               </div>
-            </div>
+            </Card>
 
             {/* Secondary */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Secondary
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Secondary</CardTitle>
               <div className="space-y-2">
                 <Button variant="secondary" size="sm">
                   Small Button
@@ -133,13 +164,11 @@ export default function UiGallery() {
                   Large Button
                 </Button>
               </div>
-            </div>
+            </Card>
 
             {/* Destructive */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Destructive
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Destructive</CardTitle>
               <div className="space-y-2">
                 <Button variant="destructive" size="sm">
                   Delete
@@ -151,13 +180,11 @@ export default function UiGallery() {
                   Confirm Deletion
                 </Button>
               </div>
-            </div>
+            </Card>
 
             {/* Outline */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Outline
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Outline</CardTitle>
               <div className="space-y-2">
                 <Button variant="outline" size="sm">
                   Outline Small
@@ -169,13 +196,11 @@ export default function UiGallery() {
                   Outline Large
                 </Button>
               </div>
-            </div>
+            </Card>
 
             {/* Ghost */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Ghost
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Ghost</CardTitle>
               <div className="space-y-2">
                 <Button variant="ghost" size="sm">
                   Ghost Small
@@ -187,13 +212,11 @@ export default function UiGallery() {
                   Ghost Large
                 </Button>
               </div>
-            </div>
+            </Card>
 
             {/* Link */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Link
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Link</CardTitle>
               <div className="space-y-2">
                 <Button variant="link" size="sm">
                   Link Small
@@ -205,7 +228,176 @@ export default function UiGallery() {
                   Link Large
                 </Button>
               </div>
+            </Card>
+          </div>
+        </section>
+
+        {/* Typography Section */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            Typography
+          </h2>
+          <Card className="p-6 space-y-6">
+            <div className="space-y-4">
+              <CardTitle>Headers (H1-H6)</CardTitle>
+              <div className="space-y-4 divide-y divide-gray-200 dark:divide-gray-800">
+                <div className="pt-4 first:pt-0">
+                  <H1>Heading 1 - The Quick Brown Fox</H1>
+                </div>
+                <div className="pt-4">
+                  <H2>Heading 2 - The Quick Brown Fox</H2>
+                </div>
+                <div className="pt-4">
+                  <H3>Heading 3 - The Quick Brown Fox</H3>
+                </div>
+                <div className="pt-4">
+                  <H4>Heading 4 - The Quick Brown Fox</H4>
+                </div>
+                <div className="pt-4">
+                  <H5>Heading 5 - The Quick Brown Fox</H5>
+                </div>
+                <div className="pt-4">
+                  <H6>Heading 6 - The Quick Brown Fox</H6>
+                </div>
+              </div>
             </div>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="p-6 space-y-3">
+              <CardTitle>Paragraph Sizes</CardTitle>
+              <div className="space-y-3">
+                <Paragraph size="xs">
+                  Extra small paragraph text for fine print and captions.
+                </Paragraph>
+                <Paragraph size="sm">
+                  Small paragraph text for secondary content.
+                </Paragraph>
+                <Paragraph size="base">
+                  Base paragraph text for body content (default).
+                </Paragraph>
+                <Paragraph size="lg">
+                  Large paragraph text for emphasized content.
+                </Paragraph>
+                <Paragraph size="xl">
+                  Extra large paragraph text for prominent content.
+                </Paragraph>
+              </div>
+            </Card>
+
+            <Card className="p-6 space-y-3">
+              <CardTitle>Paragraph Variants</CardTitle>
+              <div className="space-y-3">
+                <Paragraph variant="default">Default text color</Paragraph>
+                <Paragraph variant="muted">Muted text color</Paragraph>
+                <Paragraph variant="subtle">Subtle text color</Paragraph>
+                <Paragraph variant="primary">Primary color text</Paragraph>
+                <Paragraph variant="success">Success message</Paragraph>
+                <Paragraph variant="warning">Warning message</Paragraph>
+                <Paragraph variant="danger">Error message</Paragraph>
+              </div>
+            </Card>
+          </div>
+        </section>
+
+        {/* Code Blocks Section */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            Code Display
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="p-6 space-y-3">
+              <CardTitle>Inline Code</CardTitle>
+              <Paragraph>
+                Use <InlineCode>npm install</InlineCode> to install dependencies,
+                then run <InlineCode>npm run dev</InlineCode> to start the
+                development server.
+              </Paragraph>
+            </Card>
+
+            <Card className="p-6 space-y-3">
+              <CardTitle>Code Block</CardTitle>
+              <CodeBlock language="typescript">{`function greet(name: string) {
+  return \`Hello, \${name}!\`;
+}
+
+const message = greet("World");
+console.log(message);`}</CodeBlock>
+            </Card>
+          </div>
+
+          <Card className="p-6 space-y-3">
+            <CardTitle>Multi-language Code Examples</CardTitle>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Paragraph variant="muted" size="sm">
+                  Rust
+                </Paragraph>
+                <CodeBlock language="rust">{`fn main() {
+    println!("Hello, world!");
+    let x = 42;
+    let y = x * 2;
+}`}</CodeBlock>
+              </div>
+              <div className="space-y-2">
+                <Paragraph variant="muted" size="sm">
+                  JavaScript
+                </Paragraph>
+                <CodeBlock language="javascript">{`const fetchData = async () => {
+  const response = await fetch('/api/data');
+  return response.json();
+};`}</CodeBlock>
+              </div>
+            </div>
+          </Card>
+        </section>
+
+        {/* ScrollableLogWindow Section */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            Log Window
+          </h2>
+          <Card className="p-6 space-y-3">
+            <CardTitle>Scrollable Log Window</CardTitle>
+            <CardDescription>
+              Terminal-style log display with auto-scroll. New logs appear every 3
+              seconds. Scroll up to pause auto-scroll, scroll to bottom to resume.
+            </CardDescription>
+            <div className="relative">
+              <ScrollableLogWindow
+                title="Application Logs"
+                logs={logs}
+                maxHeight="300px"
+              />
+            </div>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="p-6 space-y-3">
+              <CardTitle>Compact Log Window</CardTitle>
+              <ScrollableLogWindow
+                logs={[
+                  "Starting build process...",
+                  "Compiling src/main.rs",
+                  "Compiling src/lib.rs",
+                  "Finished in 2.34s",
+                  "Build successful",
+                ]}
+                maxHeight="150px"
+              />
+            </Card>
+
+            <Card className="p-6 space-y-3">
+              <CardTitle>Custom Content</CardTitle>
+              <ScrollableLogWindow maxHeight="150px">
+                <div className="space-y-2">
+                  <div className="text-green-400">✓ All tests passed</div>
+                  <div className="text-yellow-400">⚠ 2 warnings</div>
+                  <div className="text-blue-400">ℹ Build time: 1.2s</div>
+                  <div className="text-white">Total: 42 assertions</div>
+                </div>
+              </ScrollableLogWindow>
+            </Card>
           </div>
         </section>
 
@@ -215,38 +407,30 @@ export default function UiGallery() {
             Inputs
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Default Input
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Default Input</CardTitle>
               <Input
                 placeholder="Enter some text..."
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
               />
-            </div>
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Monospace Input
-              </h3>
+            </Card>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Monospace Input</CardTitle>
               <Input
                 monospace
                 placeholder="Monospace font..."
                 defaultValue="const x = 42;"
               />
-            </div>
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Disabled Input
-              </h3>
+            </Card>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Input</CardTitle>
               <Input placeholder="Disabled..." disabled value="Can't edit me" />
-            </div>
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Password Input
-              </h3>
+            </Card>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Password Input</CardTitle>
               <Input type="password" placeholder="Enter password..." />
-            </div>
+            </Card>
           </div>
         </section>
 
@@ -257,10 +441,8 @@ export default function UiGallery() {
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Standard Modal */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Standard Modal
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Standard Modal</CardTitle>
               <Modal.Root>
                 <Modal.Trigger asChild>
                   <Button>Open Modal</Button>
@@ -286,13 +468,11 @@ export default function UiGallery() {
                   </Modal.Footer>
                 </Modal.Content>
               </Modal.Root>
-            </div>
+            </Card>
 
             {/* Morph Modal */}
-            <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 space-y-3">
-              <h3 className="font-medium text-gray-900 dark:text-gray-50">
-                Morph Modal
-              </h3>
+            <Card className="p-6 space-y-3">
+              <CardTitle>Morph Modal</CardTitle>
               <MorphModal
                 trigger={<Button variant="secondary">Open Morph Modal</Button>}
                 modalWidth={500}
@@ -312,7 +492,7 @@ export default function UiGallery() {
                   </div>
                 </div>
               </MorphModal>
-            </div>
+            </Card>
           </div>
         </section>
 
