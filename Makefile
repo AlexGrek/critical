@@ -106,7 +106,7 @@ test-cli:
 	@trap '$(COMPOSE) down -v; echo ">>> Ephemeral ArangoDB removed."' EXIT; \
 		$(_start_backend) && \
 		echo ">>> Running CLI integration tests..." && \
-		cargo test -p crit-cli --test cli_test -- --include-ignored -- --test-threads=1 && \
+		cargo test -p crit-cli --test cli_test -- --include-ignored --test-threads=1 && \
 		echo ">>> CLI tests passed."
 
 # Python API integration tests (requires DB + backend running)

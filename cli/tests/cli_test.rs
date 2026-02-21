@@ -32,6 +32,53 @@ fn register_user(username: &str, password: &str) {
     );
 }
 
+/// Login a user via the API and return JWT token.
+fn login_user(username: &str, password: &str) -> String {
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .post(format!("{}/api/login", BACKEND_URL))
+        .json(&serde_json::json!({
+            "user": username,
+            "password": password,
+        }))
+        .send()
+        .expect("failed to send login request");
+
+    assert!(
+        resp.status().is_success(),
+        "login failed with status: {}",
+        resp.status()
+    );
+
+    let body: serde_json::Value = resp.json().expect("failed to parse login response");
+    body.get("token")
+        .and_then(|v| v.as_str())
+        .expect("token not in response")
+        .to_string()
+}
+
+/// Create a test group via the API.
+fn create_group(token: &str, group_id: &str, name: &str) {
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .post(format!("{}/api/v1/global/groups", BACKEND_URL))
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&serde_json::json!({
+            "id": group_id,
+            "name": name,
+            "acl": {}
+        }))
+        .send()
+        .expect("failed to send create group request");
+
+    // 201 = created, 409 = already exists
+    assert!(
+        resp.status().as_u16() == 201 || resp.status().as_u16() == 409,
+        "unexpected create group status: {}",
+        resp.status()
+    );
+}
+
 fn cr1t_cmd(home: &TempDir) -> Command {
     let mut cmd = Command::cargo_bin("cr1t").expect("cr1t binary not found");
     cmd.env("HOME", home.path());
@@ -135,4 +182,199 @@ fn test_context_list_empty() {
         .assert()
         .success()
         .stderr(predicate::str::contains("No contexts configured"));
+}
+
+// --- Groups and Users commands (require backend) ---
+
+#[test]
+#[ignore]
+fn test_groups_list() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpass789";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+
+    // Create context file manually (avoid interactive login with TTY issues)
+    let ctx_dir = home.path().join(".cr1tical");
+    std::fs::create_dir_all(&ctx_dir).unwrap();
+    let ctx_content = format!(
+        "current: localhost-3742\ncontexts:\n- name: localhost-3742\n  url: {}\n  token: {}\n",
+        BACKEND_URL, token
+    );
+    std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
+
+    // List groups (should succeed even if empty)
+    cr1t_cmd(&home)
+        .args(["groups", "list"])
+        .assert()
+        .success();
+}
+
+#[test]
+#[ignore]
+fn test_groups_list_with_data() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpass999";
+    let group_id = format!("g_test{}", unique_user().chars().rev().take(6).collect::<String>());
+    let group_name = "Test Group";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, group_name);
+
+    // Create context file manually
+    let ctx_dir = home.path().join(".cr1tical");
+    std::fs::create_dir_all(&ctx_dir).unwrap();
+    let ctx_content = format!(
+        "current: localhost-3742\ncontexts:\n- name: localhost-3742\n  url: {}\n  token: {}\n",
+        BACKEND_URL, token
+    );
+    std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
+
+    // List groups
+    cr1t_cmd(&home)
+        .args(["groups", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Groups:").or(predicate::str::contains(group_name)));
+}
+
+#[test]
+#[ignore]
+fn test_groups_describe() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassabc";
+    let group_id = format!("g_desc{}", unique_user().chars().rev().take(4).collect::<String>());
+    let group_name = "Describe Test Group";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, group_name);
+
+    // Create context file manually
+    let ctx_dir = home.path().join(".cr1tical");
+    std::fs::create_dir_all(&ctx_dir).unwrap();
+    let ctx_content = format!(
+        "current: localhost-3742\ncontexts:\n- name: localhost-3742\n  url: {}\n  token: {}\n",
+        BACKEND_URL, token
+    );
+    std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
+
+    // Describe group
+    cr1t_cmd(&home)
+        .args(["groups", "describe", &group_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(&group_id).or(predicate::str::contains(group_name)));
+}
+
+#[test]
+#[ignore]
+fn test_groups_describe_not_found() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassdef";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+
+    // Create context file manually
+    let ctx_dir = home.path().join(".cr1tical");
+    std::fs::create_dir_all(&ctx_dir).unwrap();
+    let ctx_content = format!(
+        "current: localhost-3742\ncontexts:\n- name: localhost-3742\n  url: {}\n  token: {}\n",
+        BACKEND_URL, token
+    );
+    std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
+
+    // Try to describe non-existent group
+    cr1t_cmd(&home)
+        .args(["groups", "describe", "g_nonexistent"])
+        .assert()
+        .failure();
+}
+
+#[test]
+#[ignore]
+fn test_users_list() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassghi";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+
+    // Create context file manually
+    let ctx_dir = home.path().join(".cr1tical");
+    std::fs::create_dir_all(&ctx_dir).unwrap();
+    let ctx_content = format!(
+        "current: localhost-3742\ncontexts:\n- name: localhost-3742\n  url: {}\n  token: {}\n",
+        BACKEND_URL, token
+    );
+    std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
+
+    // List users (should at least contain the logged-in user)
+    cr1t_cmd(&home)
+        .args(["users", "list"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Users:").or(predicate::str::contains(&user)));
+}
+
+#[test]
+#[ignore]
+fn test_users_describe() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassjkl";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+
+    // Create context file manually
+    let ctx_dir = home.path().join(".cr1tical");
+    std::fs::create_dir_all(&ctx_dir).unwrap();
+    let ctx_content = format!(
+        "current: localhost-3742\ncontexts:\n- name: localhost-3742\n  url: {}\n  token: {}\n",
+        BACKEND_URL, token
+    );
+    std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
+
+    // Describe the logged-in user
+    let user_id = format!("u_{}", user);
+    cr1t_cmd(&home)
+        .args(["users", "describe", &user_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(&user_id));
+}
+
+#[test]
+#[ignore]
+fn test_users_describe_not_found() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassmno";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+
+    // Create context file manually
+    let ctx_dir = home.path().join(".cr1tical");
+    std::fs::create_dir_all(&ctx_dir).unwrap();
+    let ctx_content = format!(
+        "current: localhost-3742\ncontexts:\n- name: localhost-3742\n  url: {}\n  token: {}\n",
+        BACKEND_URL, token
+    );
+    std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
+
+    // Try to describe non-existent user
+    cr1t_cmd(&home)
+        .args(["users", "describe", "u_nonexistent"])
+        .assert()
+        .failure();
 }
