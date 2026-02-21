@@ -2,6 +2,8 @@ mod api;
 mod commands;
 mod context;
 
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 
 /// cr1t — CLI for Critical project management
@@ -41,6 +43,13 @@ enum Commands {
     Users {
         #[command(subcommand)]
         action: UsersAction,
+    },
+
+    /// Apply a resource from a file or stdin (create or update)
+    Apply {
+        /// File to apply. Reads from stdin if not specified.
+        #[arg(short = 'f', long = "filename", value_name = "FILE")]
+        filename: Option<PathBuf>,
     },
 }
 
@@ -95,6 +104,9 @@ async fn main() {
             UsersAction::List => commands::gitops::list_users().await,
             UsersAction::Describe { id } => commands::gitops::describe_user(&id).await,
         },
+        Commands::Apply { filename } => {
+            commands::apply::run(filename.as_deref()).await
+        }
     };
 
     if let Err(e) = result {

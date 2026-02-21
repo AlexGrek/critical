@@ -69,6 +69,31 @@ pub async fn get_user(base_url: &str, token: &str, id: &str) -> Result<Value> {
     fetch_authenticated(&url, token).await
 }
 
+pub async fn apply_object(base_url: &str, token: &str, kind: &str, id: &str, body: Value) -> Result<Value> {
+    let url = format!("{}/api/v1/global/{}/{}", base_url.trim_end_matches('/'), kind, id);
+    post_authenticated(&url, token, body).await
+}
+
+async fn post_authenticated(url: &str, token: &str, body: Value) -> Result<Value> {
+    let client = reqwest::Client::new();
+    let resp = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&body)
+        .send()
+        .await?;
+
+    if resp.status().is_success() {
+        Ok(resp.json::<Value>().await?)
+    } else {
+        let status = resp.status();
+        match resp.json::<ApiErrorBody>().await {
+            Ok(err_body) => bail!("{} ({})", err_body.error.message, status),
+            Err(_) => bail!("request failed with status {}", status),
+        }
+    }
+}
+
 async fn fetch_authenticated(url: &str, token: &str) -> Result<Value> {
     let client = reqwest::Client::new();
     let resp = client

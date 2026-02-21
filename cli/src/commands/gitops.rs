@@ -34,7 +34,12 @@ pub async fn list_groups() -> Result<()> {
 
 pub async fn describe_group(id: &str) -> Result<()> {
     let ctx = context::require_current()?;
-    let response = api::get_group(&ctx.url, &ctx.token, id).await?;
+    let mut response = api::get_group(&ctx.url, &ctx.token, id).await?;
+
+    // Inject kind field
+    if let Some(obj) = response.as_object_mut() {
+        obj.insert("kind".to_string(), serde_json::json!("group"));
+    }
 
     let yaml = serde_yaml::to_string(&response)?;
     print!("{}", yaml);
@@ -82,7 +87,12 @@ pub async fn list_users() -> Result<()> {
 
 pub async fn describe_user(id: &str) -> Result<()> {
     let ctx = context::require_current()?;
-    let response = api::get_user(&ctx.url, &ctx.token, id).await?;
+    let mut response = api::get_user(&ctx.url, &ctx.token, id).await?;
+
+    // Inject kind field
+    if let Some(obj) = response.as_object_mut() {
+        obj.insert("kind".to_string(), serde_json::json!("user"));
+    }
 
     let yaml = serde_yaml::to_string(&response)?;
     print!("{}", yaml);

@@ -71,6 +71,7 @@ Groups:
 
 # Describe a group
 $ cr1t groups describe g_engineering
+kind: group
 id: g_engineering
 name: Engineering
 acl:
@@ -108,6 +109,7 @@ Users:
 
 # Describe a user
 $ cr1t users describe u_alice
+kind: user
 id: u_alice
 personal:
   name: Alice Smith
@@ -167,6 +169,7 @@ Context names are derived from the server URL by stripping the scheme and replac
 | `src/api.rs`              | HTTP client calls to backend API (login, groups, users)         |
 | `src/commands/login.rs`   | Login command implementation                                    |
 | `src/commands/gitops.rs`  | Groups and Users list/describe commands                        |
+| `src/commands/apply.rs`   | Apply command (create or update resources from YAML)           |
 | `src/commands/`           | Other command implementations (one file per command group)      |
 
 ## Testing
@@ -201,6 +204,70 @@ make run-fresh  # Terminal 1
 
 # Run tests in another terminal
 cargo test -p crit-cli --test cli_test -- --include-ignored --test-threads=1
+```
+
+## Apply (Create / Update Resources)
+
+`cr1t apply` applies resource definitions from a YAML file or stdin. It behaves like `kubectl apply` — creating the resource if it doesn't exist, or updating it if it does.
+
+### From a file
+
+```bash
+cr1t apply -f group.yaml
+```
+
+### From stdin (pipeable)
+
+```bash
+cat group.yaml | cr1t apply
+echo "kind: group\nid: g_ops\nname: Ops" | cr1t apply
+```
+
+### YAML format
+
+Each document must have `kind` (singular) and `id` fields:
+
+```yaml
+kind: group
+id: g_engineering
+name: Engineering
+acl:
+  owner:
+    - u_alice
+  member:
+    - u_bob
+```
+
+```yaml
+kind: user
+id: u_alice
+personal:
+  name: Alice Smith
+  job_title: Engineering Lead
+```
+
+You can apply multiple resources in one file using YAML multi-document separators:
+
+```yaml
+kind: group
+id: g_frontend
+name: Frontend
+---
+kind: group
+id: g_backend
+name: Backend
+```
+
+### Supported kinds
+
+Any kind that maps to an API collection. Currently: `group`, `user`, `project`, `membership`.
+The kind is automatically pluralized to match the API endpoint (`group` → `/api/v1/global/groups/{id}`).
+
+### Output
+
+```
+group/g_engineering applied
+user/u_alice applied
 ```
 
 ## Architecture Notes
