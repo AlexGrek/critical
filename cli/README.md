@@ -2,6 +2,74 @@
 
 `cr1t` is a gitops-style CLI tool (similar to `kubectl`) that serves as a full alternative to the web frontend. It communicates with the Critical backend API over HTTP and stores authentication tokens locally.
 
+## TL;DR
+
+```bash
+# Build once
+cargo build --bin cr1t
+alias cr1t=./target/debug/cr1t
+
+# Login
+cr1t login --url http://localhost:3742 -u root   # prompts for password
+
+# List resources
+cr1t groups list
+cr1t users list
+
+# Inspect a resource (YAML output)
+cr1t groups describe g_engineering
+cr1t users describe u_alice
+
+# Apply a resource from a file (create or update)
+cr1t apply -f group.yaml
+
+# Apply from stdin
+cat group.yaml | cr1t apply
+echo "kind: group
+id: g_ops
+name: Ops" | cr1t apply
+```
+
+### With `cargo run` (dev mode, no build step)
+
+```bash
+# Login
+cargo run --bin cr1t -- login --url http://localhost:3742 -u root
+
+# List
+cargo run --bin cr1t -- groups list
+cargo run --bin cr1t -- users list
+
+# Describe
+cargo run --bin cr1t -- groups describe g_engineering
+
+# Apply from file
+cargo run --bin cr1t -- apply -f group.yaml
+
+# Apply from stdin
+cat group.yaml | cargo run --bin cr1t -- apply
+```
+
+### Minimal group YAML example
+
+```yaml
+kind: group
+id: g_engineering
+name: Engineering
+```
+
+### Minimal user YAML example
+
+```yaml
+kind: user
+id: u_alice
+personal:
+  name: Alice Smith
+  job_title: Engineer
+```
+
+---
+
 ## Quick Start
 
 ### Build
