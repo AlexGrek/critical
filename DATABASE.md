@@ -4,7 +4,7 @@
 > **Default DB Name**: `unnamed` (configurable via `DB_NAME` env var)
 > **Connection**: `http://localhost:8529` (configurable via `DB_CONNECTION_STRING`)
 
-Collections are auto-created on first connection via `ArangoDb::connect_basic()` in `backend/src/db/arangodb/mod.rs`. There is no migration system — schema is defined by Rust types in [models.rs](shared/src/models.rs), and ArangoDB itself is schemaless (documents are JSON with no DB-enforced structure).
+Collections are auto-created on first connection via `ArangoDb::connect_basic()` in `backend/src/db/arangodb/mod.rs`. There is no migration system — schema is defined by Rust types in [data_models.rs](shared/src/data_models.rs) and [util_models.rs](shared/src/util_models.rs), and ArangoDB itself is schemaless (documents are JSON with no DB-enforced structure).
 
 ---
 
@@ -145,7 +145,7 @@ The gitops API (`/api/v1/global/{kind}`) supports **any** kind string as a colle
 
 ## Planned Collections (Not Yet Persisted)
 
-Models defined in [models.rs](shared/src/models.rs) but no DB operations implemented:
+Models defined in [data_models.rs](shared/src/data_models.rs) but no DB operations implemented:
 
 | Planned Collection | Rust Struct | Key Type     |
 | ------------------ | ----------- | ------------ |

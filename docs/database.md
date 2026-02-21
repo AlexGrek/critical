@@ -4,11 +4,11 @@
 > **Default DB Name**: `unnamed` (configurable via `DB_NAME` env var)
 > **Connection**: `http://localhost:8529` (configurable via `DB_CONNECTION_STRING`)
 
-Collections are auto-created on first connection via `ArangoDb::connect_basic()`. There is no migration system — schema is defined by Rust types in `shared/src/models.rs`, and ArangoDB itself is schemaless (documents are JSON with no DB-enforced structure).
+Collections are auto-created on first connection via `ArangoDb::connect_basic()`. There is no migration system — schema is defined by Rust types in `shared/src/data_models.rs` and `shared/src/util_models.rs`, and ArangoDB itself is schemaless (documents are JSON with no DB-enforced structure).
 
 ## Schema Evolution
 
-There are no migration files, no versioning, and no automated schema diffing. The Rust structs in `shared/src/models.rs` define the **application-level** schema, not a DB-enforced one.
+There are no migration files, no versioning, and no automated schema diffing. The Rust structs in `shared/src/data_models.rs` and `shared/src/util_models.rs` define the **application-level** schema, not a DB-enforced one.
 
 **On startup**, `connect_basic` creates collections if they don't exist (idempotent `create_collection` calls that silently ignore "already exists" errors). Existing collections and documents are never altered.
 

@@ -79,12 +79,12 @@ Stack architecture: nginx gateway (:3742) routes `/api/*` to the backend and `/*
 
 ### Shared Library (`shared/`)
 - **Crate name**: `crit-shared` (import as `crit_shared`)
-- **Models** (`src/models.rs`): Domain types shared across backend and CLI
-  - Bitflag-based `Permissions` (FETCH, LIST, NOTIFY, CREATE, MODIFY, CUSTOM1, CUSTOM2)
-  - `AccessControlList` / `AccessControlStore` for ACL management
-  - Core entities: `User`, `Group`, `Ticket`, `Project`, `GroupMembership`
+- **Models** (`src/data_models.rs`, `src/util_models.rs`): Domain types and ACL utilities shared across backend and CLI
+  - `data_models.rs`: Core entities (`User`, `Group`, `Ticket`, `Project`, `GroupMembership`)
+  - `util_models.rs`: Bitflag-based `Permissions`, `AccessControlList` / `AccessControlStore` for ACL management, and super-permission constants
   - ArangoDB uses `_key` as the document ID field (note `#[serde(rename = "_key")]` on model ID fields)
   - User IDs are prefixed with `u_`, group IDs with `g_`
+- **`#[derive(Brief)]` proc macro** (`shared/derive/`): Marks struct fields with `#[brief]` to generate a `{Name}Brief` summary struct, `to_brief()`, and `brief_field_names()`. Used by controllers to produce list-view responses with only essential fields. Applied to `User` and `Group`.
 
 ### Backend (`backend/`)
 - **Framework**: Axum 0.8 with Tokio async runtime
@@ -129,6 +129,8 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
   - `can_read(user_id, doc)` / `can_write(user_id, doc)` — authorization checks
   - `can_create(user_id, body)` — authorization for new document creation (default delegates to `can_write(user_id, None)`; override when the request body is needed for auth, e.g. MembershipController checks the target group's ACL)
   - `to_internal(body, auth)` / `to_external(doc)` — convert between external API format and internal ArangoDB format
+  - `to_list_external(doc)` — convert for list responses (default delegates to `to_external`; override to return brief/summary fields only)
+  - `list_projection_fields()` — ArangoDB field names to fetch for list queries (AQL `KEEP()`); `None` = fetch all fields
   - `prepare_create(body, user_id)` — pre-creation hook (e.g. inject creator ACL for projects and groups)
   - `after_create(key, user_id, db)` — post-creation hook (e.g. insert creator as group member)
   - `after_delete(key, db)` — post-deletion hook (e.g. cascade removal of memberships for users and groups)

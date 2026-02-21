@@ -7,9 +7,10 @@ use crate::db::ArangoDb;
 use crate::error::AppError;
 use crate::middleware::auth::Auth;
 use crate::validation::naming::validate_username;
-use crit_shared::models::super_permissions;
+use crit_shared::data_models::User;
+use crit_shared::util_models::super_permissions;
 
-use super::gitops_controller::{KindController, standard_to_external, rename_id_to_key};
+use super::gitops_controller::{KindController, filter_to_brief, standard_to_external, rename_id_to_key};
 
 pub struct UserController {
     pub db: Arc<ArangoDb>,
@@ -77,6 +78,16 @@ impl KindController for UserController {
             obj.remove("password_hash");
         }
         standard_to_external(doc)
+    }
+
+    fn to_list_external(&self, doc: Value) -> Value {
+        let doc = self.to_external(doc);
+        filter_to_brief(doc, User::brief_field_names())
+    }
+
+    fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
+        // _key maps to "id" after to_external; can_read needs no extra fields
+        Some(&["_key", "deactivated", "personal"])
     }
 
     async fn after_delete(&self, key: &str, db: &ArangoDb) -> Result<(), AppError> {

@@ -2,12 +2,19 @@ use std::sync::Arc;
 
 use axum::{
     Json,
-    extract::{Path, State},
+    extract::{Path, Query, State},
     response::IntoResponse,
 };
+use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::{error::AppError, middleware::auth::AuthenticatedUser, state::AppState};
+
+#[derive(Deserialize)]
+pub struct ListQuery {
+    pub limit: Option<u32>,
+    pub cursor: Option<String>,
+}
 
 /// Validate that a kind string is a safe collection name (alphanumeric + underscores).
 fn validate_kind(kind: &str) -> Result<(), AppError> {
@@ -26,25 +33,46 @@ fn validate_kind(kind: &str) -> Result<(), AppError> {
 }
 
 /// GET /global/{kind} — list all objects of this kind.
+/// Supports optional pagination via `?limit=N&cursor=<key>`.
 pub async fn list_objects(
     AuthenticatedUser(user_id): AuthenticatedUser,
     Path(kind): Path<String>,
+    Query(query): Query<ListQuery>,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
     validate_kind(&kind)?;
     state.db.ensure_collection(&kind).await?;
 
     let ctrl = state.controller.for_kind(&kind);
-    let docs = state.db.generic_list(&kind).await?;
+    let result = state
+        .db
+        .generic_list(
+            &kind,
+            ctrl.list_projection_fields(),
+            query.limit,
+            query.cursor.as_deref(),
+        )
+        .await?;
 
     let mut filtered = Vec::new();
-    for doc in docs {
+    for doc in result.docs {
         if ctrl.can_read(&user_id, Some(&doc)).await? {
-            filtered.push(ctrl.to_external(doc));
+            filtered.push(ctrl.to_list_external(doc));
         }
     }
 
-    Ok(Json(json!({ "items": filtered })))
+    if query.limit.is_some() {
+        let mut response = json!({
+            "items": filtered,
+            "has_more": result.has_more,
+        });
+        if let Some(cursor) = result.next_cursor {
+            response["next_cursor"] = Value::String(cursor);
+        }
+        Ok(Json(response))
+    } else {
+        Ok(Json(json!({ "items": filtered })))
+    }
 }
 
 /// POST /global/{kind} — create a new object (id read from body).

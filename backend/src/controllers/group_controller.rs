@@ -7,10 +7,11 @@ use crate::db::ArangoDb;
 use crate::error::AppError;
 use crate::middleware::auth::Auth;
 use crate::validation::naming::validate_group_id;
-use crit_shared::models::{Permissions, super_permissions};
+use crit_shared::data_models::Group;
+use crit_shared::util_models::{Permissions, super_permissions};
 
 use super::gitops_controller::{
-    KindController, parse_acl, standard_to_external, standard_to_internal,
+    KindController, filter_to_brief, parse_acl, standard_to_external, standard_to_internal,
 };
 
 pub struct GroupController {
@@ -163,6 +164,16 @@ impl KindController for GroupController {
 
     fn to_external(&self, doc: Value) -> Value {
         standard_to_external(doc)
+    }
+
+    fn to_list_external(&self, doc: Value) -> Value {
+        let doc = self.to_external(doc);
+        filter_to_brief(doc, Group::brief_field_names())
+    }
+
+    fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
+        // _key → "id" after to_external; "acl" needed by can_read for ACL checks
+        Some(&["_key", "name", "acl"])
     }
 
     fn prepare_create(&self, body: &mut Value, user_id: &str) {

@@ -9,7 +9,18 @@ use arangors::transaction::{
 };
 use serde_json::{Value, json};
 
-use crit_shared::models::*;
+use crit_shared::data_models::*;
+use crit_shared::util_models::*;
+
+//
+// ------------------- PAGINATION --------------------
+//
+
+pub struct PaginatedResult {
+    pub docs: Vec<Value>,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
 
 //
 // ------------------- TRANSACTION WRAPPER --------------------
@@ -707,17 +718,73 @@ impl ArangoDb {
         Ok(())
     }
 
-    pub async fn generic_list(&self, collection: &str) -> Result<Vec<Value>> {
-        let query = "FOR doc IN @@col RETURN doc";
-        let vars = std::collections::HashMap::from([
+    pub async fn generic_list(
+        &self,
+        collection: &str,
+        fields: Option<&[&str]>,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+    ) -> Result<PaginatedResult> {
+        // Build the RETURN clause (with or without projection)
+        let return_clause = match fields {
+            Some(f) => {
+                let quoted: Vec<String> = f.iter().map(|s| format!("\"{}\"", s)).collect();
+                format!("RETURN KEEP(doc, {})", quoted.join(", "))
+            }
+            None => "RETURN doc".to_string(),
+        };
+
+        // Build the full query
+        let mut vars = std::collections::HashMap::from([
             ("@col", Value::String(collection.to_string())),
         ]);
-        let docs: Vec<Value> = self
+
+        let cursor_filter = if let Some(c) = cursor {
+            vars.insert("cursor", Value::String(c.to_string()));
+            "FILTER doc._key > @cursor"
+        } else {
+            ""
+        };
+
+        // LIMIT in AQL does not support bind parameters — inline the literal.
+        // Safe: limit is a u32, no injection possible.
+        let limit_clause = limit.map(|l| format!("LIMIT {}", l + 1)).unwrap_or_default();
+
+        let query = format!(
+            "FOR doc IN @@col {} SORT doc._key ASC {} {}",
+            cursor_filter, limit_clause, return_clause
+        );
+
+        let mut docs: Vec<Value> = self
             .db
-            .aql_bind_vars(query, vars)
+            .aql_bind_vars(&query, vars)
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
-        Ok(docs)
+
+        // Determine pagination state
+        let has_more = match limit {
+            Some(l) => docs.len() > l as usize,
+            None => false,
+        };
+
+        if has_more {
+            docs.pop(); // Remove the extra sentinel document
+        }
+
+        let next_cursor = if has_more {
+            docs.last()
+                .and_then(|d| d.get("_key"))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        } else {
+            None
+        };
+
+        Ok(PaginatedResult {
+            docs,
+            next_cursor,
+            has_more,
+        })
     }
 
     pub async fn generic_get(&self, collection: &str, key: &str) -> Result<Option<Value>> {

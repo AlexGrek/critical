@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::db::ArangoDb;
 use crate::error::AppError;
 use crate::middleware::auth::Auth;
-use crit_shared::models::{AccessControlList, AccessControlStore, Permissions};
+use crit_shared::util_models::{AccessControlList, AccessControlStore, Permissions};
 
 // ---------------------------------------------------------------------------
 // KindController trait
@@ -59,6 +59,20 @@ pub trait KindController: Send + Sync {
     async fn after_update(&self, _key: &str, _db: &ArangoDb) -> Result<(), AppError> {
         Ok(())
     }
+
+    /// Convert an internal ArangoDB document to the external representation
+    /// suitable for list responses (brief/summary view).
+    /// Default delegates to `to_external`.
+    fn to_list_external(&self, doc: Value) -> Value {
+        self.to_external(doc)
+    }
+
+    /// Return the ArangoDB field names to fetch for list queries (projection).
+    /// `None` means fetch all fields (no projection).
+    /// Fields should use ArangoDB names (e.g. `_key`, not `id`).
+    fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +109,15 @@ pub fn standard_to_internal(mut body: Value) -> Value {
 pub fn standard_to_external(mut doc: Value) -> Value {
     rename_key_to_id(&mut doc);
     doc
+}
+
+/// Filter a JSON object to only keep the given field names.
+/// Used by `to_list_external` to produce brief representations.
+pub fn filter_to_brief(mut value: Value, fields: &[&str]) -> Value {
+    if let Some(obj) = value.as_object_mut() {
+        obj.retain(|key, _| fields.contains(&key.as_str()));
+    }
+    value
 }
 
 /// Parse ACL from a raw JSON document.

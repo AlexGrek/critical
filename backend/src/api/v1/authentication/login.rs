@@ -9,14 +9,14 @@ use axum::{
 use chrono::Utc;
 
 use crate::{
+    data_models,
     error::AppError,
-    models,
     schema::{Created, LoginRequest, LoginResponse, RegisterRequest, User},
     state::AppState,
     validation::naming::validate_username,
 };
 
-impl From<User> for models::User {
+impl From<User> for data_models::User {
     fn from(src: User) -> Self {
         let mut metadata = HashMap::new();
         metadata.insert("registered_at".to_string(), Utc::now().to_rfc3339());
@@ -54,20 +54,20 @@ pub async fn register(
 
     let uid = user.username.clone();
 
-    let user_model: models::User = user.into();
+    let user_model: data_models::User = user.into();
     let user_id = user_model.id.clone();
     app_state.db.create_user(user_model, None).await?;
 
     // Grant default permissions to new users
     app_state
         .db
-        .grant_permission(models::super_permissions::USR_CREATE_PROJECTS, &user_id)
+        .grant_permission(crate::util_models::super_permissions::USR_CREATE_PROJECTS, &user_id)
         .await
         .map_err(|e| AppError::Internal(e))?;
 
     app_state
         .db
-        .grant_permission(models::super_permissions::USR_CREATE_GROUPS, &user_id)
+        .grant_permission(crate::util_models::super_permissions::USR_CREATE_GROUPS, &user_id)
         .await
         .map_err(|e| AppError::Internal(e))?;
 

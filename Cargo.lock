@@ -578,11 +578,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "crit-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "crit-shared"
 version = "0.1.0"
 dependencies = [
  "bitflags",
  "chrono",
+ "crit-derive",
  "serde",
  "uuid",
 ]

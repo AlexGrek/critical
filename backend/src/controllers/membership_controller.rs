@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::db::ArangoDb;
 use crate::error::AppError;
 use crate::middleware::auth::Auth;
-use crit_shared::models::{Permissions, super_permissions};
+use crit_shared::util_models::{Permissions, super_permissions};
 
 use super::gitops_controller::{
     KindController, parse_acl, standard_to_external, standard_to_internal,

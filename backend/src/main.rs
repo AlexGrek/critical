@@ -4,7 +4,7 @@ pub mod controllers;
 pub mod db;
 pub mod error;
 pub mod middleware;
-pub use crit_shared::models;
+pub use crit_shared::{data_models, util_models};
 pub mod schema;
 pub mod services;
 pub mod state;
@@ -119,7 +119,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let auth = Auth::new(config.jwt_secret.as_bytes(), config.jwt_expiry_days);
     if db.get_user_by_id("u_root").await?.is_none() {
         let password_hash = auth.hash_password(&config.root_password)?;
-        let root_user = crit_shared::models::User {
+        let root_user = crit_shared::data_models::User {
             id: "u_root".to_string(),
             password_hash,
             created_at: chrono::Utc::now(),

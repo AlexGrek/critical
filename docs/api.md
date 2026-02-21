@@ -13,6 +13,71 @@
 
 All routes are nested under `/api` when accessed through the gateway (nginx or ingress).
 
+## Gitops API (`/v1/global/{kind}`)
+
+A generic CRUD API for all resource kinds. `{kind}` maps to an ArangoDB collection name (e.g. `users`, `groups`, `projects`). Unknown kinds are auto-created on first access.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/global/{kind}` | List all accessible objects |
+| `GET` | `/v1/global/{kind}/{id}` | Fetch a single object |
+| `POST` | `/v1/global/{kind}` | Create a new object (id in body) |
+| `POST` | `/v1/global/{kind}/{id}` | Upsert (create or replace) |
+| `PUT` | `/v1/global/{kind}/{id}` | Update (fails if not exists) |
+| `DELETE` | `/v1/global/{kind}/{id}` | Delete an object |
+
+### Pagination
+
+The list endpoint (`GET /v1/global/{kind}`) supports optional cursor-based pagination:
+
+```
+GET /v1/global/users?limit=10
+GET /v1/global/users?limit=10&cursor=u_alice
+```
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | integer | Number of items to return. If omitted, all items are returned (no pagination). |
+| `cursor` | string | Opaque cursor from the previous page's `next_cursor` field. Omit for the first page. |
+
+**Response without `limit`** (unchanged, backward-compatible):
+```json
+{ "items": [ ... ] }
+```
+
+**Response with `limit`:**
+```json
+{
+  "items": [ ... ],
+  "has_more": true,
+  "next_cursor": "u_bob"
+}
+```
+
+On the last page, `has_more` is `false` and `next_cursor` is omitted:
+```json
+{
+  "items": [ ... ],
+  "has_more": false
+}
+```
+
+**Implementation notes:**
+- Pagination is cursor-based using `_key` (ArangoDB primary key), which is already indexed and sorted.
+- The DB query uses `SORT doc._key ASC` + `FILTER doc._key > @cursor`, making it efficient for millions of records.
+- Pages may contain **fewer items than `limit`** when per-document ACL filtering removes some results. Keep paginating until `has_more: false`.
+
+### List Response Shape (Brief)
+
+List responses return a summary view of each resource (brief fields only), not the full document. Full documents are returned by the single-object GET endpoint.
+
+| Kind | Brief fields |
+|------|-------------|
+| `users` | `id`, `deactivated`, `personal` |
+| `groups` | `id`, `name` |
+
 ## Authentication
 
 Three auth strategies:

@@ -24,7 +24,13 @@
       "Bash(npx playwright install:*)",
       "Bash(npm run test:headed:*)",
       "Bash(npm run test:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(make:*)",
+      "Read(//Users/vedmedik/dev/critical/**)",
+      "Bash(git -C /Users/vedmedik/dev/critical log:*)",
+      "Bash(git -C /Users/vedmedik/dev/critical diff HEAD backend/src/api/v1/gitops.rs)",
+      "Bash(docker ps:*)",
+      "Bash(podman ps:*)"
     ]
   }
 }
