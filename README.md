@@ -4,6 +4,8 @@ A full-stack project management and ticketing system with a Rust backend, React 
 
 Full documentation: [`docs/`](docs/README.md)
 
+Whitepaper for architectural constraints: [`WHITEPAPER`](WHITEPAPER.md)
+
 ## 🚀 Quick Start
 
 ### Installation

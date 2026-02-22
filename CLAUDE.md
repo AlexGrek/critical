@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Critical (crit-cli) is a full-stack project management and ticketing system with a Rust backend and React TypeScript frontend, using ArangoDB as the primary database.
 
+Whitepaper for architectural constraints: [`WHITEPAPER`](WHITEPAPER.md)
+
 Full documentation: [`docs/`](docs/README.md)
 
 ## Workspace Structure
