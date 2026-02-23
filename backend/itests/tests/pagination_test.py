@@ -10,6 +10,7 @@ Verifies:
 """
 
 import pytest
+import random
 import requests
 
 BASE = "http://localhost:3742/api"
@@ -49,8 +50,9 @@ def delete_user(token: str, user_id: str) -> None:
 
 @pytest.fixture(scope="module")
 def paged_users(root_token):
-    """Create 5 test users, yield their IDs, then clean up."""
-    ids = [f"u_pgtest_{i:03d}" for i in range(1, 6)]
+    """Create 5 test users with a random run suffix, yield their IDs, then clean up."""
+    run = random.randint(100000, 999999)
+    ids = [f"u_pgtest_{run}_{i:03d}" for i in range(1, 6)]
     for uid in ids:
         create_user(root_token, uid)
     yield ids

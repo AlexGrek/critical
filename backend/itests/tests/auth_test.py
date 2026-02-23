@@ -55,20 +55,38 @@ def test_user():
 
 @pytest.fixture(scope="module")
 def auth_token(test_user):
-    """Login and get JWT token for the test user"""
+    """Register (if needed) and login the test user, returning a JWT token.
+
+    With xdist each worker gets its own module-scoped fixtures, so the worker
+    running test_4_websocket_connection may never have executed
+    test_1_register_user.  We register here unconditionally and accept both
+    201 (fresh) and 409/Conflict (already registered by another fixture path)
+    so the fixture is safe to call from any worker.
+    """
     headers = {
         "Accept": "*/*",
         "User-Agent": "pytest-client",
         "Content-Type": "application/json",
     }
-    payload = {"user": test_user["username"], "password": test_user["password"]}
 
-    resp = requests.post(URL_LOGIN, json=payload, headers=headers)
-    assert resp.status_code == 200
+    reg_resp = requests.post(
+        URL_REGISTER,
+        json={"user": test_user["username"], "password": test_user["password"]},
+        headers=headers,
+    )
+    assert reg_resp.status_code in (201, 409), (
+        f"Unexpected register status {reg_resp.status_code}: {reg_resp.text}"
+    )
 
-    data = resp.json()
+    login_resp = requests.post(
+        URL_LOGIN,
+        json={"user": test_user["username"], "password": test_user["password"]},
+        headers=headers,
+    )
+    assert login_resp.status_code == 200, f"Login failed: {login_resp.text}"
+
+    data = login_resp.json()
     assert "token" in data, "No token in response"
-    
     return data["token"]
 
 
