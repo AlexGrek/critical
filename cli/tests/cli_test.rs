@@ -80,7 +80,7 @@ fn create_group(token: &str, group_id: &str, name: &str) {
 }
 
 fn cr1t_cmd(home: &TempDir) -> Command {
-    let mut cmd = Command::cargo_bin("cr1t").expect("cr1t binary not found");
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_cr1t"));
     cmd.env("HOME", home.path());
     cmd
 }
