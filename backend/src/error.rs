@@ -107,8 +107,8 @@ impl AppError {
             | AppError::Internal(_)
             | AppError::Serialization(_)
             | AppError::Io(_)
-            | AppError::Conflict(_)
             | AppError::BcryptError(_) => true,
+        AppError::Conflict(_) => false,
             AppError::SchedulingImpossible(_) => true,
         }
     }

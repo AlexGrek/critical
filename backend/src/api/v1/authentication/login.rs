@@ -57,7 +57,14 @@ pub async fn register(
 
     let user_model: data_models::User = user.into();
     let user_id = user_model.id.clone();
-    app_state.db.create_user(user_model, None).await?;
+    app_state.db.create_user(user_model, None).await.map_err(|e| {
+        let msg = e.to_string();
+        if msg.contains("unique constraint") || msg.contains("1210") {
+            AppError::conflict(format!("User '{}' already exists", uid))
+        } else {
+            AppError::Internal(e)
+        }
+    })?;
 
     // Grant default permissions to new users
     app_state
