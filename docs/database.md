@@ -26,43 +26,55 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 ## Entity-Relationship Diagram
 
 ```
-┌────────────────┐         ┌────────────────┐         ┌────────────────┐
-│     users      │         │  memberships   │         │     groups     │
-│  (Document)    │         │  (Edge)        │         │  (Document)    │
-├────────────────┤         ├────────────────┤         ├────────────────┤
-│ _key (u_xxx)   │◄─_from──│ _from          │         │ _key (g_xxx)   │
-│                │         │ _to            │──_to───▶│                │
-│                │         │ principal      │         │                │
-│                │         │ group          │         │                │
-│                │         │ _key           │         │                │
-│                │         │ (principal::   │         │                │
-│                │         │     group)     │         │                │
-└────────────────┘         └────────────────┘         └────────────────┘
-                                  ▲
-                                  │                   ┌────────────────┐
-                           groups can also            │  permissions   │
-                           be principals              │  (Document)    │
-                           (nested groups)            ├────────────────┤
-                                                      │ _key (perm     │
-                                                      │   name)        │
-                                                      │ principals[]   │
-                                                      └────────────────┘
+┌──────────────────┐
+│     users        │  u_ prefix
+│  (Document)      │
+└────────┬─────────┘
+         │                      ┌──────────────────┐
+┌────────┴─────────┐            │     groups       │  g_ prefix
+│ service_accounts │  sa_       │  (Document)      │
+│  (Document)      │            └────────┬─────────┘
+└────────┬─────────┘                     │
+         │            ┌──────────────────┘
+┌────────┴─────────┐  │
+│pipeline_accounts │  pa_
+│  (Document)      │  │
+└────────┬─────────┘  │
+         │            │
+         └─────┬──────┘
+               │  _from (any principal)
+        ┌──────▼───────┐
+        │ memberships  │  (Edge)
+        │  _from → _to │──────▶ groups
+        └──────────────┘
+
+┌──────────────────┐   ┌──────────────────┐
+│ resource_history │   │ resource_events  │
+│  (Document)      │   │  (Document)      │
+│  immutable       │   │  runtime events  │
+│  snapshots       │   │  (login, etc.)   │
+└──────────────────┘   └──────────────────┘
+
+┌──────────────────┐
+│  permissions     │  (Document)
+│  super-perms     │
+│  principals[]    │
+└──────────────────┘
 ```
 
 ### Membership Graph
 
 ```
- ┌────────┐                  ┌────────┐
- │ User A │──membership──┐   │ User B │──membership──┐
- │ u_alice│              │   │ u_bob  │              │
- └────────┘              ▼   └────────┘              ▼
-                    ┌──────────┐                ┌──────────┐
-                    │ Group X  │──membership──▶│ Group Y  │
-                    │ g_devs   │               │ g_all    │
-                    └──────────┘               └──────────┘
+ ┌─────────┐                  ┌────────────┐
+ │ u_alice │──membership──┐   │ sa_ci-bot  │──membership──┐
+ └─────────┘              │   └────────────┘              │
+                          ▼                               ▼
+                    ┌──────────┐                    ┌──────────┐
+                    │ g_devs   │──membership──────▶│ g_all    │
+                    └──────────┘                    └──────────┘
 
- Users and groups can both be members of groups (nested groups supported).
- Principals prefixed u_ are users, g_ are groups.
+ All four principal types (users, groups, service_accounts, pipeline_accounts)
+ can be members of groups. Groups can be nested (groups as members of groups).
 ```
 
 ## Collections
@@ -73,11 +85,31 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 |-----------|------------|-------------|
 | `_key` | `u_` prefix (e.g. `u_alice`) | `User` |
 
+Standard fields injected by `#[crit_resource]`: `id`, `meta`, `deletion`, `hash_code`. No `acl` (users use super-permissions only).
+
 ### `groups` — Document Collection
 
 | Key Field | Key Format | Rust Struct |
 |-----------|------------|-------------|
 | `_key` | `g_` prefix (e.g. `g_admins`) | `Group` |
+
+Has full `acl` field. Members are edges in `memberships`, not a field on the group document.
+
+### `service_accounts` — Document Collection
+
+| Key Field | Key Format | Rust Struct |
+|-----------|------------|-------------|
+| `_key` | `sa_` prefix (e.g. `sa_ci-bot`) | `ServiceAccount` |
+
+Non-human API principals for integrations. Authenticate via token.
+
+### `pipeline_accounts` — Document Collection
+
+| Key Field | Key Format | Rust Struct |
+|-----------|------------|-------------|
+| `_key` | `pa_` prefix (e.g. `pa_build-runner`) | `PipelineAccount` |
+
+Non-human CI/CD principals. Same as service accounts but scoped to a specific pipeline or project.
 
 ### `memberships` — Edge Collection
 
@@ -85,14 +117,14 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 |-----------|------------|-------------|
 | `_key` | `{principal}::{group}` composite | `GroupMembership` |
 
-**Edge fields**: `_from` (`users/{id}` or `groups/{id}`) → `_to` (`groups/{id}`). Also stores `principal` and `group` as plain string fields for backward-compatible queries.
+**Edge fields**: `_from` (any principal collection) → `_to` (`groups/{id}`). Also stores `principal` and `group` as plain string fields for direct queries.
 
-Native graph traversal is supported via `_from`/`_to` (e.g. `FOR v IN 1..10 OUTBOUND "users/u_alice" memberships`).
+Native graph traversal: `FOR v IN 1..10 OUTBOUND "users/u_alice" memberships`
 
 **Key AQL queries**:
-- Users in group: `FOR m IN memberships FILTER m.group == @group FILTER LIKE(m.principal, "u_%") RETURN m.principal`
-- Sub-groups in group: `FOR m IN memberships FILTER m.group == @group FILTER LIKE(m.principal, "g:%") RETURN m.principal`
-- All groups for user (recursive): `FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships RETURN v._key`
+- All members of a group: `FOR m IN memberships FILTER m.group == @group RETURN m.principal`
+- Users only: `FOR m IN memberships FILTER m.group == @group FILTER LIKE(m.principal, "u_%") RETURN m.principal`
+- All groups for a principal (recursive): `FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships RETURN v._key`
 
 ### `permissions` — Document Collection
 
@@ -100,36 +132,59 @@ Native graph traversal is supported via `_from`/`_to` (e.g. `FOR v IN 1..10 OUTB
 |-----------|------------|-------------|
 | `_key` | permission name (e.g. `adm_user_manager`) | `GlobalPermission` |
 
-**Fields**: `principals` (`Vec<String>`) — list of user/group IDs granted this permission.
+**Fields**: `principals` (`Vec<String>`) — list of principal IDs granted this super-permission.
 
-**Defined super-permissions**:
+**Active super-permissions**:
 
-| Permission | Description |
-|------------|-------------|
-| `adm_user_manager` | Create, edit, delete, disable, impersonate users |
-| `adm_project_manager` | Full access to all projects |
-| `usr_create_projects` | User-level permission to create projects |
-| `adm_config_editor` | Admin-level core configuration editor |
+| Permission | Granted on Registration | Description |
+|------------|------------------------|-------------|
+| `adm_user_manager` | No | Full control over users, groups, memberships |
+| `adm_config_editor` | No | Edit global configuration |
+| `usr_create_groups` | Yes | Create new groups |
 
-Permission checks resolve through the membership graph — a user has a permission if they or any of their groups (including nested groups) appear in that permission's `principals` array.
+Permission checks resolve through the membership graph — a principal has a permission if they or any of their groups (including nested groups, up to 10 levels) appear in that permission's `principals` array.
+
+### `resource_history` — Document Collection
+
+Immutable change snapshots. Written after every create/update. Survives resource deletion.
+
+| Key format | Example |
+|------------|---------|
+| `{kind}_{resource_key}_{revision:06}` | `groups_g_engineering_000003` |
+
+Fields: `resource_kind`, `resource_key`, `revision` (1-based), `snapshot` (full JSON), `changed_by`, `changed_at`.
+
+### `resource_events` — Document Collection
+
+Runtime events associated with resources. Survives resource deletion.
+
+| Key format | Example |
+|------------|---------|
+| `ev_{event_type}_{timestamp_ns}` | `ev_sign_in_1740312000123456789` |
+
+Fields: `resource_kind`, `resource_key`, `event_type`, `timestamp`, `actor`, `details`.
 
 ## Indexes
 
-ArangoDB auto-indexes `_key`, and auto-indexes `_from`/`_to` on edge collections. No additional explicit indexes defined. Candidates for manual indexes:
+ArangoDB auto-indexes `_key`, and auto-indexes `_from`/`_to` on edge collections. No additional explicit indexes defined. Candidates for future manual indexes:
 - `memberships.principal`
 - `memberships.group`
+- `resource_history.resource_key` (for fast history lookups)
+- `resource_events.resource_key`
 
 ## Transactions
 
-All four active collections (`users`, `groups`, `memberships`, `permissions`) participate in server-side transactions with `wait_for_sync: true`.
+Active document collections participate in server-side transactions with `wait_for_sync: true`: `users`, `groups`, `service_accounts`, `pipeline_accounts`, `memberships`, `permissions`, `resource_history`, `resource_events`.
 
 ## Conventions
 
 | Convention | Detail |
 |------------|--------|
-| **ID prefixes** | Users: `u_`, Groups: `g_` |
+| **ID prefixes** | Users: `u_`, Groups: `g_`, Service accounts: `sa_`, Pipeline accounts: `pa_` |
 | **Serde rename** | Rust `id` → ArangoDB `_key` |
-| **Soft deletes** | `User.deactivated` flag |
+| **Soft deletes** | `deletion: Option<DeletionInfo>` — `null` = active, present = deleted |
+| **Deleted edge capture** | `DeletionInfo.disconnected_edges` stores removed membership edges for restore |
 | **Composite edge keys** | `{principal}::{group}` |
-| **Auto-creation** | Collections created on startup if missing |
+| **Auto-creation** | Collections created on startup if missing (idempotent) |
 | **No migrations** | Schema defined entirely by Rust structs |
+| **Resource macro** | All resource structs use `#[crit_resource]` — not hand-rolled field lists |

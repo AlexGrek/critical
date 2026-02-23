@@ -1,6 +1,6 @@
 # Architecture
 
-Critical is a full-stack project management and ticketing system with a Rust backend, React TypeScript frontend, and ArangoDB database.
+Critical is a full-stack project management platform with a Rust backend, React TypeScript frontend, and ArangoDB database.
 
 ## Workspace Structure
 
@@ -24,20 +24,20 @@ Cargo workspace with three crates plus a frontend:
 
 - **Crate**: `crit-shared` (import as `crit_shared`)
 - Domain models shared across backend and CLI
-- Core entities: `User`, `Group`, `GroupMembership`, `Ticket`, `Project`
-- Bitflag-based `Permissions` (FETCH, LIST, NOTIFY, CREATE, MODIFY, CUSTOM1, CUSTOM2)
-- `AccessControlList` / `AccessControlStore` for ACL management
+- **Core entities** (`data_models.rs`): `User`, `Group`, `ServiceAccount`, `PipelineAccount`, `GroupMembership`, `GlobalPermission`
+- **Utility types** (`util_models.rs`): Bitflag `Permissions`, `AccessControlStore`, `ResourceMeta`, `DeletionInfo`, `HistoryEntry`, `ResourceEvent`, `FullResource`
 - ArangoDB `_key` mapping via `#[serde(rename = "_key")]` on `id` fields
-- ID prefixes: users `u_`, groups `g_`
+- ID prefixes: users `u_`, groups `g_`, service accounts `sa_`, pipeline accounts `pa_`
+- **`#[crit_resource]` proc macro** (`shared/derive/`): injects standard fields (`id`, `meta`, `acl`, `deletion`, `hash_code`) into resource structs; generates `{Name}Brief`, `to_brief()`, `brief_field_names()`, `compute_hash()`, `collection_name()`, `id_prefix()`
 
 ### Backend (`backend/`)
 
 - **Framework**: Axum 0.8 + Tokio
 - **Package**: `axum-api`
 - **Entry point**: `src/main.rs` — creates `AppState`, connects to DB, builds router
-- **State** (`src/state.rs`): `AppState` holds config, auth, DB interface (`Arc<dyn DatabaseInterface>`), optional services; shared via `Arc<AppState>`
-- **Database layer** (`src/db/`): `DatabaseInterface` trait with `ArangoDb` implementation using `arangors` crate
-- **Controllers** (`src/controllers/`): `user_controller`, `group_controller`, `project_controller`, `ticket_controller`
+- **State** (`src/state.rs`): `AppState` holds config, auth, DB (`Arc<ArangoDb>`), controllers; shared via `Arc<AppState>`
+- **Database layer** (`src/db/arangodb/mod.rs`): Direct `ArangoDb` struct using `arangors` crate — auto-creates collections on startup
+- **Controllers** (`src/controllers/`): `user_controller`, `group_controller`, `membership_controller`; all implement `KindController` trait
 - **Middleware** (`src/middleware/`): JWT auth applied to `/v1` routes
 - **Services** (`src/services/`): `github.rs` (GitHub integration), `offloadmq.rs` (message queue)
 
@@ -46,8 +46,9 @@ Cargo workspace with three crates plus a frontend:
 - **React 19** with **React Router 7.5** (SSR enabled)
 - **TailwindCSS 4** for styling, **Vite 6** as build tool
 - API proxy in `vite.config.ts` → `http://localhost:3742`
-- UI toolkit in `app/toolkit/` (buttons, modals, typography)
-- Routes in `app/routes/` (dashboard, auth, projects, tickets, pipelines)
+- UI components in `app/components/` (Button, Input, Modal, Card, etc.)
+- 5 visual themes: `light`, `dark`, `barbie`, `orange`, `grayscale`
+- Routes in `app/routes/`: `/`, `/sign-in`, `/sign-up`, `/groups`, `/ui-gallery`
 
 ### CLI (`cli/`)
 
@@ -55,17 +56,37 @@ Cargo workspace with three crates plus a frontend:
 - Full alternative to the web frontend
 - See [CLI documentation](cli.md)
 
+## Controller Dispatch (KindController)
+
+The gitops API routes (`/v1/global/{kind}`) use a **trait-based dispatch** pattern:
+
+```
+Request → Controller::for_kind(kind) → &dyn KindController
+                                              │
+              ┌───────────────────────────────┤
+              ▼                               ▼
+        UserController             GroupController
+        MembershipController       DefaultKindController
+```
+
+Each `KindController` implementation handles:
+- `can_read` / `can_write` / `can_create` — authorization
+- `to_internal` / `to_external` / `to_list_external` — document transformation
+- `prepare_create` / `after_create` / `after_delete` / `after_update` — lifecycle hooks
+
+Adding a new resource kind: new controller file → implement `KindController` → add to `Controller::for_kind()`. No changes to route handlers.
+
 ## Production Stack
 
 ```
-        :8080
+        :3742
           |
       [ gateway ]  (nginx:alpine)
        /        \
   /api/*         /*
     |              |
  [ api ]     [ frontend ]
-(cr1t-api)  (cr1t-frontend)
+(axum-api)  (cr1t-frontend)
     |
 [ arangodb ]
 ```

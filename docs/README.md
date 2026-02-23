@@ -4,6 +4,7 @@
 
 | Document | Description |
 |----------|-------------|
+| [Models](models.md) | Resource model, `#[crit_resource]` macro, JSON shapes, API and Rust usage examples |
 | [Access Control](access-control.md) | Permissions, ACLs, and what each user role can do |
 | [Architecture](architecture.md) | System architecture, workspace structure, component overview |
 | [API](api.md) | Backend API routes, authentication, configuration |

@@ -75,8 +75,10 @@ List responses return a summary view of each resource (brief fields only), not t
 
 | Kind | Brief fields |
 |------|-------------|
-| `users` | `id`, `deactivated`, `personal` |
-| `groups` | `id`, `name` |
+| `users` | `id`, `meta`, `personal` |
+| `groups` | `id`, `meta`, `name` |
+| `service_accounts` | `id`, `meta`, `name` |
+| `pipeline_accounts` | `id`, `meta`, `name` |
 
 ## Authentication
 

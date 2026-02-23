@@ -21,11 +21,9 @@ Granted per-principal in the `permissions` collection. `u_root` has all of them 
 
 | Permission            | Granted on Registration | Description                                  |
 | --------------------- | ----------------------- | -------------------------------------------- |
-| `adm_user_manager`    | No                      | Full control over all users and groups       |
-| `adm_project_manager` | No                      | Full control over all projects               |
-| `usr_create_projects` | No                      | Allows creating new projects                 |
+| `adm_user_manager`    | No                      | Full control over all users, groups, memberships |
+| `adm_config_editor`   | No                      | Edit global configuration                    |
 | `usr_create_groups`   | Yes                     | Allows creating new groups                   |
-| `adm_config_editor`   | No                      | Core configuration editor (not yet enforced) |
 
 ## ACL Permission Bits
 
@@ -89,7 +87,7 @@ Groups organize users and other groups. Each group has an ID prefixed with `g_` 
 
 ### Memberships
 
-Memberships are edges connecting a principal (user or group) to a group. They define the group hierarchy and are stored in the `memberships` edge collection.
+Memberships are edges connecting any principal (user, group, service account, or pipeline account) to a group. They define the group hierarchy and are stored in the `memberships` edge collection.
 
 Membership access is controlled by the **target group's ACL**, not a separate permission:
 
@@ -101,20 +99,6 @@ Membership access is controlled by the **target group's ACL**, not a separate pe
 | Delete a membership      | `adm_user_manager`, OR user's principals have MODIFY on the target group's ACL |
 
 **On deletion**: if removing a membership leaves the target group with zero members, the group is automatically deleted (with recursive cascade).
-
-### Projects
-
-Projects are top-level work containers. They embed an ACL that controls per-project access.
-
-| Operation             | Who Can Do It                                                                 |
-| --------------------- | ----------------------------------------------------------------------------- |
-| List projects         | `adm_project_manager`, OR user sees only projects where their ACL grants READ |
-| Read a single project | `adm_project_manager`, OR ACL grants READ                                     |
-| Create a project      | `adm_project_manager`, OR `usr_create_projects` super-permission              |
-| Update a project      | `adm_project_manager`, OR ACL grants WRITE                                    |
-| Delete a project      | `adm_project_manager`, OR ACL grants WRITE                                    |
-
-**On creation**: the creator is automatically added to the project's ACL with ROOT.
 
 ### Other Kinds (CRD-style)
 
