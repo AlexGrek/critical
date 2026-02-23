@@ -59,12 +59,26 @@ impl ArangoTx {
 pub struct ArangoDb {
     pub conn: Connection,
     pub db: Database<ReqwestClient>,
-    /// Optional cached collection handles for non-transactional operations
+    /// Cached collection handles for non-transactional operations
     pub users: Collection<ReqwestClient>,
     pub groups: Collection<ReqwestClient>,
-    pub memberships: Collection<ReqwestClient>,
+    pub memberships: Collection<ReqwestClient>, // edge collection
     pub permissions: Collection<ReqwestClient>,
     pub projects: Collection<ReqwestClient>,
+    // Generic relation edge collection (task→sprint, bug→release, …)
+    pub relations: Collection<ReqwestClient>, // edge collection
+    // Resource kind collections
+    pub tasks: Collection<ReqwestClient>,
+    pub sprints: Collection<ReqwestClient>,
+    pub features: Collection<ReqwestClient>,
+    pub pipelines: Collection<ReqwestClient>,
+    pub pipeline_runs: Collection<ReqwestClient>,
+    pub artifacts: Collection<ReqwestClient>,
+    pub deployments: Collection<ReqwestClient>,
+    pub releases: Collection<ReqwestClient>,
+    pub pages: Collection<ReqwestClient>,
+    pub policies: Collection<ReqwestClient>,
+    pub revisions: Collection<ReqwestClient>, // immutable audit records
 }
 
 impl ArangoDb {
@@ -89,12 +103,36 @@ impl ArangoDb {
         let _ = db.create_edge_collection("memberships").await;
         let _ = db.create_collection("permissions").await;
         let _ = db.create_collection("projects").await;
+        let _ = db.create_edge_collection("relations").await;
+        let _ = db.create_collection("tasks").await;
+        let _ = db.create_collection("sprints").await;
+        let _ = db.create_collection("features").await;
+        let _ = db.create_collection("pipelines").await;
+        let _ = db.create_collection("pipeline_runs").await;
+        let _ = db.create_collection("artifacts").await;
+        let _ = db.create_collection("deployments").await;
+        let _ = db.create_collection("releases").await;
+        let _ = db.create_collection("pages").await;
+        let _ = db.create_collection("policies").await;
+        let _ = db.create_collection("revisions").await;
 
         let users = db.collection("users").await.map_err(|e| anyhow!(e.to_string()))?;
         let groups = db.collection("groups").await.map_err(|e| anyhow!(e.to_string()))?;
         let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
         let permissions = db.collection("permissions").await.map_err(|e| anyhow!(e.to_string()))?;
         let projects = db.collection("projects").await.map_err(|e| anyhow!(e.to_string()))?;
+        let relations = db.collection("relations").await.map_err(|e| anyhow!(e.to_string()))?;
+        let tasks = db.collection("tasks").await.map_err(|e| anyhow!(e.to_string()))?;
+        let sprints = db.collection("sprints").await.map_err(|e| anyhow!(e.to_string()))?;
+        let features = db.collection("features").await.map_err(|e| anyhow!(e.to_string()))?;
+        let pipelines = db.collection("pipelines").await.map_err(|e| anyhow!(e.to_string()))?;
+        let pipeline_runs = db.collection("pipeline_runs").await.map_err(|e| anyhow!(e.to_string()))?;
+        let artifacts = db.collection("artifacts").await.map_err(|e| anyhow!(e.to_string()))?;
+        let deployments = db.collection("deployments").await.map_err(|e| anyhow!(e.to_string()))?;
+        let releases = db.collection("releases").await.map_err(|e| anyhow!(e.to_string()))?;
+        let pages = db.collection("pages").await.map_err(|e| anyhow!(e.to_string()))?;
+        let policies = db.collection("policies").await.map_err(|e| anyhow!(e.to_string()))?;
+        let revisions = db.collection("revisions").await.map_err(|e| anyhow!(e.to_string()))?;
 
         let instance = Self {
             conn,
@@ -104,6 +142,18 @@ impl ArangoDb {
             memberships,
             permissions,
             projects,
+            relations,
+            tasks,
+            sprints,
+            features,
+            pipelines,
+            pipeline_runs,
+            artifacts,
+            deployments,
+            releases,
+            pages,
+            policies,
+            revisions,
         };
 
         instance.seed_permissions().await?;
@@ -170,6 +220,55 @@ impl ArangoDb {
                 .map_err(|e| anyhow!(e.to_string()))?,
         };
 
+        let relations = match db.collection("relations").await {
+            Ok(c) => c,
+            Err(_) => db.create_edge_collection("relations").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let tasks = match db.collection("tasks").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("tasks").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let sprints = match db.collection("sprints").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("sprints").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let features = match db.collection("features").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("features").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let pipelines = match db.collection("pipelines").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("pipelines").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let pipeline_runs = match db.collection("pipeline_runs").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("pipeline_runs").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let artifacts = match db.collection("artifacts").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("artifacts").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let deployments = match db.collection("deployments").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("deployments").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let releases = match db.collection("releases").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("releases").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let pages = match db.collection("pages").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("pages").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let policies = match db.collection("policies").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("policies").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+        let revisions = match db.collection("revisions").await {
+            Ok(c) => c,
+            Err(_) => db.create_collection("revisions").await.map_err(|e| anyhow!(e.to_string()))?,
+        };
+
         Ok(Self {
             conn,
             db,
@@ -178,6 +277,18 @@ impl ArangoDb {
             memberships,
             permissions,
             projects,
+            relations,
+            tasks,
+            sprints,
+            features,
+            pipelines,
+            pipeline_runs,
+            artifacts,
+            deployments,
+            releases,
+            pages,
+            policies,
+            revisions,
         })
     }
 
@@ -210,10 +321,19 @@ impl ArangoDb {
             .collection("permissions")
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
-        let projects = db
-            .collection("projects")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let projects = db.collection("projects").await.map_err(|e| anyhow!(e.to_string()))?;
+        let relations = db.collection("relations").await.map_err(|e| anyhow!(e.to_string()))?;
+        let tasks = db.collection("tasks").await.map_err(|e| anyhow!(e.to_string()))?;
+        let sprints = db.collection("sprints").await.map_err(|e| anyhow!(e.to_string()))?;
+        let features = db.collection("features").await.map_err(|e| anyhow!(e.to_string()))?;
+        let pipelines = db.collection("pipelines").await.map_err(|e| anyhow!(e.to_string()))?;
+        let pipeline_runs = db.collection("pipeline_runs").await.map_err(|e| anyhow!(e.to_string()))?;
+        let artifacts = db.collection("artifacts").await.map_err(|e| anyhow!(e.to_string()))?;
+        let deployments = db.collection("deployments").await.map_err(|e| anyhow!(e.to_string()))?;
+        let releases = db.collection("releases").await.map_err(|e| anyhow!(e.to_string()))?;
+        let pages = db.collection("pages").await.map_err(|e| anyhow!(e.to_string()))?;
+        let policies = db.collection("policies").await.map_err(|e| anyhow!(e.to_string()))?;
+        let revisions = db.collection("revisions").await.map_err(|e| anyhow!(e.to_string()))?;
 
         Ok(Self {
             conn,
@@ -223,6 +343,18 @@ impl ArangoDb {
             memberships,
             permissions,
             projects,
+            relations,
+            tasks,
+            sprints,
+            features,
+            pipelines,
+            pipeline_runs,
+            artifacts,
+            deployments,
+            releases,
+            pages,
+            policies,
+            revisions,
         })
     }
 
@@ -240,6 +372,9 @@ impl ArangoDb {
             USR_CREATE_PROJECTS,
             USR_CREATE_GROUPS,
             ADM_CONFIG_EDITOR,
+            USR_CREATE_PIPELINES,
+            ADM_POLICY_EDITOR,
+            ADM_RELEASE_MANAGER,
         ];
 
         for perm in all {
@@ -261,6 +396,18 @@ impl ArangoDb {
                 "memberships".to_string(),
                 "permissions".to_string(),
                 "projects".to_string(),
+                "relations".to_string(),
+                "tasks".to_string(),
+                "sprints".to_string(),
+                "features".to_string(),
+                "pipelines".to_string(),
+                "pipeline_runs".to_string(),
+                "artifacts".to_string(),
+                "deployments".to_string(),
+                "releases".to_string(),
+                "pages".to_string(),
+                "policies".to_string(),
+                "revisions".to_string(),
             ])
             .build();
 

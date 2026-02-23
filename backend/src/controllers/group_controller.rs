@@ -173,7 +173,7 @@ impl KindController for GroupController {
 
     fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
         // _key → "id" after to_external; "acl" needed by can_read for ACL checks
-        Some(&["_key", "name", "acl"])
+        Some(&["_key", "name", "acl", "meta"])
     }
 
     fn prepare_create(&self, body: &mut Value, user_id: &str) {
@@ -184,6 +184,26 @@ impl KindController for GroupController {
         let Some(obj) = body.as_object_mut() else {
             return;
         };
+
+        // Populate meta (created_at, created_by) if not already set
+        let meta = obj.entry("meta").or_insert_with(|| json!({}));
+        if let Some(meta_obj) = meta.as_object_mut() {
+            meta_obj
+                .entry("created_at")
+                .or_insert_with(|| json!(chrono::Utc::now().to_rfc3339()));
+            meta_obj
+                .entry("created_by")
+                .or_insert_with(|| json!(user_id));
+            meta_obj
+                .entry("updated_at")
+                .or_insert_with(|| json!(chrono::Utc::now().to_rfc3339()));
+            meta_obj
+                .entry("labels")
+                .or_insert_with(|| json!({}));
+            meta_obj
+                .entry("annotations")
+                .or_insert_with(|| json!({}));
+        }
 
         // Ensure ACL exists with creator having ROOT permissions
         let acl = obj

@@ -192,7 +192,7 @@ cr1t get tasks -w
 cr1t watch deployments
 ```
 
-## Policy
+## PolicyШы ершы
 
 Example:
 

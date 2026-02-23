@@ -253,8 +253,8 @@ def test_cascade_user_deletion_removes_from_groups(admin_token):
             "id": user_id,
             "password": "test123",
             "personal": {"name": "Cascade Test", "gender": "", "job_title": "", "manager": None},
-            "metadata": {},
-            "deactivated": False,
+            "state": "active",
+            "meta": {},
         },
         headers=admin_headers,
     )
@@ -321,8 +321,8 @@ def test_cascade_user_deletion_empty_group_deleted(admin_token):
             "id": user_id,
             "password": "test123",
             "personal": {"name": "Empty Group Test", "gender": "", "job_title": "", "manager": None},
-            "metadata": {},
-            "deactivated": False,
+            "state": "active",
+            "meta": {},
         },
         headers=admin_headers,
     )
@@ -407,8 +407,8 @@ def test_cascade_group_deletion_removes_from_parent(admin_token):
             "id": user_id,
             "password": "test123",
             "personal": {"name": "Parent Member", "gender": "", "job_title": "", "manager": None},
-            "metadata": {},
-            "deactivated": False,
+            "state": "active",
+            "meta": {},
         },
         headers=admin_headers,
     )

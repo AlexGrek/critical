@@ -41,8 +41,8 @@ def test_gitops_create_user(auth_token):
                 "job_title": "Tester",
                 "manager": None,
             },
-            "metadata": {},
-            "deactivated": False,
+            "state": "active",
+            "meta": {},
         },
         headers=headers,
     )

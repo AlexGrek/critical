@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use axum::{
@@ -18,13 +17,15 @@ use crate::{
 
 impl From<User> for data_models::User {
     fn from(src: User) -> Self {
-        let mut metadata = HashMap::new();
-        metadata.insert("registered_at".to_string(), Utc::now().to_rfc3339());
+        let mut meta = crit_shared::util_models::ResourceMeta::default();
+        meta.created_at = Utc::now();
+        meta.annotations
+            .insert("registered_at".to_string(), Utc::now().to_rfc3339());
 
         Self {
             id: format!("u_{}", src.username),
             password_hash: src.password_hash,
-            metadata,
+            meta,
             ..Self::default()
         }
     }

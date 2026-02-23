@@ -4,6 +4,16 @@ import { Button, MorphModal, Card, CardTitle, CardDescription } from "~/componen
 import { useState, useEffect } from "react";
 
 // TypeScript types matching the Rust models
+
+interface ResourceMeta {
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  created_at: string;
+  created_by?: string;
+  updated_at: string;
+  updated_by?: string;
+}
+
 interface AccessControlList {
   permissions: number;
   principals: string[];
@@ -17,7 +27,9 @@ interface AccessControlStore {
 interface Group {
   id: string;
   name: string;
+  description?: string;
   acl: AccessControlStore;
+  meta: ResourceMeta;
 }
 
 interface GroupsResponse {

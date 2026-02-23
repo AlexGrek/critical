@@ -36,8 +36,8 @@ def create_user(token: str, user_id: str) -> None:
             "id": user_id,
             "password": "testpw123",
             "personal": {"name": f"Paging User {user_id}", "gender": "", "job_title": "", "manager": None},
-            "metadata": {},
-            "deactivated": False,
+            "meta": {},
+            "state": "active",
         },
         headers=auth(token),
     )
@@ -201,18 +201,18 @@ def test_limit_1_works(root_token, paged_users):
 
 
 def test_brief_fields_in_paginated_response(root_token, paged_users):
-    """Paginated list items contain brief fields only (id, deactivated, personal)."""
+    """Paginated list items contain brief fields only (id, state, personal, meta)."""
     resp = requests.get(f"{URL_GLOBAL}/users?limit=5", headers=auth(root_token))
     assert resp.status_code == 200
 
     for item in resp.json()["items"]:
         assert "id" in item
-        assert "deactivated" in item
+        assert "state" in item
         assert "personal" in item
         assert "password_hash" not in item, "password_hash must never appear in list"
         # Non-brief fields must be absent
-        assert "created_at" not in item
-        assert "metadata" not in item
+        assert "created_at" not in item  # created_at is inside meta, not top-level
+        assert "meta" in item
 
 
 def test_brief_fields_in_unpaginated_response(root_token, paged_users):
@@ -222,8 +222,8 @@ def test_brief_fields_in_unpaginated_response(root_token, paged_users):
 
     for item in resp.json()["items"]:
         assert "id" in item
-        assert "deactivated" in item
+        assert "state" in item
         assert "personal" in item
         assert "password_hash" not in item
-        assert "created_at" not in item
-        assert "metadata" not in item
+        assert "created_at" not in item  # created_at is inside meta, not top-level
+        assert "meta" in item

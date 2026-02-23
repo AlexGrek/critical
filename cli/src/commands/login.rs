@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 
 use anyhow::Result;
 
@@ -16,7 +16,14 @@ pub async fn run(url: Option<String>, user: Option<String>) -> Result<()> {
         None => prompt("Username")?,
     };
 
-    let password = rpassword::prompt_password("Password: ")?;
+    // Use secure TTY prompt when interactive; fall back to stdin for piped/test input.
+    let password = if io::stdin().is_terminal() {
+        rpassword::prompt_password("Password: ")?
+    } else {
+        let mut pw = String::new();
+        io::stdin().read_line(&mut pw)?;
+        pw.trim().to_string()
+    };
 
     eprintln!("Logging in to {} as {}...", &url, &user);
 
