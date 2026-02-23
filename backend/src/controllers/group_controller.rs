@@ -45,9 +45,9 @@ impl GroupController {
 
         let empty_parents = Self::cleanup_group_references(db, group_id).await?;
 
-        // Delete the group document itself
+        // Soft-delete the group document itself
         // Ignore errors if already deleted (e.g. during recursive cascade)
-        let _ = db.generic_delete("groups", group_id).await;
+        let _ = db.generic_soft_delete("groups", group_id, "system").await;
 
         // Recursively cascade for any parent groups that became empty
         for parent_id in empty_parents {

@@ -53,7 +53,6 @@ impl AccessControlStore {
 }
 
 /// Common metadata embedded in every resource.
-/// Replaces ad-hoc `metadata: HashMap` and individual `created_at` / `created_by` fields.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ResourceMeta {
     /// Queryable key-value pairs for `-l` label selectors.
@@ -66,51 +65,107 @@ pub struct ResourceMeta {
     pub updated_by: Option<PrincipalId>,
 }
 
-/// Soft-delete / archive state used across all resource kinds.
-#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum LifecycleState {
-    #[default]
-    Active,
-    Archived,
-    Deleted,
-}
+// ---------------------------------------------------------------------------
+// Soft deletion (replaces LifecycleState)
+// ---------------------------------------------------------------------------
 
-/// Typed relation kinds matching the whitepaper's graph edge examples.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-#[serde(rename_all = "snake_case")]
-pub enum RelationKind {
-    BelongsTo,   // task -> sprint
-    Implements,  // task -> feature
-    CausedBy,    // bug -> release
-    Deploys,     // deployment -> artifact
-    BuiltFrom,   // artifact -> pipeline_run
-    TriggeredBy, // pipeline -> repo
-    References,  // page -> task
-    Custom(String),
-}
-
-/// Generic edge document stored in the `relations` edge collection.
-/// Does NOT replace `GroupMembership` — membership has specialised AQL graph traversal queries.
+/// Soft-deletion marker. Present = deleted, absent = active.
+/// Every GET query should filter `doc.deletion == null` by default.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Relation {
-    #[serde(rename = "_key")]
-    pub id: String,
-    #[serde(rename = "_from")]
-    pub from: String, // e.g. "tasks/t_abc"
-    #[serde(rename = "_to")]
-    pub to: String, // e.g. "sprints/sp_xyz"
-    pub kind: RelationKind,
-    pub meta: ResourceMeta,
+pub struct DeletionInfo {
+    pub deleted_at: DateTime<Utc>,
+    pub deleted_by: PrincipalId,
+    /// Edges that were disconnected during deletion, for possible restoration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disconnected_edges: Vec<DisconnectedEdge>,
 }
+
+/// Record of a graph edge removed during soft deletion, to support restore.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DisconnectedEdge {
+    pub collection: String,
+    pub key: String,
+    pub from: String,
+    pub to: String,
+}
+
+// ---------------------------------------------------------------------------
+// Resource state (server-injected, not part of desired state)
+// ---------------------------------------------------------------------------
+
+/// Server-injected runtime state, NOT part of desired state or history.
+/// Used for computed/dynamic fields like last_login, member_count, etc.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct ResourceState {
+    #[serde(flatten)]
+    pub fields: HashMap<String, serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Change history
+// ---------------------------------------------------------------------------
+
+/// Immutable snapshot of a resource's desired state at a point in time.
+/// Stored in `resource_history` collection, survives resource deletion.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct HistoryEntry {
+    #[serde(rename = "_key")]
+    pub id: String, // "{collection}_{resource_key}_{revision}"
+    pub resource_kind: String,
+    pub resource_key: String,
+    pub revision: u64,
+    /// Full desired-state JSON at this point in time.
+    pub snapshot: serde_json::Value,
+    pub changed_by: PrincipalId,
+    pub changed_at: DateTime<Utc>,
+}
+
+// ---------------------------------------------------------------------------
+// Events (runtime, not meta changes)
+// ---------------------------------------------------------------------------
+
+/// Runtime event associated with a resource.
+/// Stored in `resource_events` collection, survives resource deletion.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceEvent {
+    #[serde(rename = "_key")]
+    pub id: String, // UUID v7
+    pub resource_kind: String,
+    pub resource_key: String,
+    pub event_type: String, // e.g., "sign_in"
+    pub timestamp: DateTime<Utc>,
+    pub actor: Option<PrincipalId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub details: Option<serde_json::Value>,
+}
+
+// ---------------------------------------------------------------------------
+// Full resource envelope (for describe / full fetch)
+// ---------------------------------------------------------------------------
+
+/// Envelope for full resource representation with optional extras.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FullResource {
+    /// The resource itself (desired state + metadata), flattened.
+    #[serde(flatten)]
+    pub resource: serde_json::Value,
+    /// Server-injected runtime state.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<ResourceState>,
+    /// Change history (oldest first).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub history: Option<Vec<HistoryEntry>>,
+    /// Runtime events.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub events: Option<Vec<ResourceEvent>>,
+}
+
+// ---------------------------------------------------------------------------
+// Super-permissions
+// ---------------------------------------------------------------------------
 
 pub mod super_permissions {
     pub const ADM_USER_MANAGER: &str = "adm_user_manager";
-    pub const ADM_PROJECT_MANAGER: &str = "adm_project_manager";
-    pub const USR_CREATE_PROJECTS: &str = "usr_create_projects";
     pub const ADM_CONFIG_EDITOR: &str = "adm_config_editor";
     pub const USR_CREATE_GROUPS: &str = "usr_create_groups";
-    pub const USR_CREATE_PIPELINES: &str = "usr_create_pipelines";
-    pub const ADM_POLICY_EDITOR: &str = "adm_policy_editor";
-    pub const ADM_RELEASE_MANAGER: &str = "adm_release_manager";
 }

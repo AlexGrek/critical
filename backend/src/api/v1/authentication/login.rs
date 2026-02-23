@@ -62,12 +62,6 @@ pub async fn register(
     // Grant default permissions to new users
     app_state
         .db
-        .grant_permission(crate::util_models::super_permissions::USR_CREATE_PROJECTS, &user_id)
-        .await
-        .map_err(|e| AppError::Internal(e))?;
-
-    app_state
-        .db
         .grant_permission(crate::util_models::super_permissions::USR_CREATE_GROUPS, &user_id)
         .await
         .map_err(|e| AppError::Internal(e))?;
@@ -99,6 +93,12 @@ pub async fn login(
     let (token_str, exp) = app_state.auth.create_token(&true_user.id)?;
 
     log::info!("Auth event -> User logged in: {}", &true_user.id);
+
+    // Record sign-in event (non-fatal — login still succeeds if event writing fails)
+    let _ = app_state
+        .db
+        .write_event("users", &true_user.id, "sign_in", Some(&true_user.id), None)
+        .await;
 
     // Calculate max-age from expiration timestamp
     let now = std::time::SystemTime::now()

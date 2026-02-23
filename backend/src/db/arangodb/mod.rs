@@ -62,23 +62,12 @@ pub struct ArangoDb {
     /// Cached collection handles for non-transactional operations
     pub users: Collection<ReqwestClient>,
     pub groups: Collection<ReqwestClient>,
+    pub service_accounts: Collection<ReqwestClient>,
+    pub pipeline_accounts: Collection<ReqwestClient>,
     pub memberships: Collection<ReqwestClient>, // edge collection
     pub permissions: Collection<ReqwestClient>,
-    pub projects: Collection<ReqwestClient>,
-    // Generic relation edge collection (task→sprint, bug→release, …)
-    pub relations: Collection<ReqwestClient>, // edge collection
-    // Resource kind collections
-    pub tasks: Collection<ReqwestClient>,
-    pub sprints: Collection<ReqwestClient>,
-    pub features: Collection<ReqwestClient>,
-    pub pipelines: Collection<ReqwestClient>,
-    pub pipeline_runs: Collection<ReqwestClient>,
-    pub artifacts: Collection<ReqwestClient>,
-    pub deployments: Collection<ReqwestClient>,
-    pub releases: Collection<ReqwestClient>,
-    pub pages: Collection<ReqwestClient>,
-    pub policies: Collection<ReqwestClient>,
-    pub revisions: Collection<ReqwestClient>, // immutable audit records
+    pub resource_history: Collection<ReqwestClient>,
+    pub resource_events: Collection<ReqwestClient>,
 }
 
 impl ArangoDb {
@@ -100,60 +89,33 @@ impl ArangoDb {
         // obtain or create collections (ignore create errors for race conditions)
         let _ = db.create_collection("users").await;
         let _ = db.create_collection("groups").await;
+        let _ = db.create_collection("service_accounts").await;
+        let _ = db.create_collection("pipeline_accounts").await;
         let _ = db.create_edge_collection("memberships").await;
         let _ = db.create_collection("permissions").await;
-        let _ = db.create_collection("projects").await;
-        let _ = db.create_edge_collection("relations").await;
-        let _ = db.create_collection("tasks").await;
-        let _ = db.create_collection("sprints").await;
-        let _ = db.create_collection("features").await;
-        let _ = db.create_collection("pipelines").await;
-        let _ = db.create_collection("pipeline_runs").await;
-        let _ = db.create_collection("artifacts").await;
-        let _ = db.create_collection("deployments").await;
-        let _ = db.create_collection("releases").await;
-        let _ = db.create_collection("pages").await;
-        let _ = db.create_collection("policies").await;
-        let _ = db.create_collection("revisions").await;
+        let _ = db.create_collection("resource_history").await;
+        let _ = db.create_collection("resource_events").await;
 
         let users = db.collection("users").await.map_err(|e| anyhow!(e.to_string()))?;
         let groups = db.collection("groups").await.map_err(|e| anyhow!(e.to_string()))?;
+        let service_accounts = db.collection("service_accounts").await.map_err(|e| anyhow!(e.to_string()))?;
+        let pipeline_accounts = db.collection("pipeline_accounts").await.map_err(|e| anyhow!(e.to_string()))?;
         let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
         let permissions = db.collection("permissions").await.map_err(|e| anyhow!(e.to_string()))?;
-        let projects = db.collection("projects").await.map_err(|e| anyhow!(e.to_string()))?;
-        let relations = db.collection("relations").await.map_err(|e| anyhow!(e.to_string()))?;
-        let tasks = db.collection("tasks").await.map_err(|e| anyhow!(e.to_string()))?;
-        let sprints = db.collection("sprints").await.map_err(|e| anyhow!(e.to_string()))?;
-        let features = db.collection("features").await.map_err(|e| anyhow!(e.to_string()))?;
-        let pipelines = db.collection("pipelines").await.map_err(|e| anyhow!(e.to_string()))?;
-        let pipeline_runs = db.collection("pipeline_runs").await.map_err(|e| anyhow!(e.to_string()))?;
-        let artifacts = db.collection("artifacts").await.map_err(|e| anyhow!(e.to_string()))?;
-        let deployments = db.collection("deployments").await.map_err(|e| anyhow!(e.to_string()))?;
-        let releases = db.collection("releases").await.map_err(|e| anyhow!(e.to_string()))?;
-        let pages = db.collection("pages").await.map_err(|e| anyhow!(e.to_string()))?;
-        let policies = db.collection("policies").await.map_err(|e| anyhow!(e.to_string()))?;
-        let revisions = db.collection("revisions").await.map_err(|e| anyhow!(e.to_string()))?;
+        let resource_history = db.collection("resource_history").await.map_err(|e| anyhow!(e.to_string()))?;
+        let resource_events = db.collection("resource_events").await.map_err(|e| anyhow!(e.to_string()))?;
 
         let instance = Self {
             conn,
             db,
             users,
             groups,
+            service_accounts,
+            pipeline_accounts,
             memberships,
             permissions,
-            projects,
-            relations,
-            tasks,
-            sprints,
-            features,
-            pipelines,
-            pipeline_runs,
-            artifacts,
-            deployments,
-            releases,
-            pages,
-            policies,
-            revisions,
+            resource_history,
+            resource_events,
         };
 
         instance.seed_permissions().await?;
@@ -212,61 +174,21 @@ impl ArangoDb {
                 .map_err(|e| anyhow!(e.to_string()))?,
         };
 
-        let projects = match db.collection("projects").await {
-            Ok(collection) => collection,
-            Err(_) => db
-                .create_collection("projects")
-                .await
-                .map_err(|e| anyhow!(e.to_string()))?,
-        };
-
-        let relations = match db.collection("relations").await {
+        let service_accounts = match db.collection("service_accounts").await {
             Ok(c) => c,
-            Err(_) => db.create_edge_collection("relations").await.map_err(|e| anyhow!(e.to_string()))?,
+            Err(_) => db.create_collection("service_accounts").await.map_err(|e| anyhow!(e.to_string()))?,
         };
-        let tasks = match db.collection("tasks").await {
+        let pipeline_accounts = match db.collection("pipeline_accounts").await {
             Ok(c) => c,
-            Err(_) => db.create_collection("tasks").await.map_err(|e| anyhow!(e.to_string()))?,
+            Err(_) => db.create_collection("pipeline_accounts").await.map_err(|e| anyhow!(e.to_string()))?,
         };
-        let sprints = match db.collection("sprints").await {
+        let resource_history = match db.collection("resource_history").await {
             Ok(c) => c,
-            Err(_) => db.create_collection("sprints").await.map_err(|e| anyhow!(e.to_string()))?,
+            Err(_) => db.create_collection("resource_history").await.map_err(|e| anyhow!(e.to_string()))?,
         };
-        let features = match db.collection("features").await {
+        let resource_events = match db.collection("resource_events").await {
             Ok(c) => c,
-            Err(_) => db.create_collection("features").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let pipelines = match db.collection("pipelines").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("pipelines").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let pipeline_runs = match db.collection("pipeline_runs").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("pipeline_runs").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let artifacts = match db.collection("artifacts").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("artifacts").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let deployments = match db.collection("deployments").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("deployments").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let releases = match db.collection("releases").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("releases").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let pages = match db.collection("pages").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("pages").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let policies = match db.collection("policies").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("policies").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let revisions = match db.collection("revisions").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("revisions").await.map_err(|e| anyhow!(e.to_string()))?,
+            Err(_) => db.create_collection("resource_events").await.map_err(|e| anyhow!(e.to_string()))?,
         };
 
         Ok(Self {
@@ -274,21 +196,12 @@ impl ArangoDb {
             db,
             users,
             groups,
+            service_accounts,
+            pipeline_accounts,
             memberships,
             permissions,
-            projects,
-            relations,
-            tasks,
-            sprints,
-            features,
-            pipelines,
-            pipeline_runs,
-            artifacts,
-            deployments,
-            releases,
-            pages,
-            policies,
-            revisions,
+            resource_history,
+            resource_events,
         })
     }
 
@@ -305,56 +218,26 @@ impl ArangoDb {
 
         let db = conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?;
 
-        let users = db
-            .collection("users")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        let groups = db
-            .collection("groups")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        let memberships = db
-            .collection("memberships")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        let permissions = db
-            .collection("permissions")
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        let projects = db.collection("projects").await.map_err(|e| anyhow!(e.to_string()))?;
-        let relations = db.collection("relations").await.map_err(|e| anyhow!(e.to_string()))?;
-        let tasks = db.collection("tasks").await.map_err(|e| anyhow!(e.to_string()))?;
-        let sprints = db.collection("sprints").await.map_err(|e| anyhow!(e.to_string()))?;
-        let features = db.collection("features").await.map_err(|e| anyhow!(e.to_string()))?;
-        let pipelines = db.collection("pipelines").await.map_err(|e| anyhow!(e.to_string()))?;
-        let pipeline_runs = db.collection("pipeline_runs").await.map_err(|e| anyhow!(e.to_string()))?;
-        let artifacts = db.collection("artifacts").await.map_err(|e| anyhow!(e.to_string()))?;
-        let deployments = db.collection("deployments").await.map_err(|e| anyhow!(e.to_string()))?;
-        let releases = db.collection("releases").await.map_err(|e| anyhow!(e.to_string()))?;
-        let pages = db.collection("pages").await.map_err(|e| anyhow!(e.to_string()))?;
-        let policies = db.collection("policies").await.map_err(|e| anyhow!(e.to_string()))?;
-        let revisions = db.collection("revisions").await.map_err(|e| anyhow!(e.to_string()))?;
+        let users = db.collection("users").await.map_err(|e| anyhow!(e.to_string()))?;
+        let groups = db.collection("groups").await.map_err(|e| anyhow!(e.to_string()))?;
+        let service_accounts = db.collection("service_accounts").await.map_err(|e| anyhow!(e.to_string()))?;
+        let pipeline_accounts = db.collection("pipeline_accounts").await.map_err(|e| anyhow!(e.to_string()))?;
+        let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
+        let permissions = db.collection("permissions").await.map_err(|e| anyhow!(e.to_string()))?;
+        let resource_history = db.collection("resource_history").await.map_err(|e| anyhow!(e.to_string()))?;
+        let resource_events = db.collection("resource_events").await.map_err(|e| anyhow!(e.to_string()))?;
 
         Ok(Self {
             conn,
             db,
             users,
             groups,
+            service_accounts,
+            pipeline_accounts,
             memberships,
             permissions,
-            projects,
-            relations,
-            tasks,
-            sprints,
-            features,
-            pipelines,
-            pipeline_runs,
-            artifacts,
-            deployments,
-            releases,
-            pages,
-            policies,
-            revisions,
+            resource_history,
+            resource_events,
         })
     }
 
@@ -368,13 +251,8 @@ impl ArangoDb {
 
         let all = [
             ADM_USER_MANAGER,
-            ADM_PROJECT_MANAGER,
-            USR_CREATE_PROJECTS,
-            USR_CREATE_GROUPS,
             ADM_CONFIG_EDITOR,
-            USR_CREATE_PIPELINES,
-            ADM_POLICY_EDITOR,
-            ADM_RELEASE_MANAGER,
+            USR_CREATE_GROUPS,
         ];
 
         for perm in all {
@@ -393,21 +271,12 @@ impl ArangoDb {
             .write(vec![
                 "users".to_string(),
                 "groups".to_string(),
+                "service_accounts".to_string(),
+                "pipeline_accounts".to_string(),
                 "memberships".to_string(),
                 "permissions".to_string(),
-                "projects".to_string(),
-                "relations".to_string(),
-                "tasks".to_string(),
-                "sprints".to_string(),
-                "features".to_string(),
-                "pipelines".to_string(),
-                "pipeline_runs".to_string(),
-                "artifacts".to_string(),
-                "deployments".to_string(),
-                "releases".to_string(),
-                "pages".to_string(),
-                "policies".to_string(),
-                "revisions".to_string(),
+                "resource_history".to_string(),
+                "resource_events".to_string(),
             ])
             .build();
 
@@ -476,11 +345,7 @@ impl ArangoDb {
         tx: Option<&mut ArangoTx>,
     ) -> Result<()> {
         let key = format!("{}::{}", principal_id, group_id);
-        let from_collection = if principal_id.starts_with("g_") {
-            "groups"
-        } else {
-            "users"
-        };
+        let from_collection = collection_for_principal(principal_id);
         let from = format!("{}/{}", from_collection, principal_id);
         let to = format!("groups/{}", group_id);
         let body = json!({
@@ -888,9 +753,9 @@ impl ArangoDb {
 
         let cursor_filter = if let Some(c) = cursor {
             vars.insert("cursor", Value::String(c.to_string()));
-            "FILTER doc._key > @cursor"
+            "FILTER doc._key > @cursor AND doc.deletion == null"
         } else {
-            ""
+            "FILTER doc.deletion == null"
         };
 
         // LIMIT in AQL does not support bind parameters — inline the literal.
@@ -937,7 +802,7 @@ impl ArangoDb {
     pub async fn generic_get(&self, collection: &str, key: &str) -> Result<Option<Value>> {
         let query = r#"
             LET doc = DOCUMENT(@@col, @key)
-            FILTER doc != null
+            FILTER doc != null AND doc.deletion == null
             RETURN doc
         "#;
         let vars = std::collections::HashMap::from([
@@ -1027,5 +892,172 @@ impl ArangoDb {
             return Err(anyhow!("document not found: {}/{}", collection, key));
         }
         Ok(())
+    }
+
+    /// Soft-delete a document: capture connected membership edges into deletion info,
+    /// then mark the document with a `deletion` field. Edges are NOT removed here —
+    /// that is handled by the controller's `after_delete` hook so cascade logic works.
+    /// Returns an error if the document doesn't exist (or is already deleted).
+    pub async fn generic_soft_delete(
+        &self,
+        collection: &str,
+        key: &str,
+        deleted_by: &str,
+    ) -> Result<()> {
+        let from_path = format!("{}/{}", collection, key);
+        // When deleting a group, also capture edges of members pointing TO this group
+        let to_path = format!("groups/{}", key);
+
+        // Find all membership edges connected to this document
+        let edge_query = r#"
+            FOR m IN memberships
+                FILTER m._from == @from_path OR m._to == @to_path
+                RETURN { key: m._key, `from`: m._from, `to`: m._to }
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("from_path", Value::String(from_path)),
+            ("to_path", Value::String(to_path)),
+        ]);
+
+        let edges: Vec<Value> = self
+            .db
+            .aql_bind_vars(edge_query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        let disconnected_edges: Vec<DisconnectedEdge> = edges
+            .into_iter()
+            .filter_map(|e| {
+                Some(DisconnectedEdge {
+                    collection: "memberships".to_string(),
+                    key: e.get("key")?.as_str()?.to_string(),
+                    from: e.get("from")?.as_str()?.to_string(),
+                    to: e.get("to")?.as_str()?.to_string(),
+                })
+            })
+            .collect();
+
+        let deletion = DeletionInfo {
+            deleted_at: chrono::Utc::now(),
+            deleted_by: deleted_by.to_string(),
+            disconnected_edges,
+        };
+        let deletion_val = serde_json::to_value(&deletion).map_err(|e| anyhow!(e))?;
+
+        let update_query = r#"
+            LET existing = DOCUMENT(@@col, @key)
+            FILTER existing != null AND existing.deletion == null
+            UPDATE existing WITH { deletion: @deletion } IN @@col
+            RETURN NEW
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("key", Value::String(key.to_string())),
+            ("deletion", deletion_val),
+        ]);
+        let result: Vec<Value> = self
+            .db
+            .aql_bind_vars(update_query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        if result.is_empty() {
+            return Err(anyhow!("document not found or already deleted: {}/{}", collection, key));
+        }
+
+        Ok(())
+    }
+
+    /// Write an immutable snapshot of a resource's desired state to `resource_history`.
+    /// Revision numbers are 1-based and auto-incremented per resource.
+    pub async fn write_history_entry(
+        &self,
+        kind: &str,
+        key: &str,
+        snapshot: Value,
+        changed_by: &str,
+    ) -> Result<()> {
+        // Count existing history entries for this resource to determine next revision
+        let count_query = r#"
+            RETURN LENGTH(
+                FOR h IN resource_history
+                    FILTER h.resource_kind == @kind AND h.resource_key == @key
+                    RETURN 1
+            )
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("kind", Value::String(kind.to_string())),
+            ("key", Value::String(key.to_string())),
+        ]);
+        let counts: Vec<u64> = self
+            .db
+            .aql_bind_vars(count_query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        let revision = counts.into_iter().next().unwrap_or(0) + 1;
+
+        let history_id = format!("{}_{}_{:06}", kind, key, revision);
+        let entry = HistoryEntry {
+            id: history_id,
+            resource_kind: kind.to_string(),
+            resource_key: key.to_string(),
+            revision,
+            snapshot,
+            changed_by: changed_by.to_string(),
+            changed_at: chrono::Utc::now(),
+        };
+
+        let entry_val = serde_json::to_value(&entry).map_err(|e| anyhow!(e))?;
+        self.resource_history
+            .create_document(Document::new(entry_val), Default::default())
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Write a runtime event associated with a resource to `resource_events`.
+    pub async fn write_event(
+        &self,
+        kind: &str,
+        key: &str,
+        event_type: &str,
+        actor: Option<&str>,
+        details: Option<Value>,
+    ) -> Result<()> {
+        // Build a unique event ID using nanosecond timestamp + event info
+        let ts_ns = chrono::Utc::now().timestamp_nanos_opt().unwrap_or_else(|| chrono::Utc::now().timestamp_micros());
+        let event_id = format!("ev_{}_{}", event_type, ts_ns);
+
+        let event = ResourceEvent {
+            id: event_id,
+            resource_kind: kind.to_string(),
+            resource_key: key.to_string(),
+            event_type: event_type.to_string(),
+            timestamp: chrono::Utc::now(),
+            actor: actor.map(String::from),
+            details,
+        };
+
+        let event_val = serde_json::to_value(&event).map_err(|e| anyhow!(e))?;
+        self.resource_events
+            .create_document(Document::new(event_val), Default::default())
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+
+        Ok(())
+    }
+}
+
+/// Resolve a principal ID prefix to its ArangoDB collection name.
+pub fn collection_for_principal(principal_id: &str) -> &'static str {
+    if principal_id.starts_with("g_") {
+        "groups"
+    } else if principal_id.starts_with("sa_") {
+        "service_accounts"
+    } else if principal_id.starts_with("pa_") {
+        "pipeline_accounts"
+    } else {
+        "users" // u_ prefix or fallback
     }
 }

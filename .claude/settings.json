@@ -30,7 +30,9 @@
       "Bash(git -C /Users/vedmedik/dev/critical log:*)",
       "Bash(git -C /Users/vedmedik/dev/critical diff HEAD backend/src/api/v1/gitops.rs)",
       "Bash(docker ps:*)",
-      "Bash(podman ps:*)"
+      "Bash(podman ps:*)",
+      "Bash(cat:*)",
+      "Bash(wc:*)"
     ]
   }
 }

@@ -244,11 +244,11 @@ pub async fn delete_object(
 
     state
         .db
-        .generic_delete(&kind, &id)
+        .generic_soft_delete(&kind, &id, &user_id)
         .await
         .map_err(|e| {
             let msg = e.to_string();
-            if msg.contains("document not found") {
+            if msg.contains("not found or already deleted") {
                 AppError::not_found(format!("{}/{}", kind, id))
             } else {
                 AppError::Internal(e)
