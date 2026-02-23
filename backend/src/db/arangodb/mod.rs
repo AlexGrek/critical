@@ -440,10 +440,11 @@ impl ArangoDb {
     /// Remove a principal from all groups it belongs to.
     /// Returns the list of group IDs that became empty after removal.
     pub async fn remove_principal_from_all_groups(&self, principal_id: &str) -> Result<Vec<String>> {
-        // Step 1: Find all groups this principal belongs to
+        // Step 1: Find all groups this principal belongs to (active memberships only)
         let find_query = r#"
             FOR m IN memberships
                 FILTER m.principal == @principal
+                FILTER m.deletion == null
                 RETURN m.group
         "#;
         let vars = std::collections::HashMap::from([(
@@ -489,6 +490,7 @@ impl ArangoDb {
             RETURN LENGTH(
                 FOR m IN memberships
                     FILTER m.group == @group
+                    FILTER m.deletion == null
                     RETURN 1
             )
         "#;

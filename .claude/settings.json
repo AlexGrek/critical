@@ -32,7 +32,8 @@
       "Bash(docker ps:*)",
       "Bash(podman ps:*)",
       "Bash(cat:*)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(python3:*)"
     ]
   }
 }
