@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::{Result, anyhow};
 use arangors::Connection;
 use arangors::client::reqwest::ReqwestClient;
@@ -68,6 +70,44 @@ pub struct ArangoDb {
     pub permissions: Collection<ReqwestClient>,
     pub resource_history: Collection<ReqwestClient>,
     pub resource_events: Collection<ReqwestClient>,
+}
+
+// ---------------------------------------------------------------------------
+// Retry helper for UPSERT operations
+// ---------------------------------------------------------------------------
+
+/// Runs an async UPSERT-style closure and retries on ArangoDB write-write
+/// conflicts (error code 1200).
+///
+/// ArangoDB's `UPSERT` statement is not atomic: it performs a read followed by
+/// a conditional insert or update.  When two concurrent requests land on the
+/// same document key the second writer sees the conflict and ArangoDB aborts it
+/// with error 1200 rather than blocking.  The operation itself is safe to
+/// retry — both callers carry the same intent — so we back off briefly and try
+/// again instead of propagating a spurious 500 to the caller.
+///
+/// Three attempts with exponential backoff (5 ms → 10 ms → give up) are enough
+/// to absorb the tight races that occur during parallel test runs while adding
+/// negligible latency in production where such collisions are rare.
+async fn upsert_with_retry<F, Fut>(mut f: F) -> Result<()>
+where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Result<()>>,
+{
+    const MAX_ATTEMPTS: u32 = 3;
+    for attempt in 0..MAX_ATTEMPTS {
+        match f().await {
+            // ArangoDB surfaces conflict 1200 as a plain error string.
+            Err(e) if e.to_string().contains("1200") => {
+                if attempt + 1 == MAX_ATTEMPTS {
+                    return Err(e);
+                }
+                tokio::time::sleep(Duration::from_millis(5 * (1 << attempt))).await;
+            }
+            other => return other,
+        }
+    }
+    unreachable!()
 }
 
 impl ArangoDb {
@@ -647,12 +687,21 @@ impl ArangoDb {
             ),
         ]);
 
-        self.db
-            .aql_bind_vars::<serde_json::Value>(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-
-        Ok(())
+        // ArangoDB UPSERT is a read-then-write and is not atomic: two concurrent
+        // calls on the same permission key produce a write-write conflict (error 1200).
+        // This is benign — both writers carry the same intent — so we retry with
+        // a short exponential backoff instead of surfacing the error to the caller.
+        upsert_with_retry(|| {
+            let vars = vars.clone();
+            async move {
+                self.db
+                    .aql_bind_vars::<serde_json::Value>(query, vars)
+                    .await
+                    .map(|_| ())
+                    .map_err(|e| anyhow!(e.to_string()))
+            }
+        })
+        .await
     }
 
     pub async fn revoke_permission(&self, permission: &str, principal: &str) -> Result<()> {
@@ -844,11 +893,20 @@ impl ArangoDb {
             ("key", Value::String(key.to_string())),
             ("doc", doc),
         ]);
-        self.db
-            .aql_bind_vars::<Value>(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
-        Ok(())
+
+        // Same write-write conflict hazard as grant_permission: concurrent upserts
+        // on the same key race at the ArangoDB level. Retry transparently.
+        upsert_with_retry(|| {
+            let vars = vars.clone();
+            async move {
+                self.db
+                    .aql_bind_vars::<Value>(query, vars)
+                    .await
+                    .map(|_| ())
+                    .map_err(|e| anyhow!(e.to_string()))
+            }
+        })
+        .await
     }
 
     pub async fn generic_update(&self, collection: &str, key: &str, doc: Value) -> Result<()> {

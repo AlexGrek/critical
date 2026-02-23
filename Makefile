@@ -3,7 +3,7 @@ COMPOSE ?= $(shell (command -v docker >/dev/null 2>&1 && echo "docker compose") 
 BACKEND_PORT ?= 3742
 BACKEND_URL ?= http://localhost:$(BACKEND_PORT)
 
-.PHONY: dev dev-api dev-frontend run run-fresh test test-unit test-cli test-api run-db stop-db reset-db logs-db wait-db wait-backend
+.PHONY: dev dev-api dev-frontend run run-fresh test test-unit test-cli test-api run-db stop-db reset-db logs-db wait-db wait-backend itests itests-seq itests-parallel
 
 dev:
 	@bash -c ' \
@@ -84,8 +84,8 @@ test:
 		$(_start_backend) && \
 		echo ">>> Running CLI integration tests..." && \
 		cargo test -p crit-cli --test cli_test -- --include-ignored && \
-		echo ">>> [3/3] Running Python API integration tests..." && \
-		cd backend/itests && pdm run pytest tests/ -v && cd ../.. && \
+		echo ">>> [3/3] Running Python API integration tests (parallel)..." && \
+		cd backend/itests && pdm run pytest tests/ -n auto && cd ../.. && \
 		echo ">>> All tests passed."
 
 # Rust unit tests + backend integration tests (via axum-test, no backend process needed)
@@ -117,9 +117,23 @@ test-api:
 	@echo ">>> Starting backend..."
 	@trap '$(COMPOSE) down -v; echo ">>> Ephemeral ArangoDB removed."' EXIT; \
 		$(_start_backend) && \
-		echo ">>> Running Python API tests..." && \
-		cd backend/itests && pdm run pytest tests/ -v && cd ../.. && \
+		echo ">>> Running Python API tests (parallel)..." && \
+		cd backend/itests && pdm run pytest tests/ -n auto && cd ../.. && \
 		echo ">>> API tests passed."
+
+# --- Integration test targets (convenience wrappers) ---
+
+# Run Python integration tests in parallel (requires backend running on $(BACKEND_URL))
+itests: itests-parallel
+
+itests-parallel:
+	@$(MAKE) -C backend itests-parallel
+
+itests-seq:
+	@$(MAKE) -C backend itests-seq
+
+itests-install:
+	@$(MAKE) -C backend itests-install
 
 # --- DB management ---
 

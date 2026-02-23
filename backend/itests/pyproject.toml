@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Integration tests for Critical backend API"
 dependencies = [
     "pytest",
+    "pytest-xdist",
     "requests",
     "websockets",
 ]
@@ -11,3 +12,10 @@ requires-python = ">=3.10"
 
 [tool.pdm]
 distribution = false
+
+[tool.pytest.ini_options]
+# Pytest configuration for parallel execution with xdist
+# -n auto: use all available CPU cores for parallel test workers
+addopts = "-v --tb=short"
+testpaths = ["tests"]
+python_files = "*_test.py"
