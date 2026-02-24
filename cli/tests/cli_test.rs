@@ -118,7 +118,10 @@ fn test_login_success() {
     assert!(ctx_path.exists(), "context.yaml should exist after login");
 
     let contents = std::fs::read_to_string(&ctx_path).unwrap();
-    assert!(contents.contains("localhost-3742"), "context name should be derived from URL");
+    assert!(
+        contents.contains("localhost-3742"),
+        "context name should be derived from URL"
+    );
 }
 
 #[test]
@@ -206,10 +209,7 @@ fn test_groups_list() {
     std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
 
     // List groups (should succeed even if empty)
-    cr1t_cmd(&home)
-        .args(["groups", "list"])
-        .assert()
-        .success();
+    cr1t_cmd(&home).args(["groups", "list"]).assert().success();
 }
 
 #[test]
@@ -218,7 +218,10 @@ fn test_groups_list_with_data() {
     let home = TempDir::new().unwrap();
     let user = unique_user();
     let pass = "testpass999";
-    let group_id = format!("g_test{}", unique_user().chars().rev().take(6).collect::<String>());
+    let group_id = format!(
+        "g_test{}",
+        unique_user().chars().rev().take(6).collect::<String>()
+    );
     let group_name = "Test Group";
 
     register_user(&user, pass);
@@ -248,7 +251,10 @@ fn test_groups_describe() {
     let home = TempDir::new().unwrap();
     let user = unique_user();
     let pass = "testpassabc";
-    let group_id = format!("g_desc{}", unique_user().chars().rev().take(4).collect::<String>());
+    let group_id = format!(
+        "g_desc{}",
+        unique_user().chars().rev().take(4).collect::<String>()
+    );
     let group_name = "Describe Test Group";
 
     register_user(&user, pass);
@@ -432,7 +438,10 @@ fn test_apply_creates_group_from_file() {
         .args(["apply", "-f", yaml_path.to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!("group/{} applied", group_id)));
+        .stdout(predicate::str::contains(format!(
+            "group/{} applied",
+            group_id
+        )));
 
     // Verify group exists with the correct name
     let client = reqwest::blocking::Client::new();
@@ -441,7 +450,11 @@ fn test_apply_creates_group_from_file() {
         .header("Authorization", format!("Bearer {}", token))
         .send()
         .unwrap();
-    assert_eq!(resp.status().as_u16(), 200, "group should exist after apply");
+    assert_eq!(
+        resp.status().as_u16(),
+        200,
+        "group should exist after apply"
+    );
     let body: serde_json::Value = resp.json().unwrap();
     assert_eq!(body["name"].as_str().unwrap(), "Apply Test");
 
@@ -495,7 +508,10 @@ fn test_apply_updates_group_from_file() {
         .args(["apply", "-f", yaml_path.to_str().unwrap()])
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!("group/{} applied", group_id)));
+        .stdout(predicate::str::contains(format!(
+            "group/{} applied",
+            group_id
+        )));
 
     // Verify name changed
     let updated: serde_json::Value = client
@@ -524,10 +540,16 @@ fn test_apply_creates_group_from_stdin() {
 
     cr1t_cmd(&home)
         .args(["apply"])
-        .write_stdin(format!("kind: group\nid: {}\nname: Stdin Group\n", group_id))
+        .write_stdin(format!(
+            "kind: group\nid: {}\nname: Stdin Group\n",
+            group_id
+        ))
         .assert()
         .success()
-        .stdout(predicate::str::contains(format!("group/{} applied", group_id)));
+        .stdout(predicate::str::contains(format!(
+            "group/{} applied",
+            group_id
+        )));
 
     let client = reqwest::blocking::Client::new();
     let resp = client

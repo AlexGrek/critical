@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
-use chrono::{DateTime, Utc};
 use bitflags::bitflags;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub type PrincipalId = String;
@@ -168,4 +168,5 @@ pub mod super_permissions {
     pub const ADM_USER_MANAGER: &str = "adm_user_manager";
     pub const ADM_CONFIG_EDITOR: &str = "adm_config_editor";
     pub const USR_CREATE_GROUPS: &str = "usr_create_groups";
+    pub const USR_CREATE_PROJECTS: &str = "usr_create_projects";
 }

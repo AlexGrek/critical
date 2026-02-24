@@ -54,6 +54,8 @@ impl ArangoTx {
     }
 }
 
+mod init;
+
 //
 // ------------------- MAIN ARANGO BACKEND --------------------
 //
@@ -66,6 +68,7 @@ pub struct ArangoDb {
     pub groups: Collection<ReqwestClient>,
     pub service_accounts: Collection<ReqwestClient>,
     pub pipeline_accounts: Collection<ReqwestClient>,
+    pub projects: Collection<ReqwestClient>,
     pub memberships: Collection<ReqwestClient>, // edge collection
     pub permissions: Collection<ReqwestClient>,
     pub resource_history: Collection<ReqwestClient>,
@@ -116,136 +119,59 @@ impl ArangoDb {
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        // obtain or create database
-        let db = match conn.db(db_name).await {
-            Ok(db) => db,
-            Err(_) => {
-                // ignore create error (e.g. race condition with parallel tests)
-                let _ = conn.create_database(db_name).await;
-                conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?
-            }
-        };
-
-        // obtain or create collections (ignore create errors for race conditions)
-        let _ = db.create_collection("users").await;
-        let _ = db.create_collection("groups").await;
-        let _ = db.create_collection("service_accounts").await;
-        let _ = db.create_collection("pipeline_accounts").await;
-        let _ = db.create_edge_collection("memberships").await;
-        let _ = db.create_collection("permissions").await;
-        let _ = db.create_collection("resource_history").await;
-        let _ = db.create_collection("resource_events").await;
-
-        let users = db.collection("users").await.map_err(|e| anyhow!(e.to_string()))?;
-        let groups = db.collection("groups").await.map_err(|e| anyhow!(e.to_string()))?;
-        let service_accounts = db.collection("service_accounts").await.map_err(|e| anyhow!(e.to_string()))?;
-        let pipeline_accounts = db.collection("pipeline_accounts").await.map_err(|e| anyhow!(e.to_string()))?;
-        let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
-        let permissions = db.collection("permissions").await.map_err(|e| anyhow!(e.to_string()))?;
-        let resource_history = db.collection("resource_history").await.map_err(|e| anyhow!(e.to_string()))?;
-        let resource_events = db.collection("resource_events").await.map_err(|e| anyhow!(e.to_string()))?;
+        let db = init::ensure_database(&conn, db_name).await?;
+        let handles = init::ensure_and_open_collections(&db).await?;
 
         let instance = Self {
             conn,
             db,
-            users,
-            groups,
-            service_accounts,
-            pipeline_accounts,
-            memberships,
-            permissions,
-            resource_history,
-            resource_events,
+            users: handles.users,
+            groups: handles.groups,
+            service_accounts: handles.service_accounts,
+            pipeline_accounts: handles.pipeline_accounts,
+            projects: handles.projects,
+            memberships: handles.memberships,
+            permissions: handles.permissions,
+            resource_history: handles.resource_history,
+            resource_events: handles.resource_events,
         };
 
         instance.seed_permissions().await?;
-
         Ok(instance)
     }
 
     pub async fn connect_anon(url: &str, db_name: &str) -> Result<Self> {
-        // establish connection anonymously
         let conn = Connection::establish_without_auth(url)
             .await
             .map_err(|e| anyhow!(e.to_string()))?;
 
-        // obtain database handle
         let db = match conn.db(db_name).await {
             Ok(db) => db,
             Err(_) => {
                 println!("Creating database...");
-                conn.create_database(db_name)
-                    .await
-                    .map_err(|e| anyhow!(e.to_string()))?;
-                conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?
+                init::ensure_database(&conn, db_name).await?
             }
         };
 
-        // obtain or create collections
-        let users = match db.collection("users").await {
-            Ok(collection) => collection,
-            Err(_) => db
-                .create_collection("users")
-                .await
-                .map_err(|e| anyhow!(e.to_string()))?,
-        };
-
-        let groups = match db.collection("groups").await {
-            Ok(collection) => collection,
-            Err(_) => db
-                .create_collection("groups")
-                .await
-                .map_err(|e| anyhow!(e.to_string()))?,
-        };
-
-        let memberships = match db.collection("memberships").await {
-            Ok(collection) => collection,
-            Err(_) => db
-                .create_edge_collection("memberships")
-                .await
-                .map_err(|e| anyhow!(e.to_string()))?,
-        };
-
-        let permissions = match db.collection("permissions").await {
-            Ok(collection) => collection,
-            Err(_) => db
-                .create_collection("permissions")
-                .await
-                .map_err(|e| anyhow!(e.to_string()))?,
-        };
-
-        let service_accounts = match db.collection("service_accounts").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("service_accounts").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let pipeline_accounts = match db.collection("pipeline_accounts").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("pipeline_accounts").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let resource_history = match db.collection("resource_history").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("resource_history").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
-        let resource_events = match db.collection("resource_events").await {
-            Ok(c) => c,
-            Err(_) => db.create_collection("resource_events").await.map_err(|e| anyhow!(e.to_string()))?,
-        };
+        let handles = init::ensure_and_open_collections(&db).await?;
 
         Ok(Self {
             conn,
             db,
-            users,
-            groups,
-            service_accounts,
-            pipeline_accounts,
-            memberships,
-            permissions,
-            resource_history,
-            resource_events,
+            users: handles.users,
+            groups: handles.groups,
+            service_accounts: handles.service_accounts,
+            pipeline_accounts: handles.pipeline_accounts,
+            projects: handles.projects,
+            memberships: handles.memberships,
+            permissions: handles.permissions,
+            resource_history: handles.resource_history,
+            resource_events: handles.resource_events,
         })
     }
 
     /// Connect to ArangoDB (JWT auth) and prepare collection handles.
+    /// Assumes the database and collections already exist.
     pub async fn connect_jwt(
         url: &str,
         username: &str,
@@ -257,27 +183,20 @@ impl ArangoDb {
             .map_err(|e| anyhow!(e.to_string()))?;
 
         let db = conn.db(db_name).await.map_err(|e| anyhow!(e.to_string()))?;
-
-        let users = db.collection("users").await.map_err(|e| anyhow!(e.to_string()))?;
-        let groups = db.collection("groups").await.map_err(|e| anyhow!(e.to_string()))?;
-        let service_accounts = db.collection("service_accounts").await.map_err(|e| anyhow!(e.to_string()))?;
-        let pipeline_accounts = db.collection("pipeline_accounts").await.map_err(|e| anyhow!(e.to_string()))?;
-        let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
-        let permissions = db.collection("permissions").await.map_err(|e| anyhow!(e.to_string()))?;
-        let resource_history = db.collection("resource_history").await.map_err(|e| anyhow!(e.to_string()))?;
-        let resource_events = db.collection("resource_events").await.map_err(|e| anyhow!(e.to_string()))?;
+        let handles = init::open_collections(&db).await?;
 
         Ok(Self {
             conn,
             db,
-            users,
-            groups,
-            service_accounts,
-            pipeline_accounts,
-            memberships,
-            permissions,
-            resource_history,
-            resource_events,
+            users: handles.users,
+            groups: handles.groups,
+            service_accounts: handles.service_accounts,
+            pipeline_accounts: handles.pipeline_accounts,
+            projects: handles.projects,
+            memberships: handles.memberships,
+            permissions: handles.permissions,
+            resource_history: handles.resource_history,
+            resource_events: handles.resource_events,
         })
     }
 
@@ -293,6 +212,7 @@ impl ArangoDb {
             ADM_USER_MANAGER,
             ADM_CONFIG_EDITOR,
             USR_CREATE_GROUPS,
+            USR_CREATE_PROJECTS,
         ];
 
         for perm in all {
@@ -308,16 +228,12 @@ impl ArangoDb {
 
     pub async fn begin_transaction(&self) -> Result<ArangoTx> {
         let collections = TransactionCollections::builder()
-            .write(vec![
-                "users".to_string(),
-                "groups".to_string(),
-                "service_accounts".to_string(),
-                "pipeline_accounts".to_string(),
-                "memberships".to_string(),
-                "permissions".to_string(),
-                "resource_history".to_string(),
-                "resource_events".to_string(),
-            ])
+            .write(
+                init::WRITE_COLLECTIONS
+                    .iter()
+                    .map(|s| (*s).to_string())
+                    .collect::<Vec<_>>(),
+            )
             .build();
 
         let settings = TransactionSettings::builder()

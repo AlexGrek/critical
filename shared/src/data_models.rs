@@ -93,14 +93,47 @@ pub struct GlobalPermission {
 }
 
 // ---------------------------------------------------------------------------
-// Projects (commented out — will be re-enabled after namespace rework)
+// Project sub-types
 // ---------------------------------------------------------------------------
-// NOTE: Projects act as namespaces for namespaced data. They do NOT have a
-// special ID prefix. When re-enabled, project IDs will be plain identifiers.
-//
-// #[crit_resource(collection = "projects", prefix = "")]
-// pub struct Project {
-//     #[brief]
-//     pub name: String,
-//     pub description: Option<String>,
-// }
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum RepoProvider {
+    #[default]
+    Git,
+    Github,
+    Gitlab,
+    Bitbucket,
+    Svn,
+    Mercurial,
+    Custom,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct RepoLink {
+    pub url: String,
+    #[serde(default)]
+    pub provider: RepoProvider,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Primary branch (git-based providers only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_branch: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+/// Projects are namespaces for all work items (issues, sprints, pipelines, wiki).
+/// Plain IDs with no prefix -- the project ID doubles as the namespace key.
+#[crit_derive::crit_resource(collection = "projects", prefix = "")]
+pub struct Project {
+    #[brief]
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Source code repositories linked to this project.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub repositories: Vec<RepoLink>,
+}
