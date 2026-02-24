@@ -122,6 +122,39 @@ pub struct RepoLink {
 }
 
 // ---------------------------------------------------------------------------
+// Project services
+// ---------------------------------------------------------------------------
+
+/// Toggleable feature modules available for a project.
+/// Controls which tabs are visible in the UI.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectService {
+    /// Webhooks, GitHub Apps, and third-party integrations.
+    Integrations,
+    /// Built-in CI/CD pipeline engine.
+    Pipelines,
+    /// State-controlled deployment management.
+    Deployments,
+    /// Secret management (HashiCorp Vault alternative).
+    Secrets,
+    /// Git-backed documentation wiki (Confluence alternative).
+    Wikis,
+    /// Custom internal tools and micro-apps.
+    Apps,
+    /// Issue tracking with kanban boards (JIRA alternative).
+    Tasks,
+    /// Team discussion boards and threads.
+    Talks,
+    /// Version tagging, changelogs, and release artifacts.
+    Releases,
+    /// Dev/staging/prod environment configuration management.
+    Environments,
+    /// Project analytics, burndown charts, and metrics.
+    Insights,
+}
+
+// ---------------------------------------------------------------------------
 // Projects
 // ---------------------------------------------------------------------------
 
@@ -136,4 +169,7 @@ pub struct Project {
     /// Source code repositories linked to this project.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub repositories: Vec<RepoLink>,
+    /// Feature modules enabled for this project (controls visible UI tabs).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub enabled_services: Vec<ProjectService>,
 }

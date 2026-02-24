@@ -60,6 +60,14 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 │  super-perms     │
 │  principals[]    │
 └──────────────────┘
+
+┌──────────────────────────────────────────┐
+│  projects        │  no prefix            │
+│  (Document)      │  (namespace resource) │
+│  name, desc      │                       │
+│  repositories[]  │  RepoLink sub-type    │
+│  enabled_services[] ProjectService enum  │
+└──────────────────────────────────────────┘
 ```
 
 ### Membership Graph
@@ -144,6 +152,32 @@ Native graph traversal: `FOR v IN 1..10 OUTBOUND "users/u_alice" memberships`
 
 Permission checks resolve through the membership graph — a principal has a permission if they or any of their groups (including nested groups, up to 10 levels) appear in that permission's `principals` array.
 
+### `projects` — Document Collection
+
+| Key Field | Key Format | Rust Struct |
+|-----------|------------|-------------|
+| `_key` | No prefix — plain identifier (e.g. `api-v2`, `mobile-app`) | `Project` |
+
+Has full `acl` field. Projects act as namespaces for work items (tasks, pipelines, wikis, deployments, etc.).
+
+**Key fields**: `name`, `description`, `repositories` (Vec of `RepoLink`), `enabled_services` (Vec of `ProjectService`).
+
+**`enabled_services`** controls which feature tabs are visible in the UI per project. Possible values (snake_case):
+
+| Value | Feature |
+|-------|---------|
+| `integrations` | Webhooks, GitHub Apps, third-party integrations |
+| `pipelines` | Built-in CI/CD pipeline engine |
+| `deployments` | State-controlled deployment management |
+| `secrets` | Secret management (Vault alternative) |
+| `wikis` | Git-backed documentation (Confluence alternative) |
+| `apps` | Custom internal tools |
+| `tasks` | Issue tracking / kanban (JIRA alternative) |
+| `talks` | Team discussion boards |
+| `releases` | Version tagging and changelogs |
+| `environments` | Dev/staging/prod config management |
+| `insights` | Analytics and burndown charts |
+
 ### `resource_history` — Document Collection
 
 Immutable change snapshots. Written after every create/update. Survives resource deletion.
@@ -174,7 +208,7 @@ ArangoDB auto-indexes `_key`, and auto-indexes `_from`/`_to` on edge collections
 
 ## Transactions
 
-Active document collections participate in server-side transactions with `wait_for_sync: true`: `users`, `groups`, `service_accounts`, `pipeline_accounts`, `memberships`, `permissions`, `resource_history`, `resource_events`.
+Active document collections participate in server-side transactions with `wait_for_sync: true`: `users`, `groups`, `service_accounts`, `pipeline_accounts`, `memberships`, `permissions`, `resource_history`, `resource_events`, `projects`.
 
 ## Conventions
 

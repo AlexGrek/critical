@@ -245,7 +245,7 @@ GET  /health          unauthenticated health check
 
 ---
 
-## Projects (Namespaces) — Planned
+## Projects (Namespaces)
 
 Projects act as namespaces for namespaced resources. Every namespaced resource specifies a project:
 
@@ -254,7 +254,23 @@ cr1t get tasks -p my-project
 cr1t get sprints --project api-v2
 ```
 
-Projects themselves are global resources (no parent namespace). Implementation is pending a namespace rework; the `projects` collection is not yet active.
+Projects themselves are global resources (no parent namespace). Each project declares which **services** (feature modules) it enables — controlling which tabs appear in the UI and which resource kinds are accessible under that project's namespace:
+
+| Service | Description |
+|---------|-------------|
+| `tasks` | Issue tracking with kanban boards (JIRA alternative) |
+| `pipelines` | Built-in CI/CD pipeline engine |
+| `deployments` | State-controlled deployment management |
+| `wikis` | Git-backed documentation (Confluence alternative) |
+| `secrets` | Secret management (HashiCorp Vault alternative) |
+| `integrations` | Webhooks, GitHub Apps, and third-party integrations |
+| `apps` | Custom internal tools and micro-apps |
+| `talks` | Team discussion boards |
+| `releases` | Version tagging and changelog management |
+| `environments` | Dev/staging/prod environment configuration |
+| `insights` | Analytics, burndown charts, and project metrics |
+
+Projects also carry a list of linked source code repositories (`repositories`), supporting multiple providers (GitHub, GitLab, Bitbucket, plain Git, SVN, Mercurial).
 
 ---
 

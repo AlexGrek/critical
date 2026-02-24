@@ -33,7 +33,11 @@
       "Bash(podman ps:*)",
       "Bash(cat:*)",
       "Bash(wc:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "WebFetch(domain:arangodb.com)",
+      "WebFetch(domain:docs.arangodb.com)",
+      "WebFetch(domain:docs.arango.ai)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }

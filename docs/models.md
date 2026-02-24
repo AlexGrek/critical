@@ -130,6 +130,88 @@ pub struct PipelineAccount {
 
 ---
 
+## Projects
+
+Projects are global resources that act as namespaces for all work items (tasks, pipelines, wikis, deployments, etc.). They have no ID prefix — plain identifiers serve directly as the namespace key.
+
+```rust
+#[crit_derive::crit_resource(collection = "projects", prefix = "")]
+pub struct Project {
+    #[brief]
+    pub name: String,
+    pub description: Option<String>,
+    /// Source code repositories linked to this project.
+    pub repositories: Vec<RepoLink>,  // omitted from JSON when empty
+    /// Feature modules enabled for this project (controls visible UI tabs).
+    pub enabled_services: Vec<ProjectService>,  // omitted from JSON when empty
+}
+
+pub struct RepoLink {
+    pub url: String,
+    pub provider: RepoProvider,   // default: Git
+    pub name: Option<String>,
+    pub default_branch: Option<String>,
+}
+
+pub enum RepoProvider {
+    Git, Github, Gitlab, Bitbucket, Svn, Mercurial, Custom
+}
+
+pub enum ProjectService {
+    Integrations,  // webhooks, GitHub Apps, third-party
+    Pipelines,     // built-in CI/CD engine
+    Deployments,   // state-controlled deployment management
+    Secrets,       // vault alternative
+    Wikis,         // git-backed docs (Confluence alternative)
+    Apps,          // custom internal tools
+    Tasks,         // issue tracking / kanban (JIRA alternative)
+    Talks,         // team discussion boards
+    Releases,      // version tagging + changelogs
+    Environments,  // dev/staging/prod config management
+    Insights,      // analytics and burndown charts
+}
+```
+
+**Brief fields:** `id`, `meta`, `name`
+
+### Project — full document
+
+```json
+{
+  "id": "api-v2",
+  "meta": {
+    "labels": { "team": "platform" },
+    "annotations": {},
+    "created_at": "2026-02-24T10:00:00Z",
+    "created_by": "u_alice",
+    "updated_at": "2026-02-24T10:00:00Z",
+    "updated_by": "u_alice"
+  },
+  "acl": {
+    "list": [
+      { "permissions": 127, "principals": ["u_alice"] },
+      { "permissions": 7,   "principals": ["g_engineering"] }
+    ],
+    "last_mod_date": "2026-02-24T10:00:00Z"
+  },
+  "deletion": null,
+  "hash_code": "b2c3d4e5f6789012",
+  "name": "API v2",
+  "description": "Next generation API project",
+  "repositories": [
+    {
+      "url": "https://github.com/acme/api-v2",
+      "provider": "github",
+      "name": "Main repo",
+      "default_branch": "main"
+    }
+  ],
+  "enabled_services": ["tasks", "pipelines", "wikis", "deployments"]
+}
+```
+
+---
+
 ## Full Resource Shape (JSON)
 
 ### Group — full document
