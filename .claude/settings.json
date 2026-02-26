@@ -48,7 +48,8 @@
       "Bash(docker-compose up -d)",
       "Bash(docker-compose down)",
       "Bash(docker stop arangodb-dev)",
-      "Bash(docker compose -f /Users/vedmedik/dev/critical/docker-compose.yml down -v)"
+      "Bash(docker compose -f /Users/vedmedik/dev/critical/docker-compose.yml down -v)",
+      "Bash(ps -p 82620 -o command=)"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"

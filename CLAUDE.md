@@ -55,6 +55,8 @@ make logs-db                # Tail container logs
 
 ArangoDB web UI is at `http://localhost:8529`. Makefile prefers docker, falls back to podman-compose.
 
+> **IMPORTANT**: After resetting or restarting the dev database (`make reset-db`, `make run-fresh`, or any `make reset`), you **must restart the backend** (`make run` or rerun `cargo run --bin axum-api`). The backend creates all collections and initial schema on startup via `connect_basic` — if ArangoDB was not running when the backend started, the database will not be initialized and all API calls will fail with 500 errors.
+
 ### Cross-Compilation
 ```bash
 make -f Makefile.xplatform build-all     # Build for all 9 target platforms
