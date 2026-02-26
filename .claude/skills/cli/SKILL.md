@@ -163,6 +163,12 @@ make test-cli
 Starts ephemeral ArangoDB + backend, runs all tests including `#[ignore]` ones,
 then tears everything down.
 
+> **IMPORTANT**: If the fast tests pass and you need to verify that the CLI works
+> correctly (e.g. after making changes, or when the user asks you to run tests),
+> **always follow up with `make test-cli`** to run the full suite including
+> integration tests. Fast tests passing alone is not sufficient — integration
+> tests catch real API, auth, and end-to-end failures.
+
 Or manually (backend already running):
 ```bash
 cargo test -p crit-cli --test cli_test -- --include-ignored
@@ -256,6 +262,7 @@ without infrastructure as part of `cargo test -p crit-cli`.
 ## Self-Review Before Finishing
 
 - [ ] `cargo test -p crit-cli` passes (fast, no infra needed — run this first)
+- [ ] `make test-cli` passes (full integration suite — always run if fast tests pass and CLI correctness must be verified)
 - [ ] New commands have integration tests in `cli/tests/cli_test.rs` with `#[ignore]`
 - [ ] `write_context()` / `write_dummy_context()` used for context setup in tests
 - [ ] `unique_user()` used to generate random usernames (avoid test conflicts)
