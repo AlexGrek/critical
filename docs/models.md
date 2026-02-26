@@ -190,9 +190,10 @@ pub enum ProjectService {
   "acl": {
     "list": [
       { "permissions": 127, "principals": ["u_alice"] },
-      { "permissions": 7,   "principals": ["g_engineering"] }
+      { "permissions": 31,  "principals": ["g_engineering"], "scope": "tasks" },
+      { "permissions": 7,   "principals": ["g_all"],         "scope": "*" }
     ],
-    "last_mod_date": "2026-02-24T10:00:00Z"
+    "last_mod_date": "2026-02-26T10:00:00Z"
   },
   "deletion": null,
   "hash_code": "b2c3d4e5f6789012",
@@ -327,7 +328,7 @@ Every resource carries `meta`:
 
 ## Access Control (`AccessControlStore`)
 
-Resources with `acl` (groups, service accounts, pipeline accounts) embed per-document permissions:
+Resources with `acl` (groups, projects) embed per-document permissions:
 
 ```json
 {
@@ -355,6 +356,38 @@ Permissions are bitflags stored as integers:
 | ROOT | 127 | All bits |
 
 Group membership resolves transitively: if `u_alice` is a member of `g_leads`, and `g_leads` appears in an ACL entry, Alice gets those permissions (up to 10 levels of nesting).
+
+### `scope` field on project ACL entries
+
+Project ACL entries can optionally include a `scope` field to restrict the entry to a specific resource kind. This enables fine-grained, kind-specific permissions within a single project ACL:
+
+```json
+{
+  "acl": {
+    "list": [
+      { "permissions": 127, "principals": ["u_alice"] },
+      { "permissions": 31,  "principals": ["g_devs"],    "scope": "tasks" },
+      { "permissions": 7,   "principals": ["g_viewers"], "scope": "*" }
+    ],
+    "last_mod_date": "2026-02-26T10:00:00Z"
+  }
+}
+```
+
+| `scope` value | Matches |
+|---------------|---------|
+| absent / `null` | All resource kinds (wildcard) |
+| `"*"` | All resource kinds (wildcard) |
+| `"tasks"` | Only resources in the `tasks` kind |
+
+### Hybrid ACL for scoped resources
+
+Project-scoped resources (e.g. tasks, pipelines) use **hybrid ACL resolution**:
+
+1. If the resource's own `acl.list` is **non-empty** → use it directly (override)
+2. Otherwise → fall back to the **parent project's ACL**, filtered by `scope` matching the resource kind
+
+This allows a project's ACL to serve as the default permission policy for all resources within it, while letting individual resources define their own override ACL when needed.
 
 ---
 
@@ -561,8 +594,17 @@ use crit_shared::util_models::Permissions;
 let acl = &group.acl;
 let user_principals = vec!["u_alice".to_string(), "g_platform".to_string()];
 
+// Standard document-level ACL check
 let can_read   = acl.check_permission(&user_principals, Permissions::READ);
 let can_modify = acl.check_permission(&user_principals, Permissions::MODIFY);
+
+// Scoped ACL check — used for project ACLs with scope-filtered entries
+// Returns true if any matching entry (scope absent, "*", or "tasks") grants MODIFY
+let can_modify_tasks = acl.check_permission_scoped(
+    &user_principals,
+    Permissions::MODIFY,
+    "tasks",
+);
 ```
 
 ### Writing a history entry (from a controller)

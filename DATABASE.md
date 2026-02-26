@@ -14,7 +14,7 @@ This document describes every collection in the Critical ArangoDB database, incl
 | ID prefixes | `u_` users · `g_` groups · `sa_` service_accounts · `pa_` pipeline_accounts |
 | `#[crit_resource]` macro | Attribute macro on Rust structs that injects standard fields (`id`, `meta`, `acl`, `deletion`, `hash_code`) and generates `{Name}Brief`, `to_brief()`, `compute_hash()`, `collection_name()`, `id_prefix()` |
 | `ResourceMeta` | Embedded in every resource; carries `labels`, `annotations`, `created_at`, `created_by`, `updated_at`, `updated_by` |
-| `AccessControlStore` | Per-document ACL: `list: [{permissions: u8, principals: [id]}]`, `last_mod_date: DateTime` |
+| `AccessControlStore` | Per-document ACL: `list: [{permissions: u8, principals: [id], scope?: string}]`, `last_mod_date: DateTime`. The optional `scope` field (on project ACL entries) restricts an entry to a specific resource kind (e.g. `"tasks"`); absent or `"*"` matches all kinds |
 | Soft-delete | `deletion: Option<DeletionInfo>` — present = deleted, absent = active. Queries always filter `doc.deletion == null` by default |
 | `hash_code` | FNV-1a 64-bit hash of desired-state fields (all except `hash_code`, `deletion`, `_id`, `_rev`). 16-char hex string. Used for write-conflict detection |
 | No migration system | ArangoDB is schemaless; adding `Option<T>` or `#[serde(default)]` fields is safe. Renames require manual data fixup |
@@ -144,8 +144,9 @@ Manually defined (no `#[crit_resource]` macro).
 | Key | Purpose |
 |-----|---------|
 | `adm_user_manager` | Full CRUD on users and groups |
-| `adm_config_editor` | Edit global configuration |
+| `adm_config_editor` | Edit global configuration and projects |
 | `usr_create_groups` | Create new groups |
+| `usr_create_projects` | Create new projects |
 
 ---
 
@@ -281,7 +282,53 @@ resource_events ──────────────────► (any r
 projects  (global resource, no parent namespace)
  └─ enabled_services[]  (ProjectService enum — determines UI tabs)
  └─ repositories[]      (RepoLink — linked source repos)
+ └─ acl.list[].scope    (optional — restricts entry to one resource kind)
+ └─ {scoped resource}   (any collection with project field, e.g. tasks, pipelines)
 ```
+
+---
+
+## Scoped Resources
+
+Resources belonging to a project carry a `project` field containing the project's `_key`. This is **Variant A** namespacing: all documents of the same kind share one collection (e.g. `tasks`), filtered by `project`.
+
+### Conventions
+
+| Convention | Detail |
+|------------|--------|
+| `project` field | String — the parent project `_key` (e.g. `"api-v2"`) |
+| Required index | Every scoped collection must have a persistent index on `["project", "deletion"]` |
+| API routes | `/v1/projects/{project}/{kind}` and `/v1/projects/{project}/{kind}/{id}` |
+| ACL resolution | **Hybrid** — resource's own `acl.list` used if non-empty; otherwise falls back to the project's `acl` filtered by `scope` matching the resource kind |
+| Create permission | Requires `CREATE` bit on the project's ACL (scoped to the resource kind) |
+
+### Hybrid ACL Resolution
+
+For a scoped resource, permission is checked as follows:
+
+1. If `doc.acl.list` is non-empty → use the resource's own ACL (override mode)
+2. Else → use the **parent project's ACL**, filtering entries where `scope` is absent, `"*"`, or equals the resource kind name (e.g. `"tasks"`)
+
+This lets projects grant blanket access to all task contributors without each individual task needing its own ACL.
+
+### Example: Project ACL with scoped entries
+
+```json
+{
+  "acl": {
+    "list": [
+      { "permissions": 127, "principals": ["u_alice"] },
+      { "permissions": 31,  "principals": ["g_devs"],   "scope": "tasks" },
+      { "permissions": 7,   "principals": ["g_viewers"], "scope": "*" }
+    ],
+    "last_mod_date": "2026-02-26T10:00:00Z"
+  }
+}
+```
+
+- Alice has ROOT on everything in the project (no scope = wildcard)
+- `g_devs` has WRITE on tasks only
+- `g_viewers` has READ on all scoped resource kinds in the project
 
 ---
 
@@ -301,4 +348,4 @@ projects  (global resource, no parent namespace)
 
 ---
 
-*Last updated: 2026-02-24*
+*Last updated: 2026-02-26*

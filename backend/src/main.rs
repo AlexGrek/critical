@@ -60,6 +60,18 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                         .put(api::v1::gitops::update_object)
                         .delete(api::v1::gitops::delete_object),
                 )
+                // Project-scoped routes
+                .route(
+                    "/projects/{project}/{kind}",
+                    get(api::v1::scoped_gitops::list_scoped_objects)
+                        .post(api::v1::scoped_gitops::create_scoped_object),
+                )
+                .route(
+                    "/projects/{project}/{kind}/{id}",
+                    get(api::v1::scoped_gitops::get_scoped_object)
+                        .put(api::v1::scoped_gitops::update_scoped_object)
+                        .delete(api::v1::scoped_gitops::delete_scoped_object),
+                )
                 .layer(from_fn_with_state(
                     shared_state.clone(),
                     middleware::jwt_auth_middleware,

@@ -61,8 +61,10 @@ run-fresh: reset-db run
 # reliably kill the child — leaving orphaned backend processes that block future runs.
 define _start_backend
 	cargo build --bin axum-api && \
-	(cd backend && ../target/debug/axum-api) > /dev/null 2>&1 & BACKEND_PID=$$!; \
-	trap 'kill $$BACKEND_PID 2>/dev/null; wait $$BACKEND_PID 2>/dev/null; $(COMPOSE) down -v; echo ">>> Cleaned up."' EXIT; \
+	BACKEND_LOG=$$(mktemp /tmp/axum-api-XXXXXX); \
+	echo ">>> Backend log: $$BACKEND_LOG"; \
+	(cd backend && ../target/debug/axum-api) > $$BACKEND_LOG 2>&1 & BACKEND_PID=$$!; \
+	trap 'kill $$BACKEND_PID 2>/dev/null; wait $$BACKEND_PID 2>/dev/null; $(COMPOSE) down -v; echo ">>> Cleaned up. Backend log: $$BACKEND_LOG"' EXIT; \
 	echo ">>> Waiting for backend..."; \
 	for i in $$(seq 1 30); do \
 		curl -sf $(BACKEND_URL)/health >/dev/null 2>&1 && break; \

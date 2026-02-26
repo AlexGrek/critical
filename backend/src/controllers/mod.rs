@@ -6,10 +6,12 @@ pub mod user_controller;
 pub mod group_controller;
 pub mod gitops_controller;
 pub mod membership_controller;
+pub mod project_controller;
 
 use gitops_controller::{DefaultKindController, GitopsController, KindController};
 use group_controller::GroupController;
 use membership_controller::MembershipController;
+use project_controller::ProjectController;
 use user_controller::UserController;
 
 pub struct Controller {
@@ -17,6 +19,7 @@ pub struct Controller {
     pub group: GroupController,
     pub gitops: GitopsController,
     pub membership: MembershipController,
+    pub project: ProjectController,
     default: DefaultKindController,
 }
 
@@ -27,6 +30,7 @@ impl Controller {
             group: GroupController::new(db.clone()),
             gitops: GitopsController::new(db.clone()),
             membership: MembershipController::new(db.clone()),
+            project: ProjectController::new(db.clone()),
             default: DefaultKindController,
         }
     }
@@ -37,6 +41,7 @@ impl Controller {
             "users" => &self.user,
             "groups" => &self.group,
             "memberships" => &self.membership,
+            "projects" => &self.project,
             _ => &self.default,
         }
     }

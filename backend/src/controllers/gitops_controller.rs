@@ -73,6 +73,61 @@ pub trait KindController: Send + Sync {
     fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
         None
     }
+
+    /// Whether this resource kind is project-scoped.
+    /// Scoped resources live under `/v1/projects/{project}/{kind}`.
+    fn is_scoped(&self) -> bool {
+        false
+    }
+
+    /// The service kind name used for ACL scope matching on the parent project.
+    /// Only meaningful when `is_scoped()` returns true (e.g. "tasks", "deployments").
+    fn resource_kind_name(&self) -> &str {
+        ""
+    }
+
+    /// Super-permission that short-circuits ACL checks for this kind.
+    /// Return `None` to indicate no super-permission bypass (fully permissive for list).
+    fn super_permission(&self) -> Option<&str> {
+        None
+    }
+
+    /// Bitmask for READ permission used in AQL-level filtering.
+    fn read_permission_bits(&self) -> u8 {
+        Permissions::READ.bits()
+    }
+
+    /// Bitmask for WRITE permission used in AQL-level filtering.
+    fn write_permission_bits(&self) -> u8 {
+        Permissions::MODIFY.bits()
+    }
+
+    /// Check hybrid ACL permission for a single document.
+    /// Uses the resource's own ACL if non-empty, otherwise falls back to
+    /// the project's ACL filtered by scope.
+    fn check_hybrid_acl(
+        &self,
+        doc: &Value,
+        principals: &[String],
+        required: Permissions,
+        project_acl: Option<&AccessControlStore>,
+    ) -> bool {
+        // Check resource's own ACL first
+        if let Ok(acl) = parse_acl(doc) {
+            if !acl.list.is_empty() {
+                return acl.check_permission(principals, required);
+            }
+        }
+        // Fallback to project ACL with scope filtering
+        if let Some(proj_acl) = project_acl {
+            return proj_acl.check_permission_scoped(
+                principals,
+                required,
+                self.resource_kind_name(),
+            );
+        }
+        false
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -156,9 +211,15 @@ pub fn parse_acl(doc: &Value) -> Result<AccessControlStore, ()> {
             .filter_map(|v| v.as_str().map(String::from))
             .collect();
 
+        let scope = entry
+            .get("scope")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
         entries.push(AccessControlList {
             permissions,
             principals,
+            scope,
         });
     }
 

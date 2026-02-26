@@ -67,7 +67,15 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 │  name, desc      │                       │
 │  repositories[]  │  RepoLink sub-type    │
 │  enabled_services[] ProjectService enum  │
-└──────────────────────────────────────────┘
+│  acl.list[].scope  (optional, per-kind)  │
+└──────────────────┬───────────────────────┘
+                   │  project: String (parent key)
+                   │
+          ┌────────▼──────────┐
+          │  scoped resource  │  e.g. tasks, pipelines
+          │  (Document)       │  doc.project = project._key
+          │  project field    │  Hybrid ACL resolution
+          └───────────────────┘
 ```
 
 ### Membership Graph
@@ -200,11 +208,41 @@ Fields: `resource_kind`, `resource_key`, `event_type`, `timestamp`, `actor`, `de
 
 ## Indexes
 
-ArangoDB auto-indexes `_key`, and auto-indexes `_from`/`_to` on edge collections. No additional explicit indexes defined. Candidates for future manual indexes:
-- `memberships.principal`
-- `memberships.group`
-- `resource_history.resource_key` (for fast history lookups)
-- `resource_events.resource_key`
+ArangoDB auto-indexes `_key`, and auto-indexes `_from`/`_to` on edge collections. No additional explicit indexes defined currently. Required indexes for future additions:
+
+| Collection | Fields | Type | Purpose |
+|------------|--------|------|---------|
+| Any scoped collection (e.g. `tasks`) | `["project", "deletion"]` | Persistent | Filter by project + exclude soft-deleted |
+| `memberships` | `["principal"]` | Persistent | Direct principal lookup |
+| `memberships` | `["group"]` | Persistent | Direct group member lookup |
+| `resource_history` | `["resource_key"]` | Persistent | Fast history lookups |
+| `resource_events` | `["resource_key"]` | Persistent | Fast event lookups |
+
+The `ensure_indexes` function in `backend/src/db/arangodb/init.rs` is the designated place to add index creation calls when a new scoped collection is introduced.
+
+## Scoped Resources (Project-Namespaced)
+
+Resources belonging to a project carry a `project: String` field matching the parent project's `_key`. All resources of the same kind share one collection (e.g. `tasks`), filtered at query time by `project`.
+
+**Conventions:**
+
+| Convention | Detail |
+|------------|--------|
+| `project` field | String — parent project `_key` (no prefix) |
+| Required index | Persistent on `["project", "deletion"]` per collection |
+| Access control | Hybrid ACL: resource ACL if non-empty, else project ACL filtered by `scope` |
+| New collection | Add `create_collection` call in `connect_basic`/`connect_anon`, add index in `ensure_indexes`, implement `KindController` with `is_scoped() = true` |
+
+**AQL traversal optimization** (used in `get_user_principals`):
+
+```aql
+FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships
+  OPTIONS { uniqueVertices: "global", order: "bfs" }
+  FILTER v.deletion == null
+  RETURN v._key
+```
+
+BFS with `uniqueVertices: "global"` eliminates revisited nodes in a single pass across all recursion depths. `FILTER v.deletion == null` excludes soft-deleted group vertices.
 
 ## Transactions
 
@@ -222,3 +260,5 @@ Active document collections participate in server-side transactions with `wait_f
 | **Auto-creation** | Collections created on startup if missing (idempotent) |
 | **No migrations** | Schema defined entirely by Rust structs |
 | **Resource macro** | All resource structs use `#[crit_resource]` — not hand-rolled field lists |
+| **Scoped `project` field** | Scoped resources carry a `project` field (string, no prefix) matching the parent project `_key` |
+| **ACL scope** | Project ACL entries may have `scope: string` to restrict to one resource kind; absent = wildcard |

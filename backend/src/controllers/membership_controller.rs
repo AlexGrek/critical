@@ -131,6 +131,10 @@ impl KindController for MembershipController {
         standard_to_external(doc)
     }
 
+    fn super_permission(&self) -> Option<&str> {
+        Some(super_permissions::ADM_USER_MANAGER)
+    }
+
     async fn after_delete(&self, key: &str, db: &ArangoDb) -> Result<(), AppError> {
         // The key format is "{principal}::{group}"
         // After a membership is deleted, check if the group is now empty

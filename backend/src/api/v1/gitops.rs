@@ -17,7 +17,7 @@ pub struct ListQuery {
 }
 
 /// Validate that a kind string is a safe collection name (alphanumeric + underscores).
-fn validate_kind(kind: &str) -> Result<(), AppError> {
+pub fn validate_kind(kind: &str) -> Result<(), AppError> {
     if kind.is_empty() {
         return Err(AppError::bad_request("kind must not be empty"));
     }
@@ -34,6 +34,7 @@ fn validate_kind(kind: &str) -> Result<(), AppError> {
 
 /// GET /global/{kind} — list all objects of this kind.
 /// Supports optional pagination via `?limit=N&cursor=<key>`.
+/// ACL filtering is pushed into a single AQL query for efficiency.
 pub async fn list_objects(
     AuthenticatedUser(user_id): AuthenticatedUser,
     Path(kind): Path<String>,
@@ -44,22 +45,38 @@ pub async fn list_objects(
     state.db.ensure_collection(&kind).await?;
 
     let ctrl = state.controller.for_kind(&kind);
+
+    // Resolve principals once for the entire request
+    let principals = state.db.get_user_principals(&user_id).await?;
+
+    // Check super-permission bypass. If None (no super-permission defined),
+    // treat as fully permissive (matches DefaultKindController behavior).
+    let super_bypass = match ctrl.super_permission() {
+        Some(perm) => state
+            .db
+            .has_permission_with_principals(&principals, perm)
+            .await?,
+        None => true,
+    };
+
     let result = state
         .db
-        .generic_list(
+        .generic_list_acl(
             &kind,
+            &principals,
+            ctrl.read_permission_bits(),
+            super_bypass,
             ctrl.list_projection_fields(),
             query.limit,
             query.cursor.as_deref(),
         )
         .await?;
 
-    let mut filtered = Vec::new();
-    for doc in result.docs {
-        if ctrl.can_read(&user_id, Some(&doc)).await? {
-            filtered.push(ctrl.to_list_external(doc));
-        }
-    }
+    let filtered: Vec<Value> = result
+        .docs
+        .into_iter()
+        .map(|doc| ctrl.to_list_external(doc))
+        .collect();
 
     if query.limit.is_some() {
         let mut response = json!({

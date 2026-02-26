@@ -122,6 +122,9 @@ impl ArangoDb {
         let db = init::ensure_database(&conn, db_name).await?;
         let handles = init::ensure_and_open_collections(&db).await?;
 
+        // arangors has no index management API — create indexes via raw HTTP.
+        init::ensure_indexes(url, db_name, user, pass).await?;
+
         let instance = Self {
             conn,
             db,
@@ -198,6 +201,42 @@ impl ArangoDb {
             resource_history: handles.resource_history,
             resource_events: handles.resource_events,
         })
+    }
+
+    //
+    // ------------------- QUERY HELPERS --------------------
+    //
+
+    /// Execute an AQL query with bind variables.
+    /// Logs the query and bind vars at DEBUG level before every execution,
+    /// including during tests (`RUST_LOG=debug` or `RUST_LOG=axum_api=debug`).
+    async fn aql<T: serde::de::DeserializeOwned>(
+        &self,
+        query: &str,
+        vars: std::collections::HashMap<&str, Value>,
+    ) -> Result<Vec<T>> {
+        log::debug!(
+            "[AQL]\n{}\nbind_vars: {}",
+            query.trim(),
+            serde_json::to_value(&vars)
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or_else(|_| "<serialize error>".into()),
+        );
+        self.db
+            .aql_bind_vars(query, vars)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))
+    }
+
+    /// Execute a bare AQL string (no bind variables).
+    /// Logs the query at DEBUG level.
+    async fn aql_str_query<T: serde::de::DeserializeOwned>(&self, query: &str) -> Result<Vec<T>> {
+        log::debug!("[AQL]\n{}", query.trim());
+        self.db
+            .aql_str(query)
+            .await
+            .map_err(|e| anyhow!(e.to_string()))
     }
 
     //
@@ -333,21 +372,13 @@ impl ArangoDb {
 
     pub async fn get_users_list(&self) -> Result<Vec<User>> {
         let query = "FOR u IN users RETURN u";
-        let users: Vec<User> = self
-            .db
-            .aql_str(query)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let users: Vec<User> = self.aql_str_query(query).await?;
         Ok(users)
     }
 
     pub async fn get_groups_list(&self) -> Result<Vec<Group>> {
         let query = "FOR g IN groups RETURN g";
-        let groups: Vec<Group> = self
-            .db
-            .aql_str(query)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let groups: Vec<Group> = self.aql_str_query(query).await?;
         Ok(groups)
     }
 
@@ -364,11 +395,7 @@ impl ArangoDb {
             serde_json::Value::String(group_id.to_string()),
         )]);
 
-        let res: Vec<String> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let res: Vec<String> = self.aql(query, vars).await?;
         Ok(res)
     }
 
@@ -385,11 +412,7 @@ impl ArangoDb {
             serde_json::Value::String(group_id.to_string()),
         )]);
 
-        let res: Vec<String> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let res: Vec<String> = self.aql(query, vars).await?;
         Ok(res)
     }
 
@@ -407,11 +430,7 @@ impl ArangoDb {
             "principal",
             serde_json::Value::String(principal_id.to_string()),
         )]);
-        let affected_groups: Vec<String> = self
-            .db
-            .aql_bind_vars(find_query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let affected_groups: Vec<String> = self.aql(find_query, vars).await?;
 
         // Step 2: Remove all membership edges for this principal
         let remove_query = r#"
@@ -423,10 +442,7 @@ impl ArangoDb {
             "principal",
             serde_json::Value::String(principal_id.to_string()),
         )]);
-        self.db
-            .aql_bind_vars::<serde_json::Value>(remove_query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        self.aql::<serde_json::Value>(remove_query, vars).await?;
 
         // Step 3: Check which of the affected groups are now empty
         let mut empty_groups = Vec::new();
@@ -454,11 +470,7 @@ impl ArangoDb {
             "group",
             serde_json::Value::String(group_id.to_string()),
         )]);
-        let result: Vec<u64> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let result: Vec<u64> = self.aql(query, vars).await?;
         Ok(result.into_iter().next().unwrap_or(0))
     }
 
@@ -473,10 +485,7 @@ impl ArangoDb {
             "group",
             serde_json::Value::String(group_id.to_string()),
         )]);
-        self.db
-            .aql_bind_vars::<serde_json::Value>(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        self.aql::<serde_json::Value>(query, vars).await?;
         Ok(())
     }
 
@@ -535,6 +544,8 @@ impl ArangoDb {
             LET user_principals = UNION_DISTINCT(
                 [@user],
                 (FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships
+                    OPTIONS { uniqueVertices: "global", order: "bfs" }
+                    FILTER v.deletion == null
                     RETURN v._key)
             )
 
@@ -549,11 +560,33 @@ impl ArangoDb {
             ),
         ]);
 
-        let result: Vec<bool> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let result: Vec<bool> = self.aql(query, vars).await?;
+
+        Ok(result.first().copied().unwrap_or(false))
+    }
+
+    /// Check if any of the given (pre-resolved) principals holds the named permission.
+    /// Avoids redundant graph traversal when principals are already known.
+    pub async fn has_permission_with_principals(
+        &self,
+        principals: &[String],
+        permission: &str,
+    ) -> Result<bool> {
+        let query = r#"
+            LET perm = DOCUMENT("permissions", @permission)
+            FILTER perm != null
+            RETURN LENGTH(INTERSECTION(@principals, perm.principals)) > 0
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            (
+                "permission",
+                serde_json::Value::String(permission.to_string()),
+            ),
+            ("principals", serde_json::to_value(principals)?),
+        ]);
+
+        let result: Vec<bool> = self.aql(query, vars).await?;
 
         Ok(result.first().copied().unwrap_or(false))
     }
@@ -565,6 +598,8 @@ impl ArangoDb {
             LET user_principals = UNION_DISTINCT(
                 [@user],
                 (FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships
+                    OPTIONS { uniqueVertices: "global", order: "bfs" }
+                    FILTER v.deletion == null
                     RETURN v._key)
             )
             RETURN user_principals
@@ -575,11 +610,7 @@ impl ArangoDb {
             serde_json::Value::String(user_id.to_string()),
         )]);
 
-        let result: Vec<Vec<String>> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let result: Vec<Vec<String>> = self.aql(query, vars).await?;
 
         Ok(result.into_iter().next().unwrap_or_default())
     }
@@ -610,11 +641,8 @@ impl ArangoDb {
         upsert_with_retry(|| {
             let vars = vars.clone();
             async move {
-                self.db
-                    .aql_bind_vars::<serde_json::Value>(query, vars)
-                    .await
+                self.aql::<serde_json::Value>(query, vars).await
                     .map(|_| ())
-                    .map_err(|e| anyhow!(e.to_string()))
             }
         })
         .await
@@ -640,10 +668,7 @@ impl ArangoDb {
             ),
         ]);
 
-        self.db
-            .aql_bind_vars::<serde_json::Value>(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        self.aql::<serde_json::Value>(query, vars).await?;
 
         Ok(())
     }
@@ -662,6 +687,8 @@ impl ArangoDb {
             LET user_principals = UNION_DISTINCT(
                 [@user],
                 (FOR v IN 1..10 OUTBOUND CONCAT("users/", @user) memberships
+                    OPTIONS { uniqueVertices: "global", order: "bfs" }
+                    FILTER v.deletion == null
                     RETURN v._key)
             )
 
@@ -675,11 +702,7 @@ impl ArangoDb {
             serde_json::Value::String(user_id.to_string()),
         )]);
 
-        let result: Vec<String> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let result: Vec<String> = self.aql(query, vars).await?;
 
         Ok(result)
     }
@@ -734,11 +757,7 @@ impl ArangoDb {
             cursor_filter, limit_clause, return_clause
         );
 
-        let mut docs: Vec<Value> = self
-            .db
-            .aql_bind_vars(&query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let mut docs: Vec<Value> = self.aql(&query, vars).await?;
 
         // Determine pagination state
         let has_more = match limit {
@@ -766,6 +785,220 @@ impl ArangoDb {
         })
     }
 
+    /// List documents with ACL filtering pushed into AQL.
+    /// For global (non-scoped) resources.
+    /// `principals`: pre-resolved user principals (user ID + transitive groups).
+    /// `required_perm`: bitmask of required permission bits.
+    /// `super_bypass`: if true, skip ACL check entirely (user is super-admin).
+    pub async fn generic_list_acl(
+        &self,
+        collection: &str,
+        principals: &[String],
+        required_perm: u8,
+        super_bypass: bool,
+        fields: Option<&[&str]>,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+    ) -> Result<PaginatedResult> {
+        let return_clause = match fields {
+            Some(f) => {
+                let quoted: Vec<String> = f.iter().map(|s| format!("\"{}\"", s)).collect();
+                format!("RETURN KEEP(doc, {})", quoted.join(", "))
+            }
+            None => "RETURN doc".to_string(),
+        };
+
+        let mut vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("principals", serde_json::to_value(principals)?),
+            ("required_perm", json!(required_perm)),
+            ("super_bypass", Value::Bool(super_bypass)),
+        ]);
+
+        let cursor_filter = if let Some(c) = cursor {
+            vars.insert("cursor", Value::String(c.to_string()));
+            "FILTER doc._key > @cursor"
+        } else {
+            ""
+        };
+
+        let limit_clause = limit.map(|l| format!("LIMIT {}", l + 1)).unwrap_or_default();
+
+        let query = format!(
+            r#"
+            FOR doc IN @@col
+                FILTER doc.deletion == null
+                {cursor_filter}
+
+                LET acl_pass = @super_bypass OR (
+                    LENGTH(doc.acl.list || []) == 0 OR
+                    LENGTH(
+                        FOR entry IN (doc.acl.list || [])
+                            FILTER BIT_AND(entry.permissions, @required_perm) == @required_perm
+                            FILTER LENGTH(INTERSECTION(entry.principals, @principals)) > 0
+                            LIMIT 1
+                            RETURN 1
+                    ) > 0
+                )
+                FILTER acl_pass
+
+                SORT doc._key ASC
+                {limit_clause}
+                {return_clause}
+            "#
+        );
+
+        let mut docs: Vec<Value> = self.aql(&query, vars).await?;
+
+        let has_more = match limit {
+            Some(l) => docs.len() > l as usize,
+            None => false,
+        };
+        if has_more {
+            docs.pop();
+        }
+
+        let next_cursor = if has_more {
+            docs.last()
+                .and_then(|d| d.get("_key"))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        } else {
+            None
+        };
+
+        Ok(PaginatedResult {
+            docs,
+            next_cursor,
+            has_more,
+        })
+    }
+
+    /// List project-scoped documents with hybrid ACL resolution in a single AQL query.
+    /// If a document has its own ACL entries, they are used.
+    /// Otherwise, falls back to the project's ACL filtered by `resource_kind` scope.
+    pub async fn generic_list_scoped(
+        &self,
+        collection: &str,
+        project_id: &str,
+        principals: &[String],
+        required_perm: u8,
+        resource_kind: &str,
+        super_bypass: bool,
+        fields: Option<&[&str]>,
+        limit: Option<u32>,
+        cursor: Option<&str>,
+    ) -> Result<PaginatedResult> {
+        let return_clause = match fields {
+            Some(f) => {
+                let quoted: Vec<String> = f.iter().map(|s| format!("\"{}\"", s)).collect();
+                format!("RETURN KEEP(doc, {})", quoted.join(", "))
+            }
+            None => "RETURN doc".to_string(),
+        };
+
+        let mut vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("project_id", Value::String(project_id.to_string())),
+            ("principals", serde_json::to_value(principals)?),
+            ("required_perm", json!(required_perm)),
+            ("resource_kind", Value::String(resource_kind.to_string())),
+            ("super_bypass", Value::Bool(super_bypass)),
+        ]);
+
+        let cursor_filter = if let Some(c) = cursor {
+            vars.insert("cursor", Value::String(c.to_string()));
+            "FILTER doc._key > @cursor"
+        } else {
+            ""
+        };
+
+        let limit_clause = limit.map(|l| format!("LIMIT {}", l + 1)).unwrap_or_default();
+
+        let query = format!(
+            r#"
+            LET project_doc = DOCUMENT("projects", @project_id)
+            LET project_acl = (project_doc != null AND project_doc.deletion == null)
+                ? (project_doc.acl.list || [])
+                : []
+
+            FOR doc IN @@col
+                FILTER doc.project == @project_id
+                FILTER doc.deletion == null
+                {cursor_filter}
+
+                LET effective_acl = LENGTH(doc.acl.list || []) > 0
+                    ? (doc.acl.list || [])
+                    : (
+                        FOR entry IN project_acl
+                            FILTER entry.scope == null OR entry.scope == "*" OR entry.scope == @resource_kind
+                            RETURN entry
+                    )
+
+                LET acl_pass = @super_bypass OR (
+                    LENGTH(
+                        FOR entry IN effective_acl
+                            FILTER BIT_AND(entry.permissions, @required_perm) == @required_perm
+                            FILTER LENGTH(INTERSECTION(entry.principals, @principals)) > 0
+                            LIMIT 1
+                            RETURN 1
+                    ) > 0
+                )
+                FILTER acl_pass
+
+                SORT doc._key ASC
+                {limit_clause}
+                {return_clause}
+            "#
+        );
+
+        let mut docs: Vec<Value> = self.aql(&query, vars).await?;
+
+        let has_more = match limit {
+            Some(l) => docs.len() > l as usize,
+            None => false,
+        };
+        if has_more {
+            docs.pop();
+        }
+
+        let next_cursor = if has_more {
+            docs.last()
+                .and_then(|d| d.get("_key"))
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        } else {
+            None
+        };
+
+        Ok(PaginatedResult {
+            docs,
+            next_cursor,
+            has_more,
+        })
+    }
+
+    /// Fetch a single project-scoped document, validating project membership.
+    pub async fn generic_get_scoped(
+        &self,
+        collection: &str,
+        project_id: &str,
+        key: &str,
+    ) -> Result<Option<Value>> {
+        let query = r#"
+            LET doc = DOCUMENT(@@col, @key)
+            FILTER doc != null AND doc.deletion == null AND doc.project == @project_id
+            RETURN doc
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("key", Value::String(key.to_string())),
+            ("project_id", Value::String(project_id.to_string())),
+        ]);
+        let result: Vec<Value> = self.aql(query, vars).await?;
+        Ok(result.into_iter().next())
+    }
+
     pub async fn generic_get(&self, collection: &str, key: &str) -> Result<Option<Value>> {
         let query = r#"
             LET doc = DOCUMENT(@@col, @key)
@@ -776,11 +1009,7 @@ impl ArangoDb {
             ("@col", Value::String(collection.to_string())),
             ("key", Value::String(key.to_string())),
         ]);
-        let result: Vec<Value> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let result: Vec<Value> = self.aql(query, vars).await?;
         Ok(result.into_iter().next())
     }
 
@@ -790,10 +1019,7 @@ impl ArangoDb {
             ("@col", Value::String(collection.to_string())),
             ("doc", doc),
         ]);
-        self.db
-            .aql_bind_vars::<Value>(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        self.aql::<Value>(query, vars).await?;
         Ok(())
     }
 
@@ -815,11 +1041,8 @@ impl ArangoDb {
         upsert_with_retry(|| {
             let vars = vars.clone();
             async move {
-                self.db
-                    .aql_bind_vars::<Value>(query, vars)
-                    .await
+                self.aql::<Value>(query, vars).await
                     .map(|_| ())
-                    .map_err(|e| anyhow!(e.to_string()))
             }
         })
         .await
@@ -837,11 +1060,7 @@ impl ArangoDb {
             ("key", Value::String(key.to_string())),
             ("doc", doc),
         ]);
-        let result: Vec<Value> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let result: Vec<Value> = self.aql(query, vars).await?;
         if result.is_empty() {
             return Err(anyhow!("document not found: {}/{}", collection, key));
         }
@@ -859,11 +1078,7 @@ impl ArangoDb {
             ("@col", Value::String(collection.to_string())),
             ("key", Value::String(key.to_string())),
         ]);
-        let result: Vec<Value> = self
-            .db
-            .aql_bind_vars(query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let result: Vec<Value> = self.aql(query, vars).await?;
         if result.is_empty() {
             return Err(anyhow!("document not found: {}/{}", collection, key));
         }
@@ -895,11 +1110,7 @@ impl ArangoDb {
             ("to_path", Value::String(to_path)),
         ]);
 
-        let edges: Vec<Value> = self
-            .db
-            .aql_bind_vars(edge_query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let edges: Vec<Value> = self.aql(edge_query, vars).await?;
 
         let disconnected_edges: Vec<DisconnectedEdge> = edges
             .into_iter()
@@ -931,11 +1142,7 @@ impl ArangoDb {
             ("key", Value::String(key.to_string())),
             ("deletion", deletion_val),
         ]);
-        let result: Vec<Value> = self
-            .db
-            .aql_bind_vars(update_query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let result: Vec<Value> = self.aql(update_query, vars).await?;
 
         if result.is_empty() {
             return Err(anyhow!("document not found or already deleted: {}/{}", collection, key));
@@ -965,11 +1172,7 @@ impl ArangoDb {
             ("kind", Value::String(kind.to_string())),
             ("key", Value::String(key.to_string())),
         ]);
-        let counts: Vec<u64> = self
-            .db
-            .aql_bind_vars(count_query, vars)
-            .await
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let counts: Vec<u64> = self.aql(count_query, vars).await?;
         let revision = counts.into_iter().next().unwrap_or(0) + 1;
 
         let history_id = format!("{}_{}_{:06}", kind, key, revision);

@@ -40,6 +40,10 @@ pub struct AccessControlStore {
 pub struct AccessControlList {
     pub permissions: Permissions,
     pub principals: Vec<String>,
+    /// Service-kind scope for project ACL entries (e.g. "tasks", "deployments", "*").
+    /// `None` or `"*"` means applies to all service kinds (wildcard).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
 }
 
 impl AccessControlStore {
@@ -47,6 +51,28 @@ impl AccessControlStore {
     pub fn check_permission(&self, principals: &[String], required: Permissions) -> bool {
         self.list.iter().any(|acl| {
             acl.permissions.contains(required)
+                && acl.principals.iter().any(|p| principals.contains(p))
+        })
+    }
+
+    /// Check permission filtered by scope. An ACL entry matches if:
+    /// - Its scope is None (wildcard / legacy), or
+    /// - Its scope is `"*"`, or
+    /// - Its scope equals `resource_kind`
+    pub fn check_permission_scoped(
+        &self,
+        principals: &[String],
+        required: Permissions,
+        resource_kind: &str,
+    ) -> bool {
+        self.list.iter().any(|acl| {
+            let scope_matches = match &acl.scope {
+                None => true,
+                Some(s) if s == "*" => true,
+                Some(s) => s == resource_kind,
+            };
+            scope_matches
+                && acl.permissions.contains(required)
                 && acl.principals.iter().any(|p| principals.contains(p))
         })
     }

@@ -13,6 +13,28 @@
 
 All routes are nested under `/api` when accessed through the gateway (nginx or ingress).
 
+## Scoped Gitops API (`/v1/projects/{project}/{kind}`)
+
+Project-namespaced CRUD for resources belonging to a project (e.g. tasks, pipelines). The project must exist and the caller must have appropriate project or resource-level ACL.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/projects/{project}/{kind}` | List accessible objects in the project |
+| `GET` | `/v1/projects/{project}/{kind}/{id}` | Fetch a single scoped object |
+| `POST` | `/v1/projects/{project}/{kind}` | Create a new scoped object |
+| `PUT` | `/v1/projects/{project}/{kind}/{id}` | Update a scoped object (fails if not exists) |
+| `DELETE` | `/v1/projects/{project}/{kind}/{id}` | Delete a scoped object |
+
+`{kind}` must be registered as a project-scoped kind (i.e. its `KindController` returns `is_scoped() = true`). Passing a global kind (e.g. `users`) returns `400 Bad Request`.
+
+**Permission model**: Hybrid ACL — resource's own ACL if non-empty; otherwise the project's ACL filtered by `scope` matching the kind. See [access-control.md](access-control.md) for details.
+
+**Pagination**: same `limit` / `cursor` query parameters as the global list endpoint.
+
+**List response**: same brief/full document structure as the global API.
+
+---
+
 ## Gitops API (`/v1/global/{kind}`)
 
 A generic CRUD API for all resource kinds. `{kind}` maps to an ArangoDB collection name (e.g. `users`, `groups`, `projects`). Unknown kinds are auto-created on first access.

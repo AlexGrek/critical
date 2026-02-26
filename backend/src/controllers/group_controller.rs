@@ -176,6 +176,10 @@ impl KindController for GroupController {
         Some(&["_key", "name", "acl", "meta"])
     }
 
+    fn super_permission(&self) -> Option<&str> {
+        Some(super_permissions::ADM_USER_MANAGER)
+    }
+
     fn prepare_create(&self, body: &mut Value, user_id: &str) {
         log::debug!(
             "[ACL] GroupController::prepare_create: user={}",

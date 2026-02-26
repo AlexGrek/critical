@@ -22,8 +22,9 @@ Granted per-principal in the `permissions` collection. `u_root` has all of them 
 | Permission            | Granted on Registration | Description                                  |
 | --------------------- | ----------------------- | -------------------------------------------- |
 | `adm_user_manager`    | No                      | Full control over all users, groups, memberships |
-| `adm_config_editor`   | No                      | Edit global configuration                    |
+| `adm_config_editor`   | No                      | Edit global configuration and any project    |
 | `usr_create_groups`   | Yes                     | Allows creating new groups                   |
+| `usr_create_projects` | No (`u_root` only)      | Allows creating new projects                 |
 
 ## ACL Permission Bits
 
@@ -99,6 +100,45 @@ Membership access is controlled by the **target group's ACL**, not a separate pe
 | Delete a membership      | `adm_user_manager`, OR user's principals have MODIFY on the target group's ACL |
 
 **On deletion**: if removing a membership leaves the target group with zero members, the group is automatically deleted (with recursive cascade).
+
+### Projects
+
+Projects are global resources that act as namespaces. They have a per-document ACL.
+
+| Operation          | Who Can Do It                                             |
+| ------------------ | --------------------------------------------------------- |
+| List all projects  | `adm_config_editor`, OR ACL grants READ                   |
+| Read a project     | `adm_config_editor`, OR ACL grants READ                   |
+| Create a project   | `adm_config_editor`, OR `usr_create_projects`             |
+| Update a project   | `adm_config_editor`, OR ACL grants MODIFY                 |
+| Delete a project   | `adm_config_editor`, OR ACL grants MODIFY                 |
+
+**On creation**: the creator is automatically added to the project ACL with ROOT permissions.
+
+### Scoped Resources (Project-Namespaced)
+
+Resources belonging to a project (e.g. tasks, pipelines) are accessed via `/v1/projects/{project}/{kind}`. These use **Hybrid ACL** resolution:
+
+1. If the resource's own `acl.list` is non-empty → use the resource's ACL directly
+2. Otherwise → fall back to the parent project's ACL, filtering by `scope` matching the resource kind
+
+| Operation                 | Who Can Do It                                                                             |
+| ------------------------- | ----------------------------------------------------------------------------------------- |
+| List scoped resources     | Super-perm bypass, OR project/resource ACL grants READ for the resource kind              |
+| Read a scoped resource    | Super-perm bypass, OR project/resource ACL grants READ for the resource kind              |
+| Create a scoped resource  | Super-perm bypass, OR project ACL has CREATE for the resource kind                        |
+| Update a scoped resource  | Super-perm bypass, OR project/resource ACL grants MODIFY for the resource kind            |
+| Delete a scoped resource  | Super-perm bypass, OR project/resource ACL grants MODIFY for the resource kind            |
+
+**ACL scope entries on projects:**
+
+```json
+{ "permissions": 31, "principals": ["g_devs"], "scope": "tasks" }
+```
+
+- `scope` absent or `"*"` → applies to all resource kinds in the project
+- `scope: "tasks"` → applies only to the `tasks` collection
+- This enables per-service-kind access control without separate permission documents
 
 ### Other Kinds (CRD-style)
 

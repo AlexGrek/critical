@@ -37,7 +37,21 @@
       "WebFetch(domain:arangodb.com)",
       "WebFetch(domain:docs.arangodb.com)",
       "WebFetch(domain:docs.arango.ai)",
-      "WebFetch(domain:github.com)"
+      "WebFetch(domain:github.com)",
+      "Bash(git checkout:*)",
+      "Bash(git merge:*)",
+      "Bash(docker image ls)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:crates.io)",
+      "Bash(docker run --rm arangodb:latest arangod --version)",
+      "Bash(docker run --rm --entrypoint=/usr/sbin/arangod arangodb:latest --version)",
+      "Bash(docker-compose up -d)",
+      "Bash(docker-compose down)",
+      "Bash(docker stop arangodb-dev)",
+      "Bash(docker compose -f /Users/vedmedik/dev/critical/docker-compose.yml down -v)"
+    ],
+    "additionalDirectories": [
+      "/Users/vedmedik/dev/critical/.claude/skills"
     ]
   }
 }
