@@ -163,6 +163,11 @@ pub fn standard_to_internal(mut body: Value) -> Value {
 /// Standard `to_external`: renames `_key` → `id`, strips `_id`/`_rev`.
 pub fn standard_to_external(mut doc: Value) -> Value {
     rename_key_to_id(&mut doc);
+    // Ensure `meta` is always present (it has `#[serde(default)]` on all crit_resource types).
+    // Documents created without an explicit `meta` field won't have it in ArangoDB.
+    if let Some(obj) = doc.as_object_mut() {
+        obj.entry("meta").or_insert_with(|| Value::Object(Default::default()));
+    }
     doc
 }
 

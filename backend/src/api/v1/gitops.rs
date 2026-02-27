@@ -46,12 +46,15 @@ pub async fn list_objects(
 
     let ctrl = state.controller.for_kind(&kind);
 
+    // Godmode bypasses all ACL checks
+    let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
+
     // Resolve principals once for the entire request
     let principals = state.db.get_user_principals(&user_id).await?;
 
     // Check super-permission bypass. If None (no super-permission defined),
     // treat as fully permissive (matches DefaultKindController behavior).
-    let super_bypass = match ctrl.super_permission() {
+    let super_bypass = godmode || match ctrl.super_permission() {
         Some(perm) => state
             .db
             .has_permission_with_principals(&principals, perm)
@@ -110,8 +113,9 @@ pub async fn create_object(
 
     let ctrl = state.controller.for_kind(&kind);
 
-    let allowed = ctrl.can_create(&user_id, &body).await?;
-    log::debug!("[HANDLER] create_object: can_create={}, user={}, kind={}, id={}", allowed, user_id, kind, id);
+    let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
+    let allowed = godmode || ctrl.can_create(&user_id, &body).await?;
+    log::debug!("[HANDLER] create_object: can_create={}, godmode={}, user={}, kind={}, id={}", allowed, godmode, user_id, kind, id);
     if !allowed {
         log::debug!("[HANDLER] create_object: DENIED, returning 404");
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
@@ -152,7 +156,8 @@ pub async fn get_object(
     let doc = state.db.generic_get(&kind, &id).await?;
     match doc {
         Some(d) => {
-            if !ctrl.can_read(&user_id, Some(&d)).await? {
+            let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
+            if !godmode && !ctrl.can_read(&user_id, Some(&d)).await? {
                 return Err(AppError::not_found(format!("{}/{}", kind, id)));
             }
             Ok(Json(ctrl.to_external(d)))
@@ -178,12 +183,14 @@ pub async fn upsert_object(
     let existing = state.db.generic_get(&kind, &id).await?;
     let is_update = existing.is_some();
 
+    let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
+
     if is_update {
-        if !ctrl.can_write(&user_id, existing.as_ref()).await? {
+        if !godmode && !ctrl.can_write(&user_id, existing.as_ref()).await? {
             return Err(AppError::not_found(format!("{}/{}", kind, id)));
         }
     } else {
-        if !ctrl.can_create(&user_id, &body).await? {
+        if !godmode && !ctrl.can_create(&user_id, &body).await? {
             return Err(AppError::not_found(format!("{}/{}", kind, id)));
         }
         ctrl.prepare_create(&mut body, &user_id);
@@ -220,7 +227,8 @@ pub async fn update_object(
     let existing = state.db.generic_get(&kind, &id).await?;
     let existing = existing.ok_or_else(|| AppError::not_found(format!("{}/{}", kind, id)))?;
 
-    if !ctrl.can_write(&user_id, Some(&existing)).await? {
+    let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
+    if !godmode && !ctrl.can_write(&user_id, Some(&existing)).await? {
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
     }
 
@@ -255,7 +263,8 @@ pub async fn delete_object(
     let existing = state.db.generic_get(&kind, &id).await?;
     let existing = existing.ok_or_else(|| AppError::not_found(format!("{}/{}", kind, id)))?;
 
-    if !ctrl.can_write(&user_id, Some(&existing)).await? {
+    let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
+    if !godmode && !ctrl.can_write(&user_id, Some(&existing)).await? {
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
     }
 

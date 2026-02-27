@@ -24,13 +24,15 @@ async fn validate_project(state: &AppState, project_id: &str) -> Result<Value, A
 }
 
 /// Resolve user principals and check super-permission bypass for a controller.
+/// Also checks godmode — if the user has ADM_GODMODE, super_bypass is always true.
 async fn resolve_auth(
     state: &AppState,
     user_id: &str,
     super_perm: Option<&str>,
 ) -> Result<(Vec<String>, bool), AppError> {
+    let godmode = state.has_godmode(user_id).await.unwrap_or(false);
     let principals = state.db.get_user_principals(user_id).await?;
-    let super_bypass = match super_perm {
+    let super_bypass = godmode || match super_perm {
         Some(perm) => state
             .db
             .has_permission_with_principals(&principals, perm)

@@ -1,4 +1,5 @@
 pub mod api;
+pub mod cache;
 pub mod config;
 pub mod controllers;
 pub mod db;
@@ -11,6 +12,7 @@ pub mod state;
 pub mod test;
 pub mod utils;
 pub mod validation;
+pub mod godmode;
 
 use std::sync::Arc;
 
@@ -98,10 +100,12 @@ pub async fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::
     let config = config::AppConfig::from_env()?;
     let auth = Auth::new(config.jwt_secret.as_bytes(), config.jwt_expiry_days);
     let db = ArangoDb::connect_basic(&config.database_connection_string, &config.database_user, &config.database_password, &config.database_name).await?;
+    let cache = cache::create_default_cache().await;
     Ok(AppState::new(
         config,
         auth,
         Arc::new(db),
+        cache,
         None,
     ))
 }
@@ -143,11 +147,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info!("Root account created (username: root)");
     }
 
+    // Ensure root has ADM_GODMODE (idempotent — safe to call on every startup)
+    db.grant_permission(
+        crit_shared::util_models::super_permissions::ADM_GODMODE,
+        "u_root",
+    )
+    .await?;
+
     // Create app state
+    let cache = cache::create_default_cache().await;
     let app_state = AppState::new(
         config.clone(),
         auth,
         Arc::new(db),
+        cache,
         None,
     );
     let shared_state = Arc::new(app_state);

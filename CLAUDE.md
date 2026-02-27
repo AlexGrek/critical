@@ -194,12 +194,12 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
 
 Four test categories:
 
-| Type | Location | Needs DB | Needs backend | Command |
-|------|----------|----------|---------------|---------|
-| Rust unit + backend integration | `backend/src/test/`, CLI unit tests | yes | no (axum-test) | `make test-unit` |
-| CLI integration | `cli/tests/cli_test.rs` | yes | yes | `make test-cli` |
-| Python API integration | `backend/itests/` | yes | yes | `make test-api` |
-| Frontend E2E (Playwright) | `e2e-tests/e2e/` | yes | yes | see below |
+| Type                            | Location                            | Needs DB | Needs backend  | Command          |
+| ------------------------------- | ----------------------------------- | -------- | -------------- | ---------------- |
+| Rust unit + backend integration | `backend/src/test/`, CLI unit tests | yes      | no (axum-test) | `make test-unit` |
+| CLI integration                 | `cli/tests/cli_test.rs`             | yes      | yes            | `make test-cli`  |
+| Python API integration          | `backend/itests/`                   | yes      | yes            | `make test-api`  |
+| Frontend E2E (Playwright)       | `e2e-tests/e2e/`                    | yes      | yes            | see below        |
 
 #### Backend/CLI/Python Tests
 
