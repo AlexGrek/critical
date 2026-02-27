@@ -29,7 +29,9 @@ Build: `cargo build --bin axum-api` / `cargo build --bin cr1t`
 All entities use the **`#[crit_derive::crit_resource]`** proc macro
 (`shared/derive/src/lib.rs`). It automatically injects:
 - `id: String` (serde → `_key` for ArangoDB)
-- `meta: ResourceMeta`
+- `labels: Labels` (queryable key-value pairs, user-managed desired state)
+- `annotations: Labels` (freeform strings, user-managed desired state)
+- `state: ResourceState` (server-managed audit: created_at/by, updated_at/by)
 - `acl: AccessControlStore` (unless `no_acl` is specified)
 - `deletion: Option<DeletionInfo>` (for soft-delete)
 - `hash_code: String`
@@ -137,7 +139,7 @@ filter_to_brief(value: Value, fields: &[&str]) -> Value
   fallback to project-scoped ACL (implemented on `KindController`)
 - ACL denial → return **404** (not 403) to avoid leaking resource existence
 
-Super-permissions (on `User.meta`) short-circuit normal ACL checks.
+Super-permissions (in `permissions` collection) short-circuit normal ACL checks.
 
 ---
 
@@ -163,6 +165,35 @@ Shared as `Arc<AppState>` — extract with `State(state): State<Arc<AppState>>` 
 Use `AppError` (`backend/src/error.rs`) — implements `IntoResponse` for Axum.
 Common variants: `AppError::NotFound`, `AppError::Unauthorized`, `AppError::BadRequest`,
 `AppError::Internal`.
+
+---
+
+## Debugging: Direct ArangoDB Queries
+
+When debugging data issues, query ArangoDB directly via its HTTP API.
+Connection details are in the root `.env` file.
+
+```bash
+# Read .env for connection details (DB_CONNECTION_STRING, DB_NAME, DB_USER, DB_PASSWORD)
+# Default dev values: root:devpassword on localhost:8529, database "devdb"
+
+# Fetch a single document by _key
+curl -u root:devpassword \
+  'http://localhost:8529/_db/devdb/_api/document/{collection}/{_key}'
+
+# Run an AQL query
+curl -u root:devpassword \
+  'http://localhost:8529/_db/devdb/_api/cursor' \
+  -d '{"query": "FOR doc IN users LIMIT 5 RETURN doc"}'
+
+# List all collections
+curl -u root:devpassword \
+  'http://localhost:8529/_db/devdb/_api/collection'
+```
+
+Use this to verify what's actually stored in the database when the API response
+doesn't match expectations — the issue may be in document creation, AQL projection
+(`KEEP`), or the `to_external`/`to_list_external` transformation pipeline.
 
 ---
 

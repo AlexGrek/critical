@@ -133,17 +133,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Seed root account if it doesn't exist
     let auth = Auth::new(config.jwt_secret.as_bytes(), config.jwt_expiry_days);
+    let db = Arc::new(db);
     if db.get_user_by_id("u_root").await?.is_none() {
-        let password_hash = auth.hash_password(&config.root_password)?;
-        let mut root_meta = crit_shared::util_models::ResourceMeta::default();
-        root_meta.created_at = chrono::Utc::now();
-        let root_user = crit_shared::data_models::User {
-            id: "u_root".to_string(),
-            password_hash,
-            meta: root_meta,
-            ..Default::default()
-        };
-        db.create_user(root_user, None).await?;
+        use crate::controllers::gitops_controller::inject_create_defaults;
+        let mut body = serde_json::json!({
+            "id": "u_root",
+            "password": &config.root_password,
+        });
+        inject_create_defaults(&mut body, "u_root");
+        let ctrl = controllers::Controller::new(db.clone());
+        let doc = ctrl.for_kind("users").to_internal(body, &auth)?;
+        db.generic_create("users", doc).await?;
         info!("Root account created (username: root)");
     }
 
@@ -159,7 +159,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app_state = AppState::new(
         config.clone(),
         auth,
-        Arc::new(db),
+        db.clone(),
         cache,
         None,
     );

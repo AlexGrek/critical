@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::db::ArangoDb;
 use crate::error::AppError;
@@ -36,9 +36,13 @@ pub trait KindController: Send + Sync {
         self.can_write(user_id, None).await
     }
 
-    /// Prepare a document body before creation (e.g. inject creator ACL).
-    /// Default is a no-op.
-    fn prepare_create(&self, _body: &mut Value, _user_id: &str) {}
+    /// Prepare a document body before creation. The default implementation
+    /// injects common fields (labels, annotations, state audit timestamps).
+    /// Override to add kind-specific setup (e.g. ACL), but call
+    /// `inject_create_defaults(body, user_id)` first.
+    fn prepare_create(&self, body: &mut Value, user_id: &str) {
+        inject_create_defaults(body, user_id);
+    }
 
     /// Called after a document is successfully created. Used for post-creation
     /// setup (e.g. inserting creator as group member).
@@ -163,12 +167,29 @@ pub fn standard_to_internal(mut body: Value) -> Value {
 /// Standard `to_external`: renames `_key` → `id`, strips `_id`/`_rev`.
 pub fn standard_to_external(mut doc: Value) -> Value {
     rename_key_to_id(&mut doc);
-    // Ensure `meta` is always present (it has `#[serde(default)]` on all crit_resource types).
-    // Documents created without an explicit `meta` field won't have it in ArangoDB.
-    if let Some(obj) = doc.as_object_mut() {
-        obj.entry("meta").or_insert_with(|| Value::Object(Default::default()));
-    }
     doc
+}
+
+/// Inject common creation defaults into a document body:
+/// labels, annotations (empty if absent), and state audit timestamps.
+pub fn inject_create_defaults(body: &mut Value, user_id: &str) {
+    let Some(obj) = body.as_object_mut() else {
+        return;
+    };
+    obj.entry("labels").or_insert_with(|| json!({}));
+    obj.entry("annotations").or_insert_with(|| json!({}));
+    let state = obj.entry("state").or_insert_with(|| json!({}));
+    if let Some(state_obj) = state.as_object_mut() {
+        state_obj
+            .entry("created_at")
+            .or_insert_with(|| json!(chrono::Utc::now().to_rfc3339()));
+        state_obj
+            .entry("created_by")
+            .or_insert_with(|| json!(user_id));
+        state_obj
+            .entry("updated_at")
+            .or_insert_with(|| json!(chrono::Utc::now().to_rfc3339()));
+    }
 }
 
 /// Filter a JSON object to only keep the given field names.

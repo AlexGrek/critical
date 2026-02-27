@@ -24,16 +24,14 @@ mod tests {
     /// Seed the root user if it doesn't exist (mirrors main.rs startup logic).
     async fn ensure_root_user(state: &AppState) {
         if state.db.get_user_by_id("u_root").await.unwrap().is_none() {
-            let password_hash = state.auth.hash_password(ROOT_PASSWORD).unwrap();
-            let mut root_meta = crit_shared::util_models::ResourceMeta::default();
-            root_meta.created_at = chrono::Utc::now();
-            let root_user = crit_shared::data_models::User {
-                id: "u_root".to_string(),
-                password_hash,
-                meta: root_meta,
-                ..Default::default()
-            };
-            state.db.create_user(root_user, None).await.unwrap();
+            use crate::controllers::gitops_controller::inject_create_defaults;
+            let mut body = serde_json::json!({
+                "id": "u_root",
+                "password": ROOT_PASSWORD,
+            });
+            inject_create_defaults(&mut body, "u_root");
+            let doc = state.controller.for_kind("users").to_internal(body, &state.auth).unwrap();
+            state.db.generic_create("users", doc).await.unwrap();
         }
     }
 

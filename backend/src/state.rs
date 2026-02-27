@@ -3,7 +3,7 @@ use std::sync::Arc;
 use serde_json::json;
 
 use crate::{
-    cache::{self, CacheStore}, config::{AppConfig, RuntimeConfig}, controllers::Controller, db::ArangoDb, godmode, middleware::auth::Auth, services::offloadmq::OffloadClient
+    cache::CacheStore, config::{AppConfig, RuntimeConfig}, controllers::Controller, db::ArangoDb, godmode, middleware::auth::Auth, services::offloadmq::OffloadClient
 };
 use crit_shared::util_models::super_permissions;
 

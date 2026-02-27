@@ -68,6 +68,16 @@ impl KindController for UserController {
                     obj.insert("password_hash".to_string(), Value::String(hash));
                 }
             }
+
+            // Ensure personal field has a default value if missing
+            if !obj.contains_key("personal") {
+                obj.insert("personal".to_string(), serde_json::json!({
+                    "name": "",
+                    "gender": "",
+                    "job_title": "",
+                    "manager": null
+                }));
+            }
         }
         rename_id_to_key(&mut body);
         Ok(body)
@@ -86,8 +96,8 @@ impl KindController for UserController {
     }
 
     fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
-        // _key maps to "id" after to_external; "meta" carries created_at for display
-        Some(&["_key", "personal", "meta"])
+        // _key maps to "id" after to_external
+        Some(&["_key", "personal", "labels", "annotations"])
     }
 
     async fn after_delete(&self, key: &str, db: &ArangoDb) -> Result<(), AppError> {

@@ -70,21 +70,25 @@ No hidden operations. No magic behind the frontend.
 Every entity in Critical is a **resource**. Resources have a uniform shape injected by the `#[crit_resource]` Rust attribute macro:
 
 ```
-┌────────────────────────────────────────────────────┐
-│  Resource                                          │
-├────────────────────────────────────────────────────┤
-│  id          String         ArangoDB _key          │
-│  meta        ResourceMeta   labels, annotations,   │
-│                             created_at, created_by,│
-│                             updated_at, updated_by │
-│  acl         AccessControl  per-document ACL       │
-│              Store          (omitted for users)    │
-│  deletion    DeletionInfo?  null = active          │
-│                             present = soft-deleted │
-│  hash_code   String         FNV-1a hash for        │
-│                             write-conflict detect  │
-└────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│  Resource                                            │
+├──────────────────────────────────────────────────────┤
+│  id           String          ArangoDB _key          │
+│  labels       Labels          queryable key-values   │
+│  annotations  Labels          freeform strings       │
+│  state        ResourceState   created_at, created_by,│
+│                               updated_at, updated_by │
+│  acl          AccessControl   per-document ACL       │
+│               Store           (omitted for users)    │
+│  deletion     DeletionInfo?   null = active          │
+│                               present = soft-deleted │
+│  hash_code    String          FNV-1a hash for        │
+│                               write-conflict detect  │
+└──────────────────────────────────────────────────────┘
   + kind-specific fields (name, description, etc.)
+
+labels and annotations are user-managed desired state.
+state is server-managed (audit timestamps) — NOT part of desired state.
 ```
 
 This is enforced by the `#[crit_derive::crit_resource]` proc macro — not by convention. All resource structs use it; edge collections and simple key-value collections are defined manually.

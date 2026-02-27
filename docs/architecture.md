@@ -25,10 +25,10 @@ Cargo workspace with three crates plus a frontend:
 - **Crate**: `crit-shared` (import as `crit_shared`)
 - Domain models shared across backend and CLI
 - **Core entities** (`data_models.rs`): `User`, `Group`, `ServiceAccount`, `PipelineAccount`, `GroupMembership`, `GlobalPermission`
-- **Utility types** (`util_models.rs`): Bitflag `Permissions`, `AccessControlStore`, `ResourceMeta`, `DeletionInfo`, `HistoryEntry`, `ResourceEvent`, `FullResource`
+- **Utility types** (`util_models.rs`): Bitflag `Permissions`, `AccessControlStore`, `ResourceState`, `RuntimeState`, `DeletionInfo`, `HistoryEntry`, `ResourceEvent`, `FullResource`
 - ArangoDB `_key` mapping via `#[serde(rename = "_key")]` on `id` fields
 - ID prefixes: users `u_`, groups `g_`, service accounts `sa_`, pipeline accounts `pa_`
-- **`#[crit_resource]` proc macro** (`shared/derive/`): injects standard fields (`id`, `meta`, `acl`, `deletion`, `hash_code`) into resource structs; generates `{Name}Brief`, `to_brief()`, `brief_field_names()`, `compute_hash()`, `collection_name()`, `id_prefix()`
+- **`#[crit_resource]` proc macro** (`shared/derive/`): injects standard fields (`id`, `labels`, `annotations`, `state`, `acl`, `deletion`, `hash_code`) into resource structs; generates `{Name}Brief`, `to_brief()`, `brief_field_names()`, `compute_hash()`, `collection_name()`, `id_prefix()`
 
 ### Backend (`backend/`)
 

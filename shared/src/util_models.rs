@@ -78,18 +78,6 @@ impl AccessControlStore {
     }
 }
 
-/// Common metadata embedded in every resource.
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct ResourceMeta {
-    /// Queryable key-value pairs for `-l` label selectors.
-    pub labels: Labels,
-    /// Non-queryable freeform annotations.
-    pub annotations: Labels,
-    pub created_at: DateTime<Utc>,
-    pub created_by: Option<PrincipalId>,
-    pub updated_at: DateTime<Utc>,
-    pub updated_by: Option<PrincipalId>,
-}
 
 // ---------------------------------------------------------------------------
 // Soft deletion (replaces LifecycleState)
@@ -119,10 +107,20 @@ pub struct DisconnectedEdge {
 // Resource state (server-injected, not part of desired state)
 // ---------------------------------------------------------------------------
 
-/// Server-injected runtime state, NOT part of desired state or history.
-/// Used for computed/dynamic fields like last_login, member_count, etc.
+/// Server-managed audit timestamps. NOT part of desired state — excluded
+/// from hash computation and not user-modifiable.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct ResourceState {
+    pub created_at: DateTime<Utc>,
+    pub created_by: Option<PrincipalId>,
+    pub updated_at: DateTime<Utc>,
+    pub updated_by: Option<PrincipalId>,
+}
+
+/// Server-injected runtime data, NOT part of desired state or history.
+/// Used for computed/dynamic fields like last_login, member_count, etc.
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct RuntimeState {
     #[serde(flatten)]
     pub fields: HashMap<String, serde_json::Value>,
 }
@@ -175,9 +173,9 @@ pub struct FullResource {
     /// The resource itself (desired state + metadata), flattened.
     #[serde(flatten)]
     pub resource: serde_json::Value,
-    /// Server-injected runtime state.
+    /// Server-injected runtime data (member_count, last_login, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub state: Option<ResourceState>,
+    pub runtime_state: Option<RuntimeState>,
     /// Change history (oldest first).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<Vec<HistoryEntry>>,

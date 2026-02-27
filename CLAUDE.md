@@ -88,7 +88,7 @@ Stack architecture: nginx gateway (:3742) routes `/api/*` to the backend and `/*
   - `util_models.rs`: Bitflag-based `Permissions`, `AccessControlList` / `AccessControlStore` for ACL management, and super-permission constants
   - ArangoDB uses `_key` as the document ID field (note `#[serde(rename = "_key")]` on model ID fields)
   - User IDs are prefixed with `u_`, group IDs with `g_`
-- **`#[derive(Brief)]` proc macro** (`shared/derive/`): Marks struct fields with `#[brief]` to generate a `{Name}Brief` summary struct, `to_brief()`, and `brief_field_names()`. Used by controllers to produce list-view responses with only essential fields. Applied to `User` and `Group`.
+- **`#[crit_resource]` proc macro** (`shared/derive/`): Attribute macro that injects standard fields (`id`, `labels`, `annotations`, `state`, `acl`, `deletion`, `hash_code`) and generates `{Name}Brief` summary struct, `to_brief()`, `brief_field_names()`, `compute_hash()`, `collection_name()`, `id_prefix()`. `labels` and `annotations` are user-managed desired state; `state` (`ResourceState`) holds server-managed audit timestamps.
 
 ### Backend (`backend/`)
 - **Framework**: Axum 0.8 with Tokio async runtime

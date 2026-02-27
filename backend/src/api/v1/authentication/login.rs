@@ -5,31 +5,14 @@ use axum::{
     http::{HeaderMap, HeaderValue, header},
     response::IntoResponse,
 };
-use chrono::Utc;
+use serde_json::json;
 
 use crate::{
-    data_models,
     error::AppError,
-    schema::{Created, LoginRequest, LoginResponse, RegisterRequest, User},
+    schema::{Created, LoginRequest, LoginResponse, RegisterRequest},
     state::AppState,
     validation::naming::validate_username,
 };
-
-impl From<User> for data_models::User {
-    fn from(src: User) -> Self {
-        let mut meta = crit_shared::util_models::ResourceMeta::default();
-        meta.created_at = Utc::now();
-        meta.annotations
-            .insert("registered_at".to_string(), Utc::now().to_rfc3339());
-
-        Self {
-            id: format!("u_{}", src.username),
-            password_hash: src.password_hash,
-            meta,
-            ..Self::default()
-        }
-    }
-}
 
 #[utoipa::path(
     get,
@@ -46,25 +29,28 @@ pub async fn register(
         ));
     }
 
-    let hashed_password = app_state.auth.hash_password(&req.password)?;
+    let username = validate_username(&req.user).map_err(AppError::Validation)?;
+    let user_id = format!("u_{}", username);
 
-    let user = User {
-        username: validate_username(&req.user).map_err(AppError::Validation)?,
-        password_hash: hashed_password,
-    };
+    // Build a JSON body and go through the standard controller pipeline
+    let mut body = json!({
+        "id": &user_id,
+        "password": req.password,
+        "annotations": { "registered_at": chrono::Utc::now().to_rfc3339() },
+    });
 
-    let uid = user.username.clone();
+    let ctrl = app_state.controller.for_kind("users");
+    ctrl.prepare_create(&mut body, &user_id);
 
-    let user_model: data_models::User = user.into();
-    let user_id = user_model.id.clone();
+    let doc = ctrl.to_internal(body, &app_state.auth)?;
     app_state
         .db
-        .create_user(user_model, None)
+        .generic_create("users", doc)
         .await
         .map_err(|e| {
             let msg = e.to_string();
             if msg.contains("unique constraint") || msg.contains("1210") {
-                AppError::conflict(format!("User '{}' already exists", uid))
+                AppError::conflict(format!("User '{}' already exists", username))
             } else {
                 AppError::Internal(e)
             }
@@ -82,7 +68,7 @@ pub async fn register(
 
     log::info!(
         "Register event -> User with ID {:?} created: {}",
-        &uid,
+        &username,
         &req.user
     );
 

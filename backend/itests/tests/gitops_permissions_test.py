@@ -71,7 +71,7 @@ def test_regular_user_cannot_create_user(regular_user):
             "id": user_id,
             "password": "test123",
             "personal": {"name": "Blocked", "gender": "", "job_title": "", "manager": None},
-            "meta": {},
+
         },
         headers=auth_headers(regular_user["token"]),
     )
@@ -91,7 +91,7 @@ def test_admin_can_create_and_delete_user(admin_token):
             "id": user_id,
             "password": "test123",
             "personal": {"name": "Admin Test", "gender": "", "job_title": "", "manager": None},
-            "meta": {},
+
         },
         headers=headers,
     )
@@ -115,7 +115,7 @@ def test_regular_user_cannot_delete_user(regular_user, admin_token):
             "id": user_id,
             "password": "test123",
             "personal": {"name": "Del Test", "gender": "", "job_title": "", "manager": None},
-            "meta": {},
+
         },
         headers=admin_headers,
     )
@@ -145,7 +145,7 @@ def test_regular_user_cannot_update_user(regular_user, admin_token):
             "id": user_id,
             "password": "test123",
             "personal": {"name": "Update Test", "gender": "", "job_title": "", "manager": None},
-            "meta": {},
+
         },
         headers=admin_headers,
     )
@@ -157,7 +157,7 @@ def test_regular_user_cannot_update_user(regular_user, admin_token):
         json={
             "id": user_id,
             "personal": {"name": "Hacked", "gender": "", "job_title": "", "manager": None},
-            "meta": {},
+
         },
         headers=auth_headers(regular_user["token"]),
     )

@@ -37,7 +37,7 @@ def create_user(token: str, user_id: str) -> None:
             "id": user_id,
             "password": "testpw123",
             "personal": {"name": f"Paging User {user_id}", "gender": "", "job_title": "", "manager": None},
-            "meta": {},
+
         },
         headers=auth(token),
     )
@@ -202,7 +202,7 @@ def test_limit_1_works(root_token, paged_users):
 
 
 def test_brief_fields_in_paginated_response(root_token, paged_users):
-    """Paginated list items contain brief fields only (id, personal, meta)."""
+    """Paginated list items contain brief fields only (id, personal, labels, annotations)."""
     resp = requests.get(f"{URL_GLOBAL}/users?limit=5", headers=auth(root_token))
     assert resp.status_code == 200
 
@@ -211,8 +211,9 @@ def test_brief_fields_in_paginated_response(root_token, paged_users):
         assert "personal" in item
         assert "password_hash" not in item, "password_hash must never appear in list"
         # Non-brief fields must be absent
-        assert "created_at" not in item  # created_at is inside meta, not top-level
-        assert "meta" in item
+        assert "created_at" not in item  # created_at is inside state, not top-level
+        assert "labels" in item
+        assert "annotations" in item
 
 
 def test_brief_fields_in_unpaginated_response(root_token, paged_users):
@@ -224,5 +225,6 @@ def test_brief_fields_in_unpaginated_response(root_token, paged_users):
         assert "id" in item
         assert "personal" in item
         assert "password_hash" not in item
-        assert "created_at" not in item  # created_at is inside meta, not top-level
-        assert "meta" in item
+        assert "created_at" not in item  # created_at is inside state, not top-level
+        assert "labels" in item
+        assert "annotations" in item

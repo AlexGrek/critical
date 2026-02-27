@@ -48,16 +48,18 @@ pub struct DeletionInfo {
 }
 ```
 
-### 2b. Add `ResourceState` — server-injected runtime state
+### 2b. Add `RuntimeState` — server-injected runtime data
 ```rust
-/// Server-injected state, NOT part of desired-state or history.
+/// Server-injected runtime data, NOT part of desired-state or history.
+/// Used for computed/dynamic fields like last_login, member_count, etc.
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct ResourceState {
-    /// Server-computed fields (e.g., last_login, member_count)
+pub struct RuntimeState {
     #[serde(flatten)]
     pub fields: HashMap<String, Value>,
 }
 ```
+
+Note: `ResourceState` is now used for server-managed audit timestamps (`created_at`, `created_by`, `updated_at`, `updated_by`) — injected into every resource by the `#[crit_resource]` macro.
 
 ### 2c. Add `HistoryEntry` — stored in `resource_history` collection
 ```rust
@@ -94,12 +96,12 @@ pub struct ResourceEvent {
 /// Envelope for full resource representation with optional extras.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct FullResource {
-    /// The resource itself (desired state + metadata), flattened
+    /// The resource itself (desired state + audit state), flattened
     #[serde(flatten)]
     pub resource: Value,
-    /// Server-injected runtime state
+    /// Server-injected runtime data (member_count, last_login, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub state: Option<ResourceState>,
+    pub runtime_state: Option<RuntimeState>,
     /// Change history (oldest first)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub history: Option<Vec<HistoryEntry>>,
@@ -131,12 +133,14 @@ The macro **injects** these standard fields into the struct (at the top, before 
 ```rust
 pub struct User {
     // ---- injected by macro ----
-    #[brief]
     #[serde(rename = "_key")]
     pub id: PrincipalId,
-    #[brief]
     #[serde(default)]
-    pub meta: ResourceMeta,
+    pub labels: Labels,
+    #[serde(default)]
+    pub annotations: Labels,
+    #[serde(default)]
+    pub state: ResourceState,
     #[serde(default)]
     pub acl: AccessControlStore,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -151,7 +155,7 @@ pub struct User {
 ```
 
 The macro also **generates**:
-1. `{Name}Brief` struct (from `#[brief]` fields, including injected ones like `id` and `meta`)
+1. `{Name}Brief` struct (from `#[brief]` fields, including injected ones like `id`, `labels`, and `annotations`)
 2. `to_brief(&self) -> {Name}Brief`
 3. `brief_field_names() -> &'static [&'static str]`
 4. `compute_hash(&self) -> String` — FNV-1a over JSON of desired-state fields (everything except `hash_code` itself, `deletion`, `state`)

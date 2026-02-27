@@ -83,14 +83,16 @@ impl Parse for CritResourceArgs {
 /// ```
 ///
 /// ## Injected fields (at the top of the struct)
-/// - `id: PrincipalId` (with `#[brief]`, `#[serde(rename = "_key")]`)
-/// - `meta: ResourceMeta` (with `#[brief]`, `#[serde(default)]`)
+/// - `id: PrincipalId` (with `#[serde(rename = "_key")]`)
+/// - `labels: Labels` (with `#[serde(default)]`) — queryable key-value pairs
+/// - `annotations: Labels` (with `#[serde(default)]`) — freeform key-value pairs
 /// - `acl: AccessControlStore` (unless `no_acl`, with `#[serde(default)]`)
+/// - `state: ResourceState` (with `#[serde(default)]`) — server-managed audit timestamps
 /// - `deletion: Option<DeletionInfo>` (with `#[serde(default, skip_serializing_if = "Option::is_none")]`)
 /// - `hash_code: String` (with `#[serde(default)]`)
 ///
 /// ## Generated code
-/// - `{Name}Brief` struct (from `#[brief]` fields, including injected `id` and `meta`)
+/// - `{Name}Brief` struct (from `#[brief]` fields, including injected `id`, `labels`, `annotations`)
 /// - `impl {Name}` with: `to_brief()`, `brief_field_names()`, `compute_hash()`,
 ///   `with_computed_hash()`, `collection_name()`, `id_prefix()`
 #[proc_macro_attribute]
@@ -167,8 +169,12 @@ fn impl_crit_resource(args: &CritResourceArgs, input: &ItemStruct) -> syn::Resul
             #[serde(rename = "_key")]
             pub id: crate::util_models::PrincipalId,
             #[serde(default)]
-            pub meta: crate::util_models::ResourceMeta,
+            pub labels: crate::util_models::Labels,
+            #[serde(default)]
+            pub annotations: crate::util_models::Labels,
             #acl_field
+            #[serde(default)]
+            pub state: crate::util_models::ResourceState,
             #[serde(default, skip_serializing_if = "Option::is_none")]
             pub deletion: Option<crate::util_models::DeletionInfo>,
             #[serde(default)]
@@ -213,7 +219,10 @@ fn impl_crit_resource(args: &CritResourceArgs, input: &ItemStruct) -> syn::Resul
         #vis struct #brief_name {
             // injected brief fields
             pub id: crate::util_models::PrincipalId,
-            pub meta: crate::util_models::ResourceMeta,
+            #[serde(default)]
+            pub labels: crate::util_models::Labels,
+            #[serde(default)]
+            pub annotations: crate::util_models::Labels,
             // user-defined brief fields
             #(#user_brief_struct_fields,)*
         }
@@ -225,14 +234,15 @@ fn impl_crit_resource(args: &CritResourceArgs, input: &ItemStruct) -> syn::Resul
             pub fn to_brief(&self) -> #brief_name {
                 #brief_name {
                     id: self.id.clone(),
-                    meta: self.meta.clone(),
+                    labels: self.labels.clone(),
+                    annotations: self.annotations.clone(),
                     #(#user_brief_assignments,)*
                 }
             }
 
             /// Returns the field names included in the brief representation.
             pub fn brief_field_names() -> &'static [&'static str] {
-                &["id", "meta", #(#user_brief_name_strs,)*]
+                &["id", "labels", "annotations", #(#user_brief_name_strs,)*]
             }
 
             /// ArangoDB collection name for this resource kind.
@@ -253,6 +263,7 @@ fn impl_crit_resource(args: &CritResourceArgs, input: &ItemStruct) -> syn::Resul
                 if let Some(obj) = val.as_object_mut() {
                     obj.remove("hash_code");
                     obj.remove("deletion");
+                    obj.remove("state"); // server-managed audit, not desired state
                     // _id and _rev are ArangoDB internals, not desired state
                     obj.remove("_id");
                     obj.remove("_rev");

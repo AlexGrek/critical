@@ -9,7 +9,9 @@ Every entity in Critical is a **resource**. All resources share a standard set o
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | `String` | ArangoDB `_key` — e.g. `u_alice`, `g_engineering` |
-| `meta` | `ResourceMeta` | Created/updated timestamps, labels, annotations |
+| `labels` | `Labels` | Queryable key-value pairs (user-managed desired state) |
+| `annotations` | `Labels` | Non-queryable freeform strings (user-managed desired state) |
+| `state` | `ResourceState` | Server-managed audit: `created_at`, `created_by`, `updated_at`, `updated_by` |
 | `acl` | `AccessControlStore` | Per-document ACL _(omitted with `no_acl`)_ |
 | `deletion` | `Option<DeletionInfo>` | `null` = active, present = soft-deleted |
 | `hash_code` | `String` | FNV-1a hash of desired state (conflict detection) |
@@ -39,7 +41,7 @@ pub struct Group {
 | `prefix = "..."` | yes | ID prefix, e.g. `"g_"` |
 | `no_acl` | no | Skip injecting the `acl` field |
 
-**`#[brief]` attribute on fields:** marks the field to be included in the list (brief) response. `id` and `meta` are always included in briefs. Fields without `#[brief]` are only in the full (describe) response.
+**`#[brief]` attribute on fields:** marks the field to be included in the list (brief) response. `id`, `labels`, and `annotations` are always included in briefs. Fields without `#[brief]` are only in the full (describe) response.
 
 **What the macro generates:**
 
@@ -76,7 +78,7 @@ pub struct PersonalInfo {
 
 Users use `no_acl` — access to user resources is controlled by super-permissions only, not per-document ACL.
 
-**Brief fields:** `id`, `meta`, `personal`
+**Brief fields:** `id`, `labels`, `annotations`, `personal`
 
 ---
 
@@ -93,7 +95,7 @@ pub struct Group {
 
 Groups have a per-document ACL. Members of a group are stored in the `memberships` edge collection, not as a field on the group.
 
-**Brief fields:** `id`, `meta`, `name`
+**Brief fields:** `id`, `labels`, `annotations`, `name`
 
 ---
 
@@ -109,7 +111,7 @@ pub struct ServiceAccount {
 }
 ```
 
-**Brief fields:** `id`, `meta`, `name`
+**Brief fields:** `id`, `labels`, `annotations`, `name`
 
 ---
 
@@ -126,7 +128,7 @@ pub struct PipelineAccount {
 }
 ```
 
-**Brief fields:** `id`, `meta`, `name`
+**Brief fields:** `id`, `labels`, `annotations`, `name`
 
 ---
 
@@ -172,16 +174,16 @@ pub enum ProjectService {
 }
 ```
 
-**Brief fields:** `id`, `meta`, `name`
+**Brief fields:** `id`, `labels`, `annotations`, `name`
 
 ### Project — full document
 
 ```json
 {
   "id": "api-v2",
-  "meta": {
-    "labels": { "team": "platform" },
-    "annotations": {},
+  "labels": { "team": "platform" },
+  "annotations": {},
+  "state": {
     "created_at": "2026-02-24T10:00:00Z",
     "created_by": "u_alice",
     "updated_at": "2026-02-24T10:00:00Z",
@@ -220,9 +222,9 @@ pub enum ProjectService {
 ```json
 {
   "id": "g_engineering",
-  "meta": {
-    "labels": { "team": "platform" },
-    "annotations": {},
+  "labels": { "team": "platform" },
+  "annotations": {},
+  "state": {
     "created_at": "2026-02-23T10:00:00Z",
     "created_by": "u_alice",
     "updated_at": "2026-02-23T10:00:00Z",
@@ -247,7 +249,8 @@ pub enum ProjectService {
 ```json
 {
   "id": "g_engineering",
-  "meta": { "created_at": "...", "created_by": "u_alice", ... },
+  "labels": { "team": "platform" },
+  "annotations": {},
   "name": "engineering"
 }
 ```
@@ -257,9 +260,9 @@ pub enum ProjectService {
 ```json
 {
   "id": "u_alice",
-  "meta": {
-    "labels": {},
-    "annotations": { "registered_at": "2026-02-23T10:00:00Z" },
+  "labels": {},
+  "annotations": { "registered_at": "2026-02-23T10:00:00Z" },
+  "state": {
     "created_at": "2026-02-23T10:00:00Z",
     "created_by": null,
     "updated_at": "2026-02-23T10:00:00Z",
@@ -305,23 +308,26 @@ Resources are never hard-deleted. Deleting a resource sets its `deletion` field:
 
 ---
 
-## Metadata (`ResourceMeta`)
+## Labels, Annotations & State
 
-Every resource carries `meta`:
+Every resource carries top-level `labels`, `annotations` (user-managed desired state), and `state` (server-managed audit timestamps):
 
 ```json
 {
   "labels": { "env": "prod", "team": "platform" },
   "annotations": { "jira-link": "CRIT-123" },
-  "created_at": "2026-02-23T10:00:00Z",
-  "created_by": "u_alice",
-  "updated_at": "2026-02-23T11:00:00Z",
-  "updated_by": "u_bob"
+  "state": {
+    "created_at": "2026-02-23T10:00:00Z",
+    "created_by": "u_alice",
+    "updated_at": "2026-02-23T11:00:00Z",
+    "updated_by": "u_bob"
+  }
 }
 ```
 
-- **Labels**: queryable key-value pairs (future: `-l key=value` selector support).
-- **Annotations**: non-queryable freeform strings (links, notes, etc.).
+- **Labels**: queryable key-value pairs (future: `-l key=value` selector support). Part of desired state.
+- **Annotations**: non-queryable freeform strings (links, notes, etc.). Part of desired state.
+- **State** (`ResourceState`): server-managed audit timestamps. NOT part of desired state — excluded from hash computation and not user-modifiable.
 - `created_by` / `updated_by` are principal IDs (set automatically by the backend).
 
 ---
@@ -488,8 +494,8 @@ Authorization: Bearer <token>
 ```json
 {
   "items": [
-    { "id": "g_engineering", "meta": { ... }, "name": "engineering" },
-    { "id": "g_leads",       "meta": { ... }, "name": "leads" }
+    { "id": "g_engineering", "labels": { ... }, "annotations": {}, "name": "engineering" },
+    { "id": "g_leads",       "labels": { ... }, "annotations": {}, "name": "leads" }
   ]
 }
 ```
@@ -503,7 +509,7 @@ GET /api/v1/global/groups/g_engineering
 Authorization: Bearer <token>
 ```
 
-Returns the full document including `acl`, `meta`, `description`, `deletion`, `hash_code`.
+Returns the full document including `acl`, `labels`, `annotations`, `state`, `description`, `deletion`, `hash_code`.
 
 ### Update a group
 
@@ -552,19 +558,15 @@ Requires MODIFY on the target group's ACL.
 ### Constructing a resource
 
 ```rust
-use crit_shared::data_models::{Group, PersonalInfo};
-use crit_shared::util_models::ResourceMeta;
+use crit_shared::data_models::Group;
 
 let group = Group {
     id: "g_platform".to_string(),
-    meta: ResourceMeta {
-        created_at: chrono::Utc::now(),
-        created_by: Some("u_alice".to_string()),
-        ..Default::default()
-    },
+    labels: Default::default(),
+    annotations: Default::default(),
     name: "platform".to_string(),
     description: Some("Platform team".to_string()),
-    // acl, deletion, hash_code use Default (injected by macro)
+    // state, acl, deletion, hash_code use Default (injected by macro)
     ..Default::default()
 };
 ```
@@ -576,7 +578,7 @@ let group = Group {
 let brief = group.to_brief();
 
 // Field names for AQL KEEP() projections
-let fields = Group::brief_field_names(); // &["_key", "name", "acl", "meta"]
+let fields = Group::brief_field_names(); // &["_key", "labels", "annotations", "name", "acl"]
 
 // Collection and prefix info
 let coll = Group::collection_name(); // "groups"

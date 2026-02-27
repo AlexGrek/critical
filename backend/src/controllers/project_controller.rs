@@ -10,7 +10,7 @@ use crit_shared::data_models::Project;
 use crit_shared::util_models::{Permissions, super_permissions};
 
 use super::gitops_controller::{
-    KindController, filter_to_brief, parse_acl, standard_to_external, standard_to_internal,
+    KindController, filter_to_brief, inject_create_defaults, parse_acl, standard_to_external, standard_to_internal,
 };
 
 pub struct ProjectController {
@@ -116,7 +116,7 @@ impl KindController for ProjectController {
     }
 
     fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["_key", "name", "acl", "meta"])
+        Some(&["_key", "name", "acl", "labels", "annotations"])
     }
 
     fn super_permission(&self) -> Option<&str> {
@@ -128,29 +128,11 @@ impl KindController for ProjectController {
             "[ACL] ProjectController::prepare_create: user={}",
             user_id
         );
+        inject_create_defaults(body, user_id);
+
         let Some(obj) = body.as_object_mut() else {
             return;
         };
-
-        // Populate meta if not already set
-        let meta = obj.entry("meta").or_insert_with(|| json!({}));
-        if let Some(meta_obj) = meta.as_object_mut() {
-            meta_obj
-                .entry("created_at")
-                .or_insert_with(|| json!(chrono::Utc::now().to_rfc3339()));
-            meta_obj
-                .entry("created_by")
-                .or_insert_with(|| json!(user_id));
-            meta_obj
-                .entry("updated_at")
-                .or_insert_with(|| json!(chrono::Utc::now().to_rfc3339()));
-            meta_obj
-                .entry("labels")
-                .or_insert_with(|| json!({}));
-            meta_obj
-                .entry("annotations")
-                .or_insert_with(|| json!({}));
-        }
 
         // Ensure ACL exists with creator having ROOT permissions
         let acl = obj.entry("acl").or_insert_with(|| {
