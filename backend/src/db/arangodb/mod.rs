@@ -1226,6 +1226,27 @@ impl ArangoDb {
 
         Ok(())
     }
+
+    /// List all non-system ArangoDB collections in the current database.
+    /// Returns each collection as `{ "name": "...", "type": 2 }` (type 2 = document, 3 = edge).
+    pub async fn list_collections(&self) -> Result<Vec<Value>> {
+        let query = "FOR c IN _collections() FILTER !STARTS_WITH(c.name, '_') \
+                     RETURN { name: c.name, type: c.type }";
+        self.aql_str_query(query).await
+    }
+
+    /// Return every document in `collection` as raw JSON.
+    /// Rejects system collections (names starting with `_`).
+    pub async fn dump_collection(&self, collection: &str) -> Result<Vec<Value>> {
+        if collection.starts_with('_') {
+            return Err(anyhow!("access to system collections is not allowed"));
+        }
+        let query = "FOR doc IN @@col RETURN doc";
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+        ]);
+        self.aql(query, vars).await
+    }
 }
 
 /// Resolve a principal ID prefix to its ArangoDB collection name.

@@ -125,6 +125,33 @@ pub async fn token_auth_middleware_mgmt(
     }
 }
 
+/// Middleware that allows only users with ADM_GODMODE through.
+/// Must be placed after `jwt_auth_middleware` so that the user identity
+/// is already in request extensions.
+pub async fn godmode_middleware(
+    State(app_state): State<Arc<AppState>>,
+    req: Request<Body>,
+    next: Next,
+) -> Result<Response, AppError> {
+    let user_id = req
+        .extensions()
+        .get::<String>()
+        .cloned()
+        .ok_or_else(|| AppError::Authorization("Unauthorized".to_string()))?;
+
+    match app_state.has_godmode(&user_id).await {
+        Ok(true) => {
+            log::debug!("[GODMODE MIDDLEWARE] access granted for {}", user_id);
+            Ok(next.run(req).await)
+        }
+        Ok(false) => {
+            log::debug!("[GODMODE MIDDLEWARE] access denied for {}", user_id);
+            Err(AppError::Authorization("Forbidden: godmode required".to_string()))
+        }
+        Err(e) => Err(AppError::Internal(e)),
+    }
+}
+
 pub async fn apikey_auth_middleware_user(
     State(app_state): State<Arc<AppState>>,
     req: Request<Body>,

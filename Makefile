@@ -76,6 +76,8 @@ endef
 
 # Run everything: Rust unit/integration tests, CLI integration tests, Python API tests
 test:
+	@echo ">>> Building backend binary..."
+	@cargo build --bin axum-api
 	@echo ">>> Starting ephemeral ArangoDB..."
 	@$(COMPOSE) up -d
 	@$(MAKE) wait-db

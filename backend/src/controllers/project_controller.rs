@@ -116,7 +116,7 @@ impl KindController for ProjectController {
     }
 
     fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["_key", "name", "acl", "labels", "annotations"])
+        Some(&["_key", "name", "acl", "labels"])
     }
 
     fn super_permission(&self) -> Option<&str> {

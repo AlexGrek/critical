@@ -92,7 +92,7 @@ impl Parse for CritResourceArgs {
 /// - `hash_code: String` (with `#[serde(default)]`)
 ///
 /// ## Generated code
-/// - `{Name}Brief` struct (from `#[brief]` fields, including injected `id`, `labels`, `annotations`)
+/// - `{Name}Brief` struct (from `#[brief]` fields, including injected `id`, `labels`)
 /// - `impl {Name}` with: `to_brief()`, `brief_field_names()`, `compute_hash()`,
 ///   `with_computed_hash()`, `collection_name()`, `id_prefix()`
 #[proc_macro_attribute]
@@ -221,8 +221,6 @@ fn impl_crit_resource(args: &CritResourceArgs, input: &ItemStruct) -> syn::Resul
             pub id: crate::util_models::PrincipalId,
             #[serde(default)]
             pub labels: crate::util_models::Labels,
-            #[serde(default)]
-            pub annotations: crate::util_models::Labels,
             // user-defined brief fields
             #(#user_brief_struct_fields,)*
         }
@@ -235,14 +233,13 @@ fn impl_crit_resource(args: &CritResourceArgs, input: &ItemStruct) -> syn::Resul
                 #brief_name {
                     id: self.id.clone(),
                     labels: self.labels.clone(),
-                    annotations: self.annotations.clone(),
                     #(#user_brief_assignments,)*
                 }
             }
 
             /// Returns the field names included in the brief representation.
             pub fn brief_field_names() -> &'static [&'static str] {
-                &["id", "labels", "annotations", #(#user_brief_name_strs,)*]
+                &["id", "labels", #(#user_brief_name_strs,)*]
             }
 
             /// ArangoDB collection name for this resource kind.

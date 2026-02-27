@@ -164,9 +164,13 @@ pub fn standard_to_internal(mut body: Value) -> Value {
     body
 }
 
-/// Standard `to_external`: renames `_key` → `id`, strips `_id`/`_rev`.
+/// Standard `to_external`: renames `_key` → `id`, strips `_id`/`_rev`,
+/// and ensures `labels` defaults to `{}` for documents created before the field existed.
 pub fn standard_to_external(mut doc: Value) -> Value {
     rename_key_to_id(&mut doc);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.entry("labels").or_insert_with(|| json!({}));
+    }
     doc
 }
 

@@ -74,6 +74,22 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                         .put(api::v1::scoped_gitops::update_scoped_object)
                         .delete(api::v1::scoped_gitops::delete_scoped_object),
                 )
+                .nest(
+                    "/debug",
+                    Router::new()
+                        .route(
+                            "/collections",
+                            get(api::v1::debug::list_collections),
+                        )
+                        .route(
+                            "/collections/{name}",
+                            get(api::v1::debug::get_collection_data),
+                        )
+                        .layer(from_fn_with_state(
+                            shared_state.clone(),
+                            middleware::godmode_middleware,
+                        )),
+                )
                 .layer(from_fn_with_state(
                     shared_state.clone(),
                     middleware::jwt_auth_middleware,

@@ -97,7 +97,7 @@ impl KindController for UserController {
 
     fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
         // _key maps to "id" after to_external
-        Some(&["_key", "personal", "labels", "annotations"])
+        Some(&["_key", "personal", "labels"])
     }
 
     async fn after_delete(&self, key: &str, db: &ArangoDb) -> Result<(), AppError> {

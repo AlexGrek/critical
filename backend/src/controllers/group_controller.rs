@@ -173,7 +173,7 @@ impl KindController for GroupController {
 
     fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
         // _key → "id" after to_external; "acl" needed by can_read for ACL checks
-        Some(&["_key", "name", "acl", "labels", "annotations"])
+        Some(&["_key", "name", "acl", "labels"])
     }
 
     fn super_permission(&self) -> Option<&str> {

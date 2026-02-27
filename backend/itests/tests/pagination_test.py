@@ -202,7 +202,7 @@ def test_limit_1_works(root_token, paged_users):
 
 
 def test_brief_fields_in_paginated_response(root_token, paged_users):
-    """Paginated list items contain brief fields only (id, personal, labels, annotations)."""
+    """Paginated list items contain brief fields only (id, personal, labels)."""
     resp = requests.get(f"{URL_GLOBAL}/users?limit=5", headers=auth(root_token))
     assert resp.status_code == 200
 
@@ -213,7 +213,7 @@ def test_brief_fields_in_paginated_response(root_token, paged_users):
         # Non-brief fields must be absent
         assert "created_at" not in item  # created_at is inside state, not top-level
         assert "labels" in item
-        assert "annotations" in item
+        assert "annotations" not in item, "annotations must not appear in brief list"
 
 
 def test_brief_fields_in_unpaginated_response(root_token, paged_users):
@@ -227,4 +227,4 @@ def test_brief_fields_in_unpaginated_response(root_token, paged_users):
         assert "password_hash" not in item
         assert "created_at" not in item  # created_at is inside state, not top-level
         assert "labels" in item
-        assert "annotations" in item
+        assert "annotations" not in item, "annotations must not appear in brief list"
