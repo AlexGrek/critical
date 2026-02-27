@@ -42,7 +42,7 @@ npm start                   # Serve production build via react-router-serve
 | Tool              | Version   | Purpose                                        |
 | ----------------- | --------- | ---------------------------------------------- |
 | React             | 19        | UI framework                                   |
-| React Router      | 7.12      | Framework mode with SSR (NOT classic SPA mode)  |
+| React Router      | 7.12      | Framework mode with SSR (NOT classic SPA mode, but SPA after hydration)  |
 | Vite              | 7         | Build tool + dev server                        |
 | TailwindCSS       | 4         | Utility-first CSS (v4 syntax, NOT v3)          |
 | TypeScript        | 5.9       | Strict mode enabled                            |
