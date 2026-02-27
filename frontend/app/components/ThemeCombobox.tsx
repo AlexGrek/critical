@@ -6,14 +6,14 @@ import {
   ListboxOptions,
   Transition,
 } from "@headlessui/react";
-import { Check, ChevronDown, Moon, Sun, Eye, Heart, Flame, Droplets } from "lucide-react";
+import { Check, ChevronDown, Moon, Sun, Eye, Heart, Flame, Droplets, Monitor } from "lucide-react";
 import { useTheme, type Theme } from "~/contexts/ThemeContext";
 
 type ThemeOption = {
   value: Theme;
   label: string;
   description: string;
-  icon: typeof Sun | typeof Moon | typeof Eye | typeof Heart | typeof Flame | typeof Droplets;
+  icon: typeof Sun | typeof Moon | typeof Eye | typeof Heart | typeof Flame | typeof Droplets | typeof Monitor;
 };
 
 const themes: ThemeOption[] = [
@@ -52,6 +52,12 @@ const themes: ThemeOption[] = [
     label: "Grayscale",
     description: "Neutral gray, no color tint",
     icon: Eye,
+  },
+  {
+    value: "nostalgic95",
+    label: "Nostalgic 95",
+    description: "Windows 95/98 silver chrome, navy blue, zero roundness",
+    icon: Monitor,
   },
 ];
 

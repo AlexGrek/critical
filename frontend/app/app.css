@@ -76,7 +76,7 @@ body {
 
 /* Theme-specific styles */
 html.light,
-html:not(.dark):not(.grayscale):not(.barbie):not(.orange):not(.fusion) {
+html:not(.dark):not(.grayscale):not(.barbie):not(.orange):not(.fusion):not(.nostalgic95) {
   background-color: #ffffff;
   color: #111827;
   color-scheme: light;
@@ -227,6 +227,102 @@ html.grayscale select:focus,
 html.grayscale textarea:focus {
   outline: 2px solid #737373;
   outline-offset: 2px;
+}
+
+/* Nostalgic95: Windows 95/98 retro theme — silver chrome, navy title bars, no roundness */
+html.nostalgic95 {
+  background-color: #c0c0c0;
+  color: #000000;
+  color-scheme: light;
+
+  --font-sans: "MS Sans Serif", "Tahoma", "Arial", sans-serif;
+
+  /* Win95 silver gray palette */
+  --color-gray-50: #ffffff;
+  --color-gray-100: #dfdfdf;
+  --color-gray-200: #c0c0c0;
+  --color-gray-300: #a0a0a0;
+  --color-gray-400: #808080;
+  --color-gray-500: #606060;
+  --color-gray-600: #404040;
+  --color-gray-700: #303030;
+  --color-gray-800: #202020;
+  --color-gray-900: #101010;
+  --color-gray-950: #000000;
+
+  /* Navy blue primary — Windows 95 active title bar */
+  --color-primary-50: #e8eaf6;
+  --color-primary-100: #c5cae9;
+  --color-primary-200: #9fa8da;
+  --color-primary-300: #7986cb;
+  --color-primary-400: #1084d0;
+  --color-primary-500: #000080;
+  --color-primary-600: #00006e;
+  --color-primary-700: #00005c;
+  --color-primary-800: #00004a;
+  --color-primary-900: #000038;
+  --color-primary-950: #000028;
+
+  /* Zero roundness — Win95 had perfectly square corners everywhere */
+  --radius-component: 0px;
+  --radius-component-lg: 0px;
+  --radius-component-xl: 0px;
+}
+
+/* Classic Win95 3D raised button effect */
+html.nostalgic95 button,
+html.nostalgic95 [role="button"] {
+  box-shadow:
+    inset -1px -1px 0 #808080,
+    inset 1px 1px 0 #ffffff,
+    inset -2px -2px 0 #404040,
+    inset 2px 2px 0 #dfdfdf;
+  border-radius: 0 !important;
+  transition: none !important;
+}
+
+html.nostalgic95 button:active,
+html.nostalgic95 [role="button"]:active {
+  box-shadow:
+    inset 1px 1px 0 #808080,
+    inset -1px -1px 0 #ffffff,
+    inset 2px 2px 0 #404040,
+    inset -2px -2px 0 #dfdfdf;
+}
+
+/* Win95 sunken inset for input fields */
+html.nostalgic95 input,
+html.nostalgic95 textarea,
+html.nostalgic95 select {
+  box-shadow:
+    inset 1px 1px 0 #808080,
+    inset -1px -1px 0 #ffffff,
+    inset 2px 2px 0 #404040,
+    inset -2px -2px 0 #dfdfdf;
+  border-radius: 0 !important;
+  background-color: #ffffff;
+}
+
+/* Win95 dotted focus outline (classic style) */
+html.nostalgic95 button:focus,
+html.nostalgic95 input:focus,
+html.nostalgic95 select:focus,
+html.nostalgic95 textarea:focus {
+  outline: 1px dotted #000000;
+  outline-offset: -3px;
+  box-shadow:
+    inset -1px -1px 0 #808080,
+    inset 1px 1px 0 #ffffff,
+    inset -2px -2px 0 #404040,
+    inset 2px 2px 0 #dfdfdf;
+}
+
+/* No transitions — Win95 was instant */
+html.nostalgic95 *,
+html.nostalgic95 *::before,
+html.nostalgic95 *::after {
+  transition-duration: 0.001ms !important;
+  animation-duration: 0.001ms !important;
 }
 
 /* Keyframe animations */
