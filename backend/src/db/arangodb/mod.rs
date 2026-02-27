@@ -1228,11 +1228,18 @@ impl ArangoDb {
     }
 
     /// List all non-system ArangoDB collections in the current database.
-    /// Returns each collection as `{ "name": "...", "type": 2 }` (type 2 = document, 3 = edge).
+    /// Returns each collection as `{ "name": "..." }`.
     pub async fn list_collections(&self) -> Result<Vec<Value>> {
-        let query = "FOR c IN _collections() FILTER !STARTS_WITH(c.name, '_') \
-                     RETURN { name: c.name, type: c.type }";
-        self.aql_str_query(query).await
+        let collections = self
+            .db
+            .accessible_collections()
+            .await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        Ok(collections
+            .into_iter()
+            .filter(|c| !c.is_system)
+            .map(|c| json!({ "name": c.name }))
+            .collect())
     }
 
     /// Return every document in `collection` as raw JSON.

@@ -105,7 +105,9 @@ pub async fn create_object(
     log::debug!("[HANDLER] create_object: user={}, kind={}", user_id, kind);
     validate_kind(&kind)?;
 
-    let id = body
+    // Read the raw id for the auth check — to_internal hasn't run yet so the
+    // id may not have its kind prefix (e.g. "qqq" before becoming "g_qqq").
+    let raw_id = body
         .get("id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| AppError::bad_request("missing 'id' field in request body"))?
@@ -115,17 +117,26 @@ pub async fn create_object(
 
     let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
     let allowed = godmode || ctrl.can_create(&user_id, &body).await?;
-    log::debug!("[HANDLER] create_object: can_create={}, godmode={}, user={}, kind={}, id={}", allowed, godmode, user_id, kind, id);
+    log::debug!("[HANDLER] create_object: can_create={}, godmode={}, user={}, kind={}, raw_id={}", allowed, godmode, user_id, kind, raw_id);
     if !allowed {
         log::debug!("[HANDLER] create_object: DENIED, returning 404");
-        return Err(AppError::not_found(format!("{}/{}", kind, id)));
+        return Err(AppError::not_found(format!("{}/{}", kind, raw_id)));
     }
 
     ctrl.prepare_create(&mut body, &user_id);
 
     state.db.ensure_collection(&kind).await?;
 
+    // to_internal may transform the id (e.g. add a kind prefix, rename to _key).
+    // Extract the final _key from the transformed document so that after_create,
+    // error messages, and the success response all use the canonical stored key.
     let doc = ctrl.to_internal(body, &state.auth)?;
+    let final_id = doc
+        .get("_key")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&raw_id)
+        .to_string();
+
     state
         .db
         .generic_create(&kind, doc)
@@ -133,15 +144,15 @@ pub async fn create_object(
         .map_err(|e| {
             let msg = e.to_string();
             if msg.contains("unique constraint") || msg.contains("1210") {
-                AppError::conflict(format!("{}/{} already exists", kind, id))
+                AppError::conflict(format!("{}/{} already exists", kind, final_id))
             } else {
                 AppError::Internal(e)
             }
         })?;
 
-    ctrl.after_create(&id, &user_id, &state.db).await?;
+    ctrl.after_create(&final_id, &user_id, &state.db).await?;
 
-    Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": id }))))
+    Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": final_id }))))
 }
 
 /// GET /global/{kind}/{id} — get a single object.

@@ -1,13 +1,28 @@
 import type { Route } from "./+types/groups";
 import { useLoaderData, Link, useFetcher, useRevalidator } from "react-router";
-import { Button, MorphModal, Card, CardTitle, CardDescription } from "~/components";
+import {
+  Button,
+  Input,
+  MorphModal,
+  Card,
+  CardTitle,
+  H1,
+  H2,
+  Paragraph,
+} from "~/components";
 import { useState, useEffect } from "react";
 
-// TypeScript types matching the Rust models
+// ---------------------------------------------------------------------------
+// API types — match the actual shapes returned by the backend
+// ---------------------------------------------------------------------------
 
+/** An ACL entry granting a set of permissions to a list of principals. */
 interface AccessControlList {
+  /** Bitfield of Permissions flags (FETCH=1, LIST=2, NOTIFY=4, CREATE=8, MODIFY=16). */
   permissions: number;
   principals: string[];
+  /** Optional scope, e.g. "tasks" or "*". Absent means wildcard. */
+  scope?: string;
 }
 
 interface AccessControlStore {
@@ -15,31 +30,64 @@ interface AccessControlStore {
   last_mod_date: string;
 }
 
-interface Group {
+/** Server-managed audit timestamps injected by the #[crit_resource] macro. */
+interface ResourceState {
+  created_at: string;
+  created_by?: string;
+  updated_at: string;
+  updated_by?: string;
+}
+
+interface DeletionInfo {
+  deleted_at: string;
+  deleted_by: string;
+}
+
+/**
+ * Shape returned by the list endpoint (GET /v1/global/groups).
+ * Only brief fields: id, name, labels — per Group::brief_field_names() in the Rust macro.
+ */
+interface GroupBrief {
   id: string;
   name: string;
-  description?: string;
-  acl: AccessControlStore;
   labels: Record<string, string>;
+}
+
+/**
+ * Full shape returned by the single GET endpoint (GET /v1/global/groups/{id}).
+ * Includes all fields injected by the #[crit_resource] macro.
+ */
+export interface GroupFull extends GroupBrief {
+  description?: string;
   annotations: Record<string, string>;
+  acl: AccessControlStore;
+  state: ResourceState;
+  deletion?: DeletionInfo;
+  hash_code: string;
 }
 
 interface GroupsResponse {
-  items: Group[];
+  items: GroupBrief[];
 }
+
+// ---------------------------------------------------------------------------
+// Meta
+// ---------------------------------------------------------------------------
 
 export function meta({}: Route.MetaArgs) {
   return [
     { title: "{!} Groups - Critical" },
-    { name: "description", content: "View all available groups" },
+    { name: "description", content: "View and manage all groups in the system" },
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Loader
+// ---------------------------------------------------------------------------
+
 export async function loader({ request }: Route.LoaderArgs) {
-  // Fetch groups from the API
   const response = await fetch("http://localhost:3742/api/v1/global/groups", {
     headers: {
-      // Cookie will be automatically included by the browser
       Cookie: request.headers.get("Cookie") || "",
     },
   });
@@ -54,6 +102,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   const data: GroupsResponse = await response.json();
   return { groups: data.items };
 }
+
+// ---------------------------------------------------------------------------
+// Action
+// ---------------------------------------------------------------------------
 
 export async function action({ request }: Route.ActionArgs) {
   const formData = await request.formData();
@@ -87,6 +139,24 @@ export async function action({ request }: Route.ActionArgs) {
   return { error: "Unknown action" };
 }
 
+// ---------------------------------------------------------------------------
+// Client-side validation (mirrors backend validate_group_id)
+// ---------------------------------------------------------------------------
+
+function validateGroupId(id: string): string | null {
+  // Strip g_ prefix if the user typed it — backend strips it too
+  const bare = id.startsWith("g_") ? id.slice(2) : id;
+  if (bare.length < 2) return "Group ID must be at least 2 characters (excluding g_ prefix)";
+  if (bare.length > 63) return "Group ID must be at most 63 characters (excluding g_ prefix)";
+  if (!/^[a-z0-9_]+$/.test(bare)) return "Group ID can only contain lowercase letters, numbers, and underscores";
+  if (/^[0-9]/.test(bare)) return "Group ID cannot start with a digit";
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Page component
+// ---------------------------------------------------------------------------
+
 export default function Groups() {
   const { groups } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
@@ -94,26 +164,6 @@ export default function Groups() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [formData, setFormData] = useState({ name: "", id: "" });
   const [error, setError] = useState("");
-
-  const validateGroupId = (id: string): string | null => {
-    if (id.length < 2) {
-      return "Group ID must be at least 2 characters";
-    }
-
-    if (id.length > 63) {
-      return "Group ID must be at most 63 characters";
-    }
-
-    if (!/^[a-z0-9_]+$/.test(id)) {
-      return "Group ID can only contain lowercase letters, numbers, and underscores";
-    }
-
-    if (/^[0-9]/.test(id)) {
-      return "Group ID cannot start with a digit";
-    }
-
-    return null;
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,11 +189,9 @@ export default function Groups() {
     form.append("intent", "create");
     form.append("name", formData.name);
     form.append("id", formData.id);
-
     fetcher.submit(form, { method: "POST" });
   };
 
-  // Handle successful creation
   useEffect(() => {
     if (fetcher.data?.success && isModalOpen) {
       setIsModalOpen(false);
@@ -153,7 +201,6 @@ export default function Groups() {
     }
   }, [fetcher.data, isModalOpen, revalidator]);
 
-  // Handle errors from action
   useEffect(() => {
     if (fetcher.data?.error) {
       setError(fetcher.data.error);
@@ -161,14 +208,15 @@ export default function Groups() {
   }, [fetcher.data]);
 
   return (
-    <div className="min-h-screen bg-gray-950 px-4 py-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 py-8">
       <div className="max-w-6xl mx-auto">
+        {/* Page header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">{"{!} "}Groups</h1>
-            <p className="text-gray-400">
+            <H1 data-testid="groups-page-heading">{"{!} "}Groups</H1>
+            <Paragraph variant="muted" data-testid="groups-description">
               View and manage all groups in the system
-            </p>
+            </Paragraph>
           </div>
           <div className="flex gap-3">
             <MorphModal
@@ -178,7 +226,7 @@ export default function Groups() {
                 </Button>
               }
               modalWidth={500}
-              modalHeight={400}
+              modalHeight={420}
               isOpen={isModalOpen}
               onOpenChange={(open) => {
                 setIsModalOpen(open);
@@ -190,14 +238,14 @@ export default function Groups() {
             >
               {(close) => (
                 <div className="flex flex-col h-full">
-                  <h2 className="text-2xl font-bold text-white mb-4">
+                  <H2 data-testid="create-group-modal-title" className="mb-4">
                     Create New Group
-                  </h2>
+                  </H2>
                   <form onSubmit={handleSubmit} className="flex-1 flex flex-col">
                     <div className="flex-1 space-y-4">
                       {error && (
                         <div
-                          className="bg-red-500/10 border border-red-500/50 rounded-(--radius-component) p-3 text-red-400 text-sm"
+                          className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/50 rounded-(--radius-component) p-3 text-red-600 dark:text-red-400 text-sm"
                           data-testid="create-group-error"
                         >
                           {error}
@@ -207,11 +255,11 @@ export default function Groups() {
                       <div>
                         <label
                           htmlFor="group-name"
-                          className="block text-sm font-medium text-gray-300 mb-2"
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                         >
                           Group Name
                         </label>
-                        <input
+                        <Input
                           id="group-name"
                           type="text"
                           data-testid="group-name-input"
@@ -219,7 +267,6 @@ export default function Groups() {
                           onChange={(e) =>
                             setFormData({ ...formData, name: e.target.value })
                           }
-                          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-(--radius-component) text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
                           placeholder="Enter group name"
                           required
                         />
@@ -228,31 +275,39 @@ export default function Groups() {
                       <div>
                         <label
                           htmlFor="group-id"
-                          className="block text-sm font-medium text-gray-300 mb-2"
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                         >
                           Group ID
                         </label>
-                        <input
+                        <Input
                           id="group-id"
                           type="text"
+                          monospace
                           data-testid="group-id-input"
                           value={formData.id}
-                          onChange={(e) => {
-                            const value = e.target.value.toLowerCase();
-                            setFormData({ ...formData, id: value });
-                          }}
-                          className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-(--radius-component) text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              id: e.target.value.toLowerCase(),
+                            })
+                          }
                           placeholder="my_group"
                           required
                         />
-                        <p className="mt-1 text-xs text-gray-500">
-                          2-63 characters, lowercase letters, numbers, and underscores
-                          only (g_ prefix will be added automatically)
-                        </p>
+                        <Paragraph
+                          variant="subtle"
+                          className="mt-1 text-xs"
+                          data-testid="group-id-hint"
+                        >
+                          2–63 characters, lowercase letters, numbers, and
+                          underscores only. The{" "}
+                          <span className="font-mono">g_</span> prefix is added
+                          automatically.
+                        </Paragraph>
                       </div>
                     </div>
 
-                    <div className="flex gap-3 pt-4 border-t border-gray-800">
+                    <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
                       <Button
                         type="submit"
                         variant="primary"
@@ -276,66 +331,78 @@ export default function Groups() {
                 </div>
               )}
             </MorphModal>
-            <Link to="/">
+
+            <Link to="/" data-testid="back-to-home-link">
               <Button variant="secondary">Back to Home</Button>
             </Link>
           </div>
         </div>
 
+        {/* Content */}
         {groups.length === 0 ? (
-          <Card className="p-12 text-center">
+          <Card data-testid="groups-empty-state" className="p-12 text-center">
             <CardTitle className="text-lg">No groups found</CardTitle>
-            <CardDescription className="mt-2">
+            <Paragraph variant="muted" className="mt-2">
               Groups will appear here once they are created
-            </CardDescription>
+            </Paragraph>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div
+            data-testid="groups-grid"
+            className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+          >
             {groups.map((group) => (
-              <Card
-                key={group.id}
-                data-testid={`group-card-${group.id}`}
-                className="p-6 hover:border-gray-700 transition-colors"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <h2 className="text-xl font-semibold text-white mb-1">
-                      {group.name}
-                    </h2>
-                    <p className="text-sm text-gray-500 font-mono">{group.id}</p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-400">Access Rules:</span>
-                    <span className="text-gray-300 font-medium">
-                      {group.acl.list.length}
-                    </span>
-                  </div>
-                  {group.acl.list.length > 0 && (
-                    <div className="mt-3 pt-3 border-t border-gray-800">
-                      <p className="text-xs text-gray-500 mb-2">Principals:</p>
-                      <div className="flex flex-wrap gap-1">
-                        {group.acl.list.flatMap((acl) =>
-                          acl.principals.map((principal, idx) => (
-                            <span
-                              key={`${principal}-${idx}`}
-                              className="inline-flex items-center px-2 py-1 rounded-(--radius-component) text-xs font-mono bg-gray-800 text-gray-300"
-                            >
-                              {principal}
-                            </span>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </Card>
+              <GroupCard key={group.id} group={group} />
             ))}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Group card
+// ---------------------------------------------------------------------------
+
+function GroupCard({ group }: { group: GroupBrief }) {
+  const labelEntries = Object.entries(group.labels);
+
+  return (
+    <Card
+      data-testid={`group-card-${group.id}`}
+      className="p-6 hover:border-gray-300 dark:hover:border-gray-700 transition-colors"
+    >
+      <div className="mb-3">
+        <CardTitle className="text-lg mb-1">{group.name}</CardTitle>
+        <span
+          data-testid={`group-id-label-${group.id}`}
+          className="text-sm text-gray-500 dark:text-gray-400 font-mono"
+        >
+          {group.id}
+        </span>
+      </div>
+
+      {labelEntries.length > 0 && (
+        <div
+          className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-800"
+          data-testid={`group-labels-${group.id}`}
+        >
+          <Paragraph variant="subtle" className="text-xs mb-2">
+            Labels
+          </Paragraph>
+          <div className="flex flex-wrap gap-1">
+            {labelEntries.map(([key, value]) => (
+              <span
+                key={key}
+                className="inline-flex items-center px-2 py-0.5 rounded-(--radius-component) text-xs font-mono bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+              >
+                {key}={value}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }
