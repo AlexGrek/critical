@@ -51,7 +51,8 @@
       "Bash(docker compose -f /Users/vedmedik/dev/critical/docker-compose.yml down -v)",
       "Bash(ps -p 82620 -o command=)",
       "Bash(cargo expand --package crit-shared)",
-      "Read(//dev/**)"
+      "Read(//dev/**)",
+      "Read(//private/tmp/**)"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"
