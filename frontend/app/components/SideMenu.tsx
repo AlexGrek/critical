@@ -22,6 +22,7 @@ interface SideMenuProps {
   isOpen: boolean;
   isDesktop: boolean;
   onClose: () => void;
+  topOffset: number;
 }
 
 type NavItem =
@@ -120,7 +121,7 @@ function NavLink({
   );
 }
 
-export function SideMenu({ isOpen, isDesktop, onClose }: SideMenuProps) {
+export function SideMenu({ isOpen, isDesktop, onClose, topOffset }: SideMenuProps) {
   const location = useLocation();
 
   return (
@@ -145,10 +146,10 @@ export function SideMenu({ isOpen, isDesktop, onClose }: SideMenuProps) {
       {/* Sidebar panel */}
       <motion.aside
         initial={false}
-        animate={{ x: isOpen ? 0 : -280 }}
+        animate={{ x: isOpen ? 0 : -280, top: topOffset }}
         transition={{ type: "spring", stiffness: 300, damping: 32 }}
         className={cn(
-          "fixed top-14 left-0 bottom-0 w-64 z-40",
+          "fixed left-0 bottom-0 w-64 z-40",
           "bg-(--color-nav-bg)",
           "border-r border-(--color-nav-border)",
           "flex flex-col overflow-hidden"

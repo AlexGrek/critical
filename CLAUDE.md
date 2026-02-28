@@ -165,7 +165,8 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
   - Grayscale theme: NO roundness (completely sharp, brutalist aesthetic)
   - Light/Dark themes: Standard roundness
   - CSS variables: `--radius-component`, `--radius-component-lg`, `--radius-component-xl`
-- **Current routes**:
+- **App layout** (`frontend/app/layouts/app-layout.tsx`): wraps all routes — fixed `TopBar` (height 56px, z-50) with animated `{!}` logo toggle, collapsible `SideMenu` (width 256px, slides in/out with Framer Motion). Desktop: sidebar open by default, content shifts right. Mobile: sidebar overlays with backdrop.
+- **Current routes** (all wrapped by `app-layout.tsx`):
   - `/` (home)
   - `/sign-in`, `/sign-up` (authentication)
   - `/groups` (groups listing with ACL display)

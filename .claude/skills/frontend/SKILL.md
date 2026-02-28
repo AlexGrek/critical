@@ -271,6 +271,8 @@ Always use the project's custom components instead.
 | `ScrollableLogWindow` | `~/components` | Terminal-style log viewer with auto-scroll |
 | `LogoCritical`, `LogoCriticalAnimated` | `~/components` | `{!}` branding logo |
 | `ThemeCombobox` | `~/components` | Theme picker dropdown |
+| `TopBar` | `~/components` | Fixed app header (h-14, z-50) with animated logo toggle and user button. Props: `isOpen`, `onToggle` |
+| `SideMenu` | `~/components` | Collapsible nav sidebar (w-64) with sections, active-link detection, theme picker at bottom. Props: `isOpen`, `isDesktop`, `onClose` |
 
 ### Component Patterns
 
@@ -409,6 +411,8 @@ frontend/
 │   │   ├── sign-up.tsx
 │   │   ├── groups.tsx
 │   │   └── ui-gallery.tsx
+│   ├── layouts/
+│   │   └── app-layout.tsx         # Shell: TopBar + SideMenu + <Outlet />; wraps all routes
 │   ├── components/                # Custom components (always use these!)
 │   │   ├── index.ts               # Barrel export
 │   │   ├── Button.tsx
@@ -421,7 +425,9 @@ frontend/
 │   │   ├── CodeBlock.tsx
 │   │   ├── ScrollableLogWindow.tsx
 │   │   ├── LogoCritical.tsx
-│   │   └── ThemeCombobox.tsx
+│   │   ├── ThemeCombobox.tsx
+│   │   ├── TopBar.tsx             # Fixed top bar; uses --color-topbar-* CSS vars
+│   │   └── SideMenu.tsx           # Collapsible sidebar; uses --color-nav-* CSS vars
 │   ├── contexts/
 │   │   └── ThemeContext.tsx        # Theme state management
 │   └── lib/

@@ -64,8 +64,8 @@ export default function SignIn() {
         <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 translate-y-1/2 w-75 h-50 rounded-full bg-primary-400/4 blur-3xl" />
       </div>
 
-      {/* Theme switcher */}
-      <div className="fixed top-4 right-4 z-10">
+      {/* Theme switcher — positioned below the topbar (max h-14 = 56px) */}
+      <div className="fixed top-16 right-4 z-10">
         <ThemeCombobox />
       </div>
 

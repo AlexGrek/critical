@@ -1,10 +1,8 @@
-import { Fragment } from "react";
 import {
   Listbox,
   ListboxButton,
   ListboxOption,
   ListboxOptions,
-  Transition,
 } from "@headlessui/react";
 import { Check, ChevronDown, Moon, Sun, Eye, Heart, Flame, Droplets, Monitor } from "lucide-react";
 import { useTheme, type Theme } from "~/contexts/ThemeContext";
@@ -72,7 +70,7 @@ export function ThemeCombobox() {
         if (value) setTheme(value.value);
       }}
     >
-      <div className="relative w-full max-w-xs">
+      <div className="relative w-full">
         <ListboxButton className="relative w-full cursor-pointer rounded-(--radius-component) border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 py-2.5 pl-10 pr-10 text-left text-sm text-gray-900 dark:text-gray-50 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 transition-colors">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3">
             <selectedTheme.icon
@@ -88,13 +86,11 @@ export function ThemeCombobox() {
             />
           </span>
         </ListboxButton>
-        <Transition
-          as={Fragment}
-          leave="transition ease-in duration-100"
-          leaveFrom="opacity-100"
-          leaveTo="opacity-0"
+        <ListboxOptions
+          anchor="top"
+          transition
+          className="z-[100] w-[var(--button-width)] min-w-64 max-h-80 overflow-y-auto rounded-(--radius-component) bg-white dark:bg-gray-900 shadow-xl ring-1 ring-black/5 dark:ring-white/10 focus:outline-none [--anchor-gap:8px] transition duration-100 ease-in data-leave:data-closed:opacity-0"
         >
-          <ListboxOptions className="absolute z-50 mt-2 w-full min-w-[320px] overflow-hidden rounded-(--radius-component) bg-white dark:bg-gray-900 shadow-lg ring-1 ring-black/5 dark:ring-white/10 focus:outline-none">
             {themes.map((themeOption) => (
               <ListboxOption
                 key={themeOption.value}
@@ -143,8 +139,7 @@ export function ThemeCombobox() {
                 )}
               </ListboxOption>
             ))}
-          </ListboxOptions>
-        </Transition>
+        </ListboxOptions>
       </div>
     </Listbox>
   );

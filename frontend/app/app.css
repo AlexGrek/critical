@@ -185,22 +185,62 @@ html.fusion {
   --color-nav-item-active-text: #0c4a6e;
 }
 
-/* Orange dark: orange-tinted dark theme (uses .dark for layout) */
-html.orange {
-  background-color: #0f0a05;
-  color: #fff7ed;
+/* Dark theme: neutral dark surfaces, green reserved for accents/active states only */
+html.dark {
+  background-color: #0f0f0f;
+  color: #e5e5e5;
   color-scheme: dark;
-  --color-gray-950: #0a0704;
-  --color-gray-900: #141008;
-  --color-gray-800: #1e180d;
-  --color-gray-700: #352a14;
-  --color-gray-600: #4a3c1f;
-  --color-gray-500: #6b5a32;
-  --color-gray-400: #a3936d;
-  --color-gray-300: #c9bc9e;
-  --color-gray-200: #e5dfcf;
-  --color-gray-100: #f2efe5;
-  --color-gray-50: #faf8f4;
+  /* Neutral dark grays — no green tint on surfaces */
+  --color-gray-950: #080808;
+  --color-gray-900: #111111;
+  --color-gray-800: #1c1c1c;
+  --color-gray-700: #2a2a2a;
+  --color-gray-600: #3d3d3d;
+  --color-gray-500: #525252;
+  --color-gray-400: #737373;
+  --color-gray-300: #a3a3a3;
+  --color-gray-200: #d4d4d4;
+  --color-gray-100: #e5e5e5;
+  --color-gray-50: #f5f5f5;
+
+  /* Dark theme: standard roundness */
+  --radius-component: var(--radius-md);
+  --radius-component-lg: var(--radius-lg);
+  --radius-component-xl: var(--radius-xl);
+
+  /* Nav: neutral dark — green only for active item */
+  --color-topbar-bg: #141414;
+  --color-topbar-text: #d4d4d4;
+  --color-topbar-item-hover: #1f1f1f;
+  --color-nav-bg: #0f0f0f;
+  --color-nav-border: #242424;
+  --color-nav-text: #d4d4d4;
+  --color-nav-text-muted: #737373;
+  --color-nav-item-hover: #1a1a1a;
+  --color-nav-item-hover-text: #e5e5e5;
+  --color-nav-item-active: #064e3b;
+  --color-nav-item-active-text: #6ee7b7;
+}
+
+/* Orange dark: neutral dark base so vivid orange accents pop.
+   MUST come after html.dark — orange adds both .orange and .dark to <html>,
+   so html.dark also matches; orange must be later to win the cascade. */
+html.orange {
+  background-color: #111111;
+  color: #f0f0f0;
+  color-scheme: dark;
+  /* Neutral grays — no warm tint; orange comes only from primary */
+  --color-gray-950: #080808;
+  --color-gray-900: #111111;
+  --color-gray-800: #1c1c1c;
+  --color-gray-700: #2a2a2a;
+  --color-gray-600: #3d3d3d;
+  --color-gray-500: #525252;
+  --color-gray-400: #737373;
+  --color-gray-300: #a3a3a3;
+  --color-gray-200: #d4d4d4;
+  --color-gray-100: #e5e5e5;
+  --color-gray-50: #f5f5f5;
   --color-primary-50: #fff7ed;
   --color-primary-100: #ffedd5;
   --color-primary-200: #fed7aa;
@@ -214,58 +254,22 @@ html.orange {
   --color-primary-950: #431407;
 
   /* Orange theme: VERY MINIMAL roundness - sharp, utilitarian */
-  --radius-component: var(--radius-sm);       /* 0.25rem = very minimal */
-  --radius-component-lg: var(--radius-sm);    /* even large elements minimal */
-  --radius-component-xl: var(--radius-sm);    /* modals also minimal */
+  --radius-component: var(--radius-sm);
+  --radius-component-lg: var(--radius-sm);
+  --radius-component-xl: var(--radius-sm);
 
-  /* Nav / topbar colors */
-  --color-topbar-bg: #200f00;
-  --color-topbar-text: #fed7aa;
-  --color-topbar-item-hover: #3d2200;
-  --color-nav-bg: #150b00;
-  --color-nav-border: #3d2200;
-  --color-nav-text: #fed7aa;
-  --color-nav-text-muted: #fb923c;
-  --color-nav-item-hover: #1f1200;
-  --color-nav-item-hover-text: #fed7aa;
-  --color-nav-item-active: #7c2d12;
-  --color-nav-item-active-text: #fed7aa;
-}
-
-/* Green-tinted dark theme: primary is green; override grays so surfaces/borders match */
-html.dark {
-  background-color: #07120e;
-  color: #ecfdf5;
-  color-scheme: dark;
-  --color-gray-950: #050a08;
-  --color-gray-900: #0f1412;
-  --color-gray-800: #1a231e;
-  --color-gray-700: #2d3a34;
-  --color-gray-600: #3d4d45;
-  --color-gray-500: #5c6b62;
-  --color-gray-400: #9caa9f;
-  --color-gray-300: #c5cfc7;
-  --color-gray-200: #dde5df;
-  --color-gray-100: #ecf3ee;
-  --color-gray-50: #f4f9f5;
-
-  /* Dark theme: standard roundness */
-  --radius-component: var(--radius-md);
-  --radius-component-lg: var(--radius-lg);
-  --radius-component-xl: var(--radius-xl);
-
-  /* Nav / topbar colors */
-  --color-topbar-bg: #0d1b13;
-  --color-topbar-text: #d1fae5;
-  --color-topbar-item-hover: #1a2e22;
-  --color-nav-bg: #0a1510;
-  --color-nav-border: #1a2e22;
-  --color-nav-text: #d1fae5;
-  --color-nav-text-muted: #6ee7b7;
-  --color-nav-item-hover: #0f1f18;
-  --color-nav-item-hover-text: #d1fae5;
-  --color-nav-item-active: #064e3b;
-  --color-nav-item-active-text: #6ee7b7;
+  /* Nav: neutral surfaces, orange only for active/accent */
+  --color-topbar-bg: #1a1a1a;
+  --color-topbar-text: #f0f0f0;
+  --color-topbar-item-hover: #262626;
+  --color-nav-bg: #141414;
+  --color-nav-border: #2a2a2a;
+  --color-nav-text: #e0e0e0;
+  --color-nav-text-muted: #737373;
+  --color-nav-item-hover: #1f1f1f;
+  --color-nav-item-hover-text: #f0f0f0;
+  --color-nav-item-active: #9a3412;
+  --color-nav-item-active-text: #fb923c;
 }
 
 /* Grayscale = truly neutral gray, no blue/green tint. Uses .dark for layout;
