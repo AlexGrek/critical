@@ -23,6 +23,8 @@ const VERTEX_COLLECTIONS: &[&str] = &[
     "permissions",
     "resource_history",
     "resource_events",
+    "unprocessed_images",
+    "persistent_files",
 ];
 
 /// Edge collections created at startup.
@@ -52,6 +54,8 @@ pub struct CollectionHandles {
     pub permissions: Collection<ReqwestClient>,
     pub resource_history: Collection<ReqwestClient>,
     pub resource_events: Collection<ReqwestClient>,
+    pub unprocessed_images: Collection<ReqwestClient>,
+    pub persistent_files: Collection<ReqwestClient>,
 }
 
 /// Obtain the database, creating it if it does not exist.
@@ -103,6 +107,14 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         .collection("resource_events")
         .await
         .map_err(|e| anyhow!(e.to_string()))?;
+    let unprocessed_images = db
+        .collection("unprocessed_images")
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
+    let persistent_files = db
+        .collection("persistent_files")
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
 
     Ok(CollectionHandles {
         users,
@@ -114,6 +126,8 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         permissions,
         resource_history,
         resource_events,
+        unprocessed_images,
+        persistent_files,
     })
 }
 

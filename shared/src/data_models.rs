@@ -24,6 +24,13 @@ pub struct User {
     pub password_hash: String,
     #[brief]
     pub personal: PersonalInfo,
+    /// ULID of the user's current avatar (no extension). Set when an avatar upload is accepted;
+    /// the processed WebP files live in `user_avatars/{ulid}_hd.webp` and `_thumb.webp`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar_ulid: Option<String>,
+    /// ULID of the user's current profile wallpaper. Files in `user_wallpapers/`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallpaper_ulid: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

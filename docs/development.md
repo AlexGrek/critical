@@ -53,6 +53,26 @@ make logs-db                # Tail container logs
 
 ArangoDB web UI: `http://localhost:8529`
 
+## Object Store
+
+The backend supports pluggable object storage via the `object_store` crate. Set `OBJECT_STORE_BACKEND` in `backend/.env` to enable it (the app starts without it if the var is unset).
+
+| Env var | Default | Description |
+|---------|---------|-------------|
+| `OBJECT_STORE_BACKEND` | *(unset — disabled)* | `local` \| `s3` \| `webdav` |
+| `OBJECT_STORE_PATH` | `./data` | Root path (local backend only) |
+| `OBJECT_STORE_BUCKET` | | S3 bucket name |
+| `OBJECT_STORE_URL` | | S3 custom endpoint or WebDAV server URL |
+| `OBJECT_STORE_KEY` | | S3 access key ID or WebDAV username |
+| `OBJECT_STORE_SECRET` | | S3 secret key or WebDAV password |
+| `OBJECT_STORE_REGION` | `us-east-1` | S3 region |
+
+Local filesystem example (`backend/.env`):
+```bash
+OBJECT_STORE_BACKEND=local
+OBJECT_STORE_PATH=./data
+```
+
 Makefile prefers `docker compose`, falls back to `podman-compose`.
 
 ## Testing

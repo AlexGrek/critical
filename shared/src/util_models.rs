@@ -185,6 +185,59 @@ pub struct FullResource {
 }
 
 // ---------------------------------------------------------------------------
+// Media / file tracking
+// ---------------------------------------------------------------------------
+
+/// Tracks a raw uploaded image that is pending background processing.
+/// Stored in `unprocessed_images` collection; hard-deleted when processing completes or fails.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UnprocessedImage {
+    #[serde(rename = "_key")]
+    pub id: String,
+    /// Original filename: `{ulid}.{ext}` (e.g. `01jz....jpg`).
+    pub filename: String,
+    /// User ID who uploaded the image.
+    pub owner_id: String,
+    /// "avatar" or "wallpaper".
+    pub upload_type: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// Resolved URIs (filenames, no directory prefix) for the two sizes of a processed image.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PersistentFileUri {
+    /// HD variant filename, e.g. `01jz..._hd.webp`.
+    pub hd: String,
+    /// Thumbnail variant filename, e.g. `01jz..._thumb.webp`.
+    pub thumb: String,
+}
+
+/// Persistent record for a fully processed, stored image file.
+/// Stored in `persistent_files` collection; survives as long as the file is live.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PersistentFile {
+    #[serde(rename = "_key")]
+    pub id: String,
+    /// Object-store subdirectory that owns this file (`user_avatars` or `user_wallpapers`).
+    pub category: String,
+    /// Always `"principal"` for now; reserved for future relation types.
+    pub relation_type: String,
+    /// Owner principal ID (e.g. `u_alice`).
+    pub owner: String,
+    /// Always `"webp"`.
+    pub format: String,
+    /// Available size variants: `["hd", "thumb"]`.
+    pub sizes: Vec<String>,
+    /// Combined byte size of all stored variants.
+    pub total_size_bytes: u64,
+    /// Full object-store paths for each variant (same order as `sizes`).
+    pub filenames: Vec<String>,
+    /// Convenience URIs (filenames only, without directory) for each size.
+    pub uri: PersistentFileUri,
+    pub created_at: DateTime<Utc>,
+}
+
+// ---------------------------------------------------------------------------
 // Super-permissions
 // ---------------------------------------------------------------------------
 

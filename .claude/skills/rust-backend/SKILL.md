@@ -1,11 +1,7 @@
 ---
 name: rust-backend
-description: >
-  Expert knowledge of this project's Rust backend architecture. Use when writing,
-  reviewing, or debugging backend Rust code — controllers, DB layer, models,
-  middleware, routing, or new resource kinds. Provides architectural constraints
-  and patterns specific to this codebase so you don't have to re-read CLAUDE.md.
-user-invocable: true
+description: "Expert knowledge of this project's Rust backend architecture. Use when writing, reviewing, or debugging backend Rust code — controllers, DB layer, models, middleware, routing, or new resource kinds. Provides architectural constraints and patterns specific to this codebase so you don't have to re-read CLAUDE.md."
+user-invokable: true
 ---
 
 You are working on the **Critical (crit-cli)** Rust backend. Apply the following
@@ -147,16 +143,57 @@ Super-permissions (in `permissions` collection) short-circuit normal ACL checks.
 
 ```rust
 pub struct AppState {
-    pub config: Config,
-    pub auth: Auth,
+    pub config: Arc<AppConfig>,
+    pub auth: Arc<Auth>,
+    pub controller: Arc<Controller>,
     pub db: Arc<ArangoDb>,
-    pub controllers: Controller,
-    pub github: Option<GitHubService>,
-    pub offloadmq: Option<OffloadMqService>,
+    pub cache: Arc<CacheStore>,
+    pub runtime_config: Arc<RuntimeConfig>,
+    pub offloadmq: Arc<Option<OffloadClient>>,
+    pub objectstore: Arc<Option<ObjectStoreService>>,
 }
 ```
 
 Shared as `Arc<AppState>` — extract with `State(state): State<Arc<AppState>>` in handlers.
+
+Optional services use `Arc<Option<T>>` — check `state.objectstore.as_ref()` before use.
+
+---
+
+## Object Store Service (`backend/src/services/objectstore.rs`)
+
+Generic async object storage backed by the `object_store` crate (version `0.11`).
+Backend is selected at startup from `OBJECT_STORE_BACKEND` env var.
+If the var is unset or empty, `AppState.objectstore` is `Arc(None)` and the app runs normally.
+
+**Supported backends** (all three enabled via Cargo features `aws` + `http`):
+- `local` — `LocalFileSystem` with a path prefix (`OBJECT_STORE_PATH`, default `./data`)
+- `s3` — `AmazonS3Builder` (`OBJECT_STORE_BUCKET`, `OBJECT_STORE_KEY`, `OBJECT_STORE_SECRET`, `OBJECT_STORE_REGION`, optional `OBJECT_STORE_URL` for custom endpoints)
+- `webdav` — `HttpBuilder` (`OBJECT_STORE_URL` for server URL)
+
+**Service API** (all async, paths are `/`-separated strings):
+```rust
+svc.put(path: &str, data: Bytes) -> Result<(), StorageError>
+svc.get(path: &str)              -> Result<Bytes, StorageError>
+svc.delete(path: &str)           -> Result<(), StorageError>
+svc.list(prefix: &str)           -> Result<Vec<ObjectMeta>, StorageError>
+```
+
+**Using in a handler:**
+```rust
+async fn my_handler(State(state): State<Arc<AppState>>, ...) {
+    let store = state.objectstore.as_ref().as_ref()
+        .ok_or(AppError::Internal("object store not configured".into()))?;
+    let bytes = store.get("avatars/u_root.png").await?;
+}
+```
+
+**Unit testing** — use `object_store::memory::InMemory` directly on the struct:
+```rust
+let svc = ObjectStoreService { store: Arc::new(InMemory::new()) };
+```
+
+**Error type**: `StorageError` (thiserror) — variants: `Store`, `Path`, `NotConfigured`, `UnsupportedBackend`.
 
 ---
 

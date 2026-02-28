@@ -62,6 +62,10 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                         .put(api::v1::gitops::update_object)
                         .delete(api::v1::gitops::delete_object),
                 )
+                .route(
+                    "/global/{kind}/{id}/upload/{upload_type}",
+                    post(api::v1::upload::upload_media),
+                )
                 // Project-scoped routes
                 .route(
                     "/projects/{project}/{kind}",

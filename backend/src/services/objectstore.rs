@@ -18,11 +18,19 @@ pub enum StorageError {
     UnsupportedBackend(String),
 }
 
+#[derive(Clone)]
 pub struct ObjectStoreService {
     store: Arc<dyn ObjectStore>,
 }
 
 impl ObjectStoreService {
+    /// Construct from a bare `ObjectStore` implementation.
+    /// Only available during test compilation.
+    #[cfg(test)]
+    pub(crate) fn from_store(store: Arc<dyn ObjectStore>) -> Self {
+        Self { store }
+    }
+
     pub fn new(config: &AppConfig) -> Result<Self, StorageError> {
         let store: Arc<dyn ObjectStore> = match config.object_store_backend.as_str() {
             "local" => {
@@ -113,9 +121,7 @@ mod tests {
     use object_store::memory::InMemory;
 
     fn memory_service() -> ObjectStoreService {
-        ObjectStoreService {
-            store: Arc::new(InMemory::new()),
-        }
+        ObjectStoreService::from_store(Arc::new(InMemory::new()))
     }
 
     #[tokio::test]

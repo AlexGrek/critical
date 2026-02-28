@@ -73,6 +73,8 @@ pub struct ArangoDb {
     pub permissions: Collection<ReqwestClient>,
     pub resource_history: Collection<ReqwestClient>,
     pub resource_events: Collection<ReqwestClient>,
+    pub unprocessed_images: Collection<ReqwestClient>,
+    pub persistent_files: Collection<ReqwestClient>,
 }
 
 // ---------------------------------------------------------------------------
@@ -137,6 +139,8 @@ impl ArangoDb {
             permissions: handles.permissions,
             resource_history: handles.resource_history,
             resource_events: handles.resource_events,
+            unprocessed_images: handles.unprocessed_images,
+            persistent_files: handles.persistent_files,
         };
 
         instance.seed_permissions().await?;
@@ -170,6 +174,8 @@ impl ArangoDb {
             permissions: handles.permissions,
             resource_history: handles.resource_history,
             resource_events: handles.resource_events,
+            unprocessed_images: handles.unprocessed_images,
+            persistent_files: handles.persistent_files,
         })
     }
 
@@ -200,6 +206,8 @@ impl ArangoDb {
             permissions: handles.permissions,
             resource_history: handles.resource_history,
             resource_events: handles.resource_events,
+            unprocessed_images: handles.unprocessed_images,
+            persistent_files: handles.persistent_files,
         })
     }
 
@@ -1082,6 +1090,32 @@ impl ArangoDb {
         if result.is_empty() {
             return Err(anyhow!("document not found: {}/{}", collection, key));
         }
+        Ok(())
+    }
+
+    /// Patch a user document to update a single image ULID field (`avatar_ulid` or
+    /// `wallpaper_ulid`). Uses AQL UPDATE WITH (non-destructive merge) rather than
+    /// REPLACE so all other user fields are preserved.
+    pub async fn patch_user_image_ulid(
+        &self,
+        user_id: &str,
+        field: &str,
+        ulid: Option<&str>,
+    ) -> Result<()> {
+        let value = ulid
+            .map(|u| Value::String(u.to_string()))
+            .unwrap_or(Value::Null);
+        let patch = serde_json::json!({ field: value });
+        let query = r#"
+            FOR doc IN users
+              FILTER doc._key == @id
+              UPDATE doc WITH @patch IN users
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("id", Value::String(user_id.to_string())),
+            ("patch", patch),
+        ]);
+        self.aql::<Value>(query, vars).await?;
         Ok(())
     }
 

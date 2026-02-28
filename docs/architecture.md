@@ -39,7 +39,7 @@ Cargo workspace with three crates plus a frontend:
 - **Database layer** (`src/db/arangodb/mod.rs`): Direct `ArangoDb` struct using `arangors` crate — auto-creates collections on startup
 - **Controllers** (`src/controllers/`): `user_controller`, `group_controller`, `membership_controller`; all implement `KindController` trait
 - **Middleware** (`src/middleware/`): JWT auth applied to `/v1` routes
-- **Services** (`src/services/`): `github.rs` (GitHub integration), `offloadmq.rs` (message queue)
+- **Services** (`src/services/`): `github.rs` (GitHub integration), `offloadmq.rs` (message queue), `objectstore.rs` (object storage — local filesystem, S3, or WebDAV; selected via `OBJECT_STORE_BACKEND` env var)
 
 ### Frontend (`frontend/`)
 
