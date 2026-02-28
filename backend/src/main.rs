@@ -123,6 +123,7 @@ pub async fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::
         Arc::new(db),
         cache,
         None,
+        None,
     ))
 }
 
@@ -172,12 +173,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create app state
     let cache = cache::create_default_cache().await;
+    let objectstore = services::objectstore::ObjectStoreService::try_from_config(&config);
     let app_state = AppState::new(
         config.clone(),
         auth,
         db.clone(),
         cache,
         None,
+        objectstore,
     );
     let shared_state = Arc::new(app_state);
 

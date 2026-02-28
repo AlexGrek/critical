@@ -3,7 +3,14 @@ use std::sync::Arc;
 use serde_json::json;
 
 use crate::{
-    cache::CacheStore, config::{AppConfig, RuntimeConfig}, controllers::Controller, db::ArangoDb, godmode, middleware::auth::Auth, services::offloadmq::OffloadClient
+    cache::CacheStore,
+    config::{AppConfig, RuntimeConfig},
+    controllers::Controller,
+    db::ArangoDb,
+    godmode,
+    middleware::auth::Auth,
+    services::objectstore::ObjectStoreService,
+    services::offloadmq::OffloadClient,
 };
 use crit_shared::util_models::super_permissions;
 
@@ -16,10 +23,11 @@ pub struct AppState {
     pub cache: Arc<CacheStore>,
     pub runtime_config: Arc<RuntimeConfig>,
     pub offloadmq: Arc<Option<OffloadClient>>,
+    pub objectstore: Arc<Option<ObjectStoreService>>,
 }
 
 impl AppState {
-    pub fn new(config: AppConfig, auth: Auth, database: Arc<ArangoDb>, cache: Arc<CacheStore>, offloadmq: Option<OffloadClient>) -> Self {
+    pub fn new(config: AppConfig, auth: Auth, database: Arc<ArangoDb>, cache: Arc<CacheStore>, offloadmq: Option<OffloadClient>, objectstore: Option<ObjectStoreService>) -> Self {
         Self {
             config: Arc::new(config),
             auth: Arc::new(auth),
@@ -27,7 +35,8 @@ impl AppState {
             cache,
             runtime_config: Arc::new(AppConfig::runtime_from_env().unwrap_or_default()),
             controller: Arc::new(Controller::new(database.clone())),
-            offloadmq: Arc::new(offloadmq)
+            offloadmq: Arc::new(offloadmq),
+            objectstore: Arc::new(objectstore),
         }
     }
 

@@ -23,6 +23,14 @@ pub struct AppConfig {
     pub port: u16,
     pub root_password: String,
     pub jwt_expiry_days: u64,
+    // Object store
+    pub object_store_backend: String,
+    pub object_store_path: String,
+    pub object_store_url: String,
+    pub object_store_bucket: String,
+    pub object_store_key: String,
+    pub object_store_secret: String,
+    pub object_store_region: String,
 }
 
 impl AppConfig {
@@ -81,6 +89,21 @@ impl AppConfig {
             .unwrap_or_else(|_| "3069".to_string())
             .parse::<u16>()?;
 
+        let object_store_backend =
+            env::var("OBJECT_STORE_BACKEND").unwrap_or_else(|_| String::new());
+        let object_store_path =
+            env::var("OBJECT_STORE_PATH").unwrap_or_else(|_| "./data".to_string());
+        let object_store_url =
+            env::var("OBJECT_STORE_URL").unwrap_or_else(|_| String::new());
+        let object_store_bucket =
+            env::var("OBJECT_STORE_BUCKET").unwrap_or_else(|_| String::new());
+        let object_store_key =
+            env::var("OBJECT_STORE_KEY").unwrap_or_else(|_| String::new());
+        let object_store_secret =
+            env::var("OBJECT_STORE_SECRET").unwrap_or_else(|_| String::new());
+        let object_store_region =
+            env::var("OBJECT_STORE_REGION").unwrap_or_else(|_| "us-east-1".to_string());
+
         Ok(Self {
             jwt_secret,
             database_connection_string,
@@ -93,6 +116,13 @@ impl AppConfig {
             management_token,
             root_password,
             jwt_expiry_days,
+            object_store_backend,
+            object_store_path,
+            object_store_url,
+            object_store_bucket,
+            object_store_key,
+            object_store_secret,
+            object_store_region,
         })
     }
 }
