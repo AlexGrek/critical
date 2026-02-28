@@ -47,6 +47,12 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
         .route("/register", post(api::v1::authentication::login::register))
         .route("/login", post(api::v1::authentication::login::login))
         .route("/logout", post(api::v1::authentication::login::logout))
+        // Unauthenticated object-store static files (avatars / wallpapers).
+        // Must be added outside the /v1 auth nest so no JWT is required.
+        .route(
+            "/v1/static/{*path}",
+            get(api::v1::static_files::serve_static),
+        )
         .nest(
             "/v1",
             Router::new()

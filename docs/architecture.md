@@ -25,7 +25,7 @@ Cargo workspace with three crates plus a frontend:
 - **Crate**: `crit-shared` (import as `crit_shared`)
 - Domain models shared across backend and CLI
 - **Core entities** (`data_models.rs`): `User`, `Group`, `ServiceAccount`, `PipelineAccount`, `GroupMembership`, `GlobalPermission`
-- **Utility types** (`util_models.rs`): Bitflag `Permissions`, `AccessControlStore`, `ResourceState`, `RuntimeState`, `DeletionInfo`, `HistoryEntry`, `ResourceEvent`, `FullResource`
+- **Utility types** (`util_models.rs`): Bitflag `Permissions`, `AccessControlStore`, `ResourceState`, `RuntimeState`, `DeletionInfo`, `HistoryEntry`, `ResourceEvent`, `FullResource`, `UnprocessedImage`, `PersistentFile`, `PersistentFileUri`
 - ArangoDB `_key` mapping via `#[serde(rename = "_key")]` on `id` fields
 - ID prefixes: users `u_`, groups `g_`, service accounts `sa_`, pipeline accounts `pa_`
 - **`#[crit_resource]` proc macro** (`shared/derive/`): injects standard fields (`id`, `labels`, `annotations`, `state`, `acl`, `deletion`, `hash_code`) into resource structs; generates `{Name}Brief`, `to_brief()`, `brief_field_names()`, `compute_hash()`, `collection_name()`, `id_prefix()`
@@ -35,11 +35,15 @@ Cargo workspace with three crates plus a frontend:
 - **Framework**: Axum 0.8 + Tokio
 - **Package**: `axum-api`
 - **Entry point**: `src/main.rs` — creates `AppState`, connects to DB, builds router
-- **State** (`src/state.rs`): `AppState` holds config, auth, DB (`Arc<ArangoDb>`), controllers; shared via `Arc<AppState>`
+- **State** (`src/state.rs`): `AppState` holds config, auth, DB (`Arc<ArangoDb>`), controllers, optional services, and `image_processing_semaphore: Arc<Semaphore>` (limits background image conversion to one task at a time); shared via `Arc<AppState>`
 - **Database layer** (`src/db/arangodb/mod.rs`): Direct `ArangoDb` struct using `arangors` crate — auto-creates collections on startup
 - **Controllers** (`src/controllers/`): `user_controller`, `group_controller`, `membership_controller`; all implement `KindController` trait
-- **Middleware** (`src/middleware/`): JWT auth applied to `/v1` routes
-- **Services** (`src/services/`): `github.rs` (GitHub integration), `offloadmq.rs` (message queue), `objectstore.rs` (object storage — local filesystem, S3, or WebDAV; selected via `OBJECT_STORE_BACKEND` env var)
+- **Middleware** (`src/middleware/`): JWT auth applied to all `/v1` routes; `/v1/static/*` is registered on the outer router and intentionally bypasses this layer
+- **Services** (`src/services/`):
+  - `objectstore.rs` — pluggable object storage (local filesystem, S3, WebDAV) via the `object_store` crate; selected by `OBJECT_STORE_BACKEND` env var; optional at runtime
+  - `image_processing.rs` — pure-Rust image pipeline: magic-byte format detection, center-crop (integer arithmetic, no float rounding), Lanczos3 resize, in-memory WebP encode; produces HD + thumbnail for avatars (480×480 / 128×128 px) and wallpapers (1400×600 / 300×128 px)
+  - `github.rs` — GitHub integration
+  - `offloadmq.rs` — message queue integration
 
 ### Frontend (`frontend/`)
 

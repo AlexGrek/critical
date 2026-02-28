@@ -7,6 +7,7 @@
 | `/health` | none | Health check |
 | `/register` | none | User registration |
 | `/login` | none | User login (returns JWT) |
+| `/v1/static/{*path}` | none | Serve processed images from object store |
 | `/v1/*` | JWT | Protected API routes |
 | `/v1/ws` | JWT | WebSocket endpoint |
 | `/swagger-ui` | none | OpenAPI documentation |
@@ -101,6 +102,68 @@ List responses return a summary view of each resource (brief fields only), not t
 | `groups` | `id`, `meta`, `name` |
 | `service_accounts` | `id`, `meta`, `name` |
 | `pipeline_accounts` | `id`, `meta`, `name` |
+
+## Media Upload (`/v1/global/{kind}/{id}/upload/{upload_type}`)
+
+Upload an avatar or wallpaper image for a user. The response is returned immediately after the raw file is stored; image processing (crop → resize → WebP encode) continues in a background task.
+
+```
+POST /v1/global/users/{user_id}/upload/avatar
+POST /v1/global/users/{user_id}/upload/wallpaper
+Content-Type: multipart/form-data
+
+file=<image bytes>   (JPEG / PNG / WebP, max 5 MB)
+```
+
+**Response** `201 Created`:
+```json
+{ "ulid": "01jz0a9rp700000000000000000" }
+```
+
+The returned ULID is immediately written to the user's `avatar_ulid` or `wallpaper_ulid` field. Once the background task completes, the processed WebP files are available at the static endpoint.
+
+**Authorization:**
+- A user may upload their own media (self-upload)
+- `ADM_USER_MANAGER` may upload for any user
+- `ADM_GODMODE` bypasses all checks
+- Any other caller receives `404` (to avoid leaking whether the target user exists)
+
+**Background processing:**
+1. Fetch raw bytes from `raw_uploads/`
+2. Center-crop to target aspect ratio (1:1 avatar, 21:9 wallpaper)
+3. Resize and encode two WebP variants (HD + thumbnail)
+4. Store in `user_avatars/` or `user_wallpapers/`
+5. Write a `persistent_files` record; delete the raw upload
+
+Only one image conversion runs at a time (global `Semaphore(1)` in `AppState`). Additional uploads queue up and are processed in order.
+
+Currently only `kind = "users"` is supported.
+
+---
+
+## Static File Serving (`/v1/static/{*path}`)
+
+Serves processed images from the object store without authentication. URLs are unguessable in practice because they are ULID-based.
+
+```
+GET /v1/static/user_avatars/{ulid}_hd.webp
+GET /v1/static/user_avatars/{ulid}_thumb.webp
+GET /v1/static/user_wallpapers/{ulid}_hd.webp
+GET /v1/static/user_wallpapers/{ulid}_thumb.webp
+```
+
+**Response:** raw WebP bytes with:
+- `Content-Type: image/webp`
+- `Cache-Control: public, max-age=31536000, immutable`
+
+**Restrictions:**
+- Only `user_avatars/` and `user_wallpapers/` directory prefixes are served — all other paths return `404`
+- Path traversal (`..`) is rejected
+- If the object store is not configured, returns `404`
+
+Because each upload produces a new ULID, cached URLs never become stale — when a user re-uploads, the client fetches a new ULID from the user document and uses a new URL.
+
+---
 
 ## Authentication
 

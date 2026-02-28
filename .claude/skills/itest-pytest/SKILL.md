@@ -186,6 +186,14 @@ Use these constants in ACL list entries:
 
 ---
 
+## Assets
+
+You can use graphical and binary assets in tests by placing them in `backend/itests/assets/` and referencing them by relative path (e.g. for avatar upload tests). Reuse available assets where possible to avoid cluttering the repo with test-only files.
+
+Use object_storage configuration with local filesystem backend (pointing to `backend/itests/temp/{random directory name}`) for tests that need to upload or access files. You can check the contents of the storage directory after a test failure for debugging, add directory content assertions in tests, or use the debug route utilities to inspect DB records that reference stored objects. remember to clean up any uploaded files in test teardown to avoid filling up disk over time.
+
+---
+
 ## Super-Permissions
 
 Stored in the `permissions` collection (key = permission name, value = `{ "principals": [...] }`).

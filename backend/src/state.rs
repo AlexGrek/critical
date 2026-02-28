@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use serde_json::json;
+use tokio::sync::Semaphore;
 
 use crate::{
     cache::CacheStore,
@@ -24,6 +25,9 @@ pub struct AppState {
     pub runtime_config: Arc<RuntimeConfig>,
     pub offloadmq: Arc<Option<OffloadClient>>,
     pub objectstore: Arc<Option<ObjectStoreService>>,
+    /// Limits background image conversion to one task at a time.
+    /// All other upload tasks queue up and wait their turn.
+    pub image_processing_semaphore: Arc<Semaphore>,
 }
 
 impl AppState {
@@ -37,6 +41,7 @@ impl AppState {
             controller: Arc::new(Controller::new(database.clone())),
             offloadmq: Arc::new(offloadmq),
             objectstore: Arc::new(objectstore),
+            image_processing_semaphore: Arc::new(Semaphore::new(1)),
         }
     }
 

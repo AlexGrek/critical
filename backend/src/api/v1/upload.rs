@@ -27,6 +27,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde_json::json;
+use tokio::sync::Semaphore;
 use ulid::Ulid;
 
 use crate::{
@@ -143,10 +144,12 @@ pub async fn upload_media(
     );
 
     // Spawn background image processing — response returns immediately.
+    // The semaphore ensures only one conversion runs at a time; others queue up.
     let bg_db = state.db.clone();
     let bg_ulid = ulid.clone();
+    let bg_sem = state.image_processing_semaphore.clone();
     tokio::spawn(async move {
-        process_upload_background(bg_ulid, filename, upload_type, target_id, bg_db, store).await;
+        process_upload_background(bg_ulid, filename, upload_type, target_id, bg_db, store, bg_sem).await;
     });
 
     Ok((StatusCode::CREATED, Json(json!({ "ulid": ulid }))))
@@ -163,7 +166,21 @@ async fn process_upload_background(
     owner_id: String,
     db: Arc<crate::db::ArangoDb>,
     store: ObjectStoreService,
+    sem: Arc<Semaphore>,
 ) {
+    // Acquire the semaphore before doing any CPU-intensive work.
+    // If another conversion is already running, this awaits until it finishes.
+    // The permit is released automatically when it drops at function exit.
+    let _permit = match sem.acquire().await {
+        Ok(p) => p,
+        Err(_) => {
+            log::error!("[upload:bg] semaphore closed, aborting conversion for {ulid}");
+            cleanup_raw(&store, &format!("raw_uploads/{}", filename), &db, &ulid).await;
+            return;
+        }
+    };
+    log::debug!("[upload:bg] semaphore acquired, starting conversion for {filename}");
+
     let raw_path = format!("raw_uploads/{}", filename);
     let dir = upload_type.storage_dir();
     let hd_path = format!("{}/{}_hd.webp", dir, ulid);
