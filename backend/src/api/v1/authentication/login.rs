@@ -16,7 +16,7 @@ use crate::{
 
 #[utoipa::path(
     get,
-    path = "/api/register",
+    path = "/api/v1/register",
     responses((status = 201, description = "Create user successfully"))
 )]
 pub async fn register(

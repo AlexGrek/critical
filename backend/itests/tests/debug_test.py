@@ -2,8 +2,8 @@ import pytest
 import requests
 
 BASE = "http://localhost:3742/api"
-URL_LOGIN = f"{BASE}/login"
-URL_REGISTER = f"{BASE}/register"
+URL_LOGIN = f"{BASE}/v1/login"
+URL_REGISTER = f"{BASE}/v1/register"
 URL_DEBUG = f"{BASE}/v1/debug"
 
 ROOT_PASSWORD = "changeme"

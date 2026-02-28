@@ -15,7 +15,7 @@ test.describe('Home Page', () => {
   });
 
   test('should have navigation elements', async ({ page }) => {
-    await expect(page.locator('header').first()).toBeVisible();
+    await expect(page.locator('nav').first()).toBeVisible();
   });
 
   test('should have navigation links', async ({ page }) => {

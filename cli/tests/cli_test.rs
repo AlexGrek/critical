@@ -16,7 +16,7 @@ const BACKEND_URL: &str = "http://localhost:3742";
 fn register_user(username: &str, password: &str) {
     let client = reqwest::blocking::Client::new();
     let resp = client
-        .post(format!("{}/api/register", BACKEND_URL))
+        .post(format!("{}/api/v1/register", BACKEND_URL))
         .json(&serde_json::json!({
             "user": username,
             "password": password,
@@ -36,7 +36,7 @@ fn register_user(username: &str, password: &str) {
 fn login_user(username: &str, password: &str) -> String {
     let client = reqwest::blocking::Client::new();
     let resp = client
-        .post(format!("{}/api/login", BACKEND_URL))
+        .post(format!("{}/api/v1/login", BACKEND_URL))
         .json(&serde_json::json!({
             "user": username,
             "password": password,
@@ -243,6 +243,8 @@ fn test_groups_list_with_data() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Groups:").or(predicate::str::contains(group_name)));
+
+    delete_group(&token, &group_id);
 }
 
 #[test]
@@ -276,6 +278,8 @@ fn test_groups_describe() {
         .assert()
         .success()
         .stdout(predicate::str::contains(&group_id).or(predicate::str::contains(group_name)));
+
+    delete_group(&token, &group_id);
 }
 
 #[test]

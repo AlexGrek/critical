@@ -59,7 +59,7 @@ def _upload_avatar(user_id: str, token: str, asset_path: str = None) -> requests
 
 @pytest.fixture(scope="module")
 def admin_token():
-    resp = requests.post(f"{BASE}/login", json={"user": "root", "password": "changeme"})
+    resp = requests.post(f"{BASE}/v1/login", json={"user": "root", "password": "changeme"})
     assert resp.status_code == 200, f"Root login failed: {resp.text}"
     return resp.json()["token"]
 
@@ -68,8 +68,8 @@ def admin_token():
 def regular_user():
     num = random.randint(100000, 999999)
     user = f"avatar_user_{num}"
-    requests.post(f"{BASE}/register", json={"user": user, "password": user})
-    resp = requests.post(f"{BASE}/login", json={"user": user, "password": user})
+    requests.post(f"{BASE}/v1/register", json={"user": user, "password": user})
+    resp = requests.post(f"{BASE}/v1/login", json={"user": user, "password": user})
     assert resp.status_code == 200, f"Login failed: {resp.text}"
     return {"user_id": f"u_{user}", "token": resp.json()["token"]}
 
@@ -78,8 +78,8 @@ def regular_user():
 def other_user():
     num = random.randint(100000, 999999)
     user = f"avatar_other_{num}"
-    requests.post(f"{BASE}/register", json={"user": user, "password": user})
-    resp = requests.post(f"{BASE}/login", json={"user": user, "password": user})
+    requests.post(f"{BASE}/v1/register", json={"user": user, "password": user})
+    resp = requests.post(f"{BASE}/v1/login", json={"user": user, "password": user})
     assert resp.status_code == 200, f"Login failed: {resp.text}"
     return {"user_id": f"u_{user}", "token": resp.json()["token"]}
 

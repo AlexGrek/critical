@@ -38,7 +38,7 @@ mod tests {
     /// Login as root and return the JWT token.
     async fn login_root(server: &TestServer) -> String {
         let resp = server
-            .post("/api/login")
+            .post("/api/v1/login")
             .json(&LoginRequest {
                 user: "root".to_string(),
                 password: ROOT_PASSWORD.to_string(),
@@ -53,7 +53,7 @@ mod tests {
         let password = "testpassword123";
 
         server
-            .post("/api/register")
+            .post("/api/v1/register")
             .json(&RegisterRequest {
                 user: username.to_string(),
                 password: password.to_string(),
@@ -62,7 +62,7 @@ mod tests {
             .assert_status(StatusCode::CREATED);
 
         let resp = server
-            .post("/api/login")
+            .post("/api/v1/login")
             .json(&LoginRequest {
                 user: username.to_string(),
                 password: password.to_string(),

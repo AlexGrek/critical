@@ -7,8 +7,8 @@ import websockets
 import asyncio
 
 
-URL_LOGIN = "http://localhost:3742/api/login"
-URL_REGISTER = "http://localhost:3742/api/register"
+URL_LOGIN = "http://localhost:3742/api/v1/login"
+URL_REGISTER = "http://localhost:3742/api/v1/register"
 URL_WS = "ws://localhost:3742/api/v1/ws"
 
 

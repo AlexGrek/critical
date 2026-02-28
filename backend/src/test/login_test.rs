@@ -48,7 +48,7 @@ mod tests {
             password: password.to_string(),
         };
 
-        let register_response = server.post("/api/register").json(&register_request).await;
+        let register_response = server.post("/api/v1/register").json(&register_request).await;
         register_response.assert_status(StatusCode::CREATED);
 
         let login_request = LoginRequest {
@@ -56,7 +56,7 @@ mod tests {
             password: password.to_string(),
         };
 
-        let login_response = server.post("/api/login").json(&login_request).await;
+        let login_response = server.post("/api/v1/login").json(&login_request).await;
         login_response.assert_status_ok();
 
         let body: LoginResponse = login_response.json::<LoginResponse>();
@@ -73,7 +73,7 @@ mod tests {
         let user = unique_user("invalidcreds");
 
         server
-            .post("/api/register")
+            .post("/api/v1/register")
             .json(&RegisterRequest {
                 user: user.clone(),
                 password: "correct_password".to_string(),
@@ -86,7 +86,7 @@ mod tests {
             password: "wrong_password".to_string(),
         };
 
-        let login_response = server.post("/api/login").json(&login_request).await;
+        let login_response = server.post("/api/v1/login").json(&login_request).await;
         login_response.assert_status(StatusCode::UNAUTHORIZED);
     }
 }

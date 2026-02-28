@@ -14,7 +14,7 @@ import random
 import requests
 
 BASE = "http://localhost:3742/api"
-URL_LOGIN = f"{BASE}/login"
+URL_LOGIN = f"{BASE}/v1/login"
 URL_GLOBAL = f"{BASE}/v1/global"
 
 

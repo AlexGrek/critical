@@ -26,7 +26,7 @@ struct ApiErrorDetail {
 }
 
 pub async fn login(base_url: &str, user: &str, password: &str) -> Result<LoginResponse> {
-    let url = format!("{}/api/login", base_url.trim_end_matches('/'));
+    let url = format!("{}/api/v1/login", base_url.trim_end_matches('/'));
 
     let client = reqwest::Client::new();
     let resp = client
