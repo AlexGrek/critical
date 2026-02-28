@@ -54,6 +54,7 @@ pub trait KindController: Send + Sync {
     /// Called after a document is deleted. Used for cascade cleanup.
     /// Default is a no-op.
     async fn after_delete(&self, _key: &str, _db: &ArangoDb) -> Result<(), AppError> {
+        // TODO: log any errors here explicitly, as after_delete may break data integrity and should be treated as major error if it does
         Ok(())
     }
 
@@ -61,6 +62,7 @@ pub trait KindController: Send + Sync {
     /// (e.g. empty-group deletion).
     /// Default is a no-op.
     async fn after_update(&self, _key: &str, _db: &ArangoDb) -> Result<(), AppError> {
+        // TODO: if it can fail, log it explicitly, as after_update may break data integrity and should be treated as major error if it does
         Ok(())
     }
 

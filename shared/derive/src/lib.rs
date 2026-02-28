@@ -278,6 +278,10 @@ fn impl_crit_resource(args: &CritResourceArgs, input: &ItemStruct) -> syn::Resul
 
             /// Set hash_code to the computed hash of current desired state.
             pub fn with_computed_hash(&mut self) {
+                // TODO: use it in controllers when writing to DB!
+                // TODO: use it in write conflict checks!
+                // TODO: send it to clients, implement it in CLI and web UI
+                // TODO: use it in history records!
                 self.hash_code = self.compute_hash();
             }
         }

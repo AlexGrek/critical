@@ -39,6 +39,9 @@ pub enum AppError {
     #[error("Bad request: {0}")]
     BadRequest(String),
 
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Scheduling impossible: {0}")]
     SchedulingImpossible(String),
 
@@ -67,6 +70,7 @@ impl AppError {
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::Conflict(_) => StatusCode::CONFLICT,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
+            AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::Jwt(_) => StatusCode::UNAUTHORIZED,
             AppError::Io(_) => StatusCode::INTERNAL_SERVER_ERROR,
             AppError::Parse(_) => StatusCode::BAD_REQUEST,
@@ -86,6 +90,7 @@ impl AppError {
             AppError::NotFound(_) => "not_found",
             AppError::Conflict(_) => "conflict",
             AppError::BadRequest(_) => "bad_request",
+            AppError::Forbidden(_) => "forbidden",
             AppError::Jwt(_) => "jwt_error",
             AppError::Io(_) => "io_error",
             AppError::Parse(_) => "parse_error",
@@ -101,6 +106,7 @@ impl AppError {
             | AppError::Authorization(_)
             | AppError::NotFound(_)
             | AppError::BadRequest(_)
+            | AppError::Forbidden(_)
             | AppError::Jwt(_)
             | AppError::Parse(_) => false,
             AppError::Validation(_)
@@ -147,6 +153,22 @@ impl IntoResponses for AppError {
             RefOr::T(
                 ResponseBuilder::new()
                     .description("Unauthorized")
+                    .content(
+                        "application/json",
+                        ContentBuilder::new()
+                            .schema(Some(ErrorResponse::schema()))
+                            .build(),
+                    )
+                    .build(),
+            ),
+        );
+
+        // 403 Forbidden
+        responses.insert(
+            "403".to_string(),
+            RefOr::T(
+                ResponseBuilder::new()
+                    .description("Forbidden")
                     .content(
                         "application/json",
                         ContentBuilder::new()
@@ -273,6 +295,10 @@ impl AppError {
 
     pub fn bad_request<T: std::fmt::Display>(msg: T) -> Self {
         Self::BadRequest(msg.to_string())
+    }
+
+    pub fn forbidden<T: std::fmt::Display>(msg: T) -> Self {
+        Self::Forbidden(msg.to_string())
     }
 
     pub fn serialization<T: std::fmt::Display>(msg: T) -> Self {

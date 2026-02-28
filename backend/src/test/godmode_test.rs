@@ -146,8 +146,8 @@ mod tests {
                 "personal": { "display_name": "Should Not Exist" }
             }))
             .await;
-        // Should be 404 (ACL denial returns 404 to avoid leaking resource existence)
-        resp.assert_status(StatusCode::NOT_FOUND);
+        // Should be 403 (CREATE denial returns 403 since the resource doesn't exist)
+        resp.assert_status(StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
@@ -283,7 +283,8 @@ mod tests {
                 "password": "pass123"
             }))
             .await;
-        resp.assert_status(StatusCode::NOT_FOUND);
+        // Should be 403 (CREATE denial returns 403 since the resource doesn't exist)
+        resp.assert_status(StatusCode::FORBIDDEN);
 
         // Grant godmode to the user
         state

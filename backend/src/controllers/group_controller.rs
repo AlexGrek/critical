@@ -11,7 +11,8 @@ use crit_shared::data_models::Group;
 use crit_shared::util_models::{Permissions, super_permissions};
 
 use super::gitops_controller::{
-    KindController, filter_to_brief, inject_create_defaults, parse_acl, standard_to_external, standard_to_internal,
+    KindController, filter_to_brief, inject_create_defaults, parse_acl, standard_to_external,
+    standard_to_internal,
 };
 
 pub struct GroupController {
@@ -23,9 +24,15 @@ impl GroupController {
         Self { db }
     }
 
+    /// TODO: auto update ACLs when members change
+    /// TODO: add "with_members" query parameter to include member list in group GET responses, to avoid extra round trips when the caller needs both
+
     /// Remove all membership references for a group and return parent groups
     /// that became empty as a result.
-    async fn cleanup_group_references(db: &ArangoDb, group_id: &str) -> Result<Vec<String>, AppError> {
+    async fn cleanup_group_references(
+        db: &ArangoDb,
+        group_id: &str,
+    ) -> Result<Vec<String>, AppError> {
         // Remove all membership edges where this group is the target (members OF this group)
         db.remove_all_members_of_group(group_id).await?;
 
@@ -150,8 +157,7 @@ impl KindController for GroupController {
         if let Some(obj) = body.as_object_mut() {
             if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {
                 // Validate (strips g_ prefix if present, validates, returns without prefix)
-                let validated_id = validate_group_id(id)
-                    .map_err(AppError::Validation)?;
+                let validated_id = validate_group_id(id).map_err(AppError::Validation)?;
 
                 // Add g_ prefix
                 let prefixed_id = format!("g_{}", validated_id);
@@ -181,10 +187,7 @@ impl KindController for GroupController {
     }
 
     fn prepare_create(&self, body: &mut Value, user_id: &str) {
-        log::debug!(
-            "[ACL] GroupController::prepare_create: user={}",
-            user_id
-        );
+        log::debug!("[ACL] GroupController::prepare_create: user={}", user_id);
         inject_create_defaults(body, user_id);
 
         let Some(obj) = body.as_object_mut() else {
@@ -192,11 +195,9 @@ impl KindController for GroupController {
         };
 
         // Ensure ACL exists with creator having ROOT permissions
-        let acl = obj
-            .entry("acl")
-            .or_insert_with(|| {
-                json!({"list": [], "last_mod_date": chrono::Utc::now().to_rfc3339()})
-            });
+        let acl = obj.entry("acl").or_insert_with(
+            || json!({"list": [], "last_mod_date": chrono::Utc::now().to_rfc3339()}),
+        );
 
         let Some(acl_obj) = acl.as_object_mut() else {
             return;
@@ -211,9 +212,7 @@ impl KindController for GroupController {
             entry
                 .get("principals")
                 .and_then(|p| p.as_array())
-                .is_some_and(|principals| {
-                    principals.iter().any(|p| p.as_str() == Some(user_id))
-                })
+                .is_some_and(|principals| principals.iter().any(|p| p.as_str() == Some(user_id)))
         });
 
         if !already_present {
@@ -221,33 +220,30 @@ impl KindController for GroupController {
                 "permissions": Permissions::ROOT.bits(),
                 "principals": [user_id],
             }));
-            log::debug!(
-                "[ACL] GroupController::prepare_create: added ROOT entry for user",
-            );
+            log::debug!("[ACL] GroupController::prepare_create: added ROOT entry for user",);
         }
     }
 
     async fn after_create(&self, key: &str, user_id: &str, db: &ArangoDb) -> Result<(), AppError> {
         log::debug!(
             "[LIFECYCLE] GroupController::after_create: group={}, creator={}",
-            key, user_id
+            key,
+            user_id
         );
 
         // Insert creator as a member of the new group
         db.add_principal_to_group(user_id, key, None).await?;
         log::debug!(
             "[LIFECYCLE] GroupController::after_create: added creator {} as member of group {}",
-            user_id, key
+            user_id,
+            key
         );
 
         Ok(())
     }
 
     async fn after_delete(&self, key: &str, db: &ArangoDb) -> Result<(), AppError> {
-        log::debug!(
-            "[LIFECYCLE] GroupController::after_delete: group={}",
-            key
-        );
+        log::debug!("[LIFECYCLE] GroupController::after_delete: group={}", key);
 
         let empty_parents = Self::cleanup_group_references(db, key).await?;
 
@@ -268,7 +264,8 @@ impl KindController for GroupController {
         let count = db.count_group_members(key).await?;
         log::debug!(
             "[LIFECYCLE] GroupController::after_update: group={}, member_count={}",
-            key, count
+            key,
+            count
         );
         if count == 0 {
             log::debug!(

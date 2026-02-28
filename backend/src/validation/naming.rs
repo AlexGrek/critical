@@ -25,8 +25,9 @@ pub fn validate_group_id(group_id: &str) -> Result<String, String> {
     let validators: Vec<ValidatorFn> = vec![
             limit_length(63),
             limit_min_length(2),
-            allow_only_alphanumerics_and_specials(Some("_")),
+            allow_only_alphanumerics_and_specials(Some("_-")),
             not_start_with_digit(),
+            not_start_with_char('-'),
         ];
     run_validators(&lowercased, &validators)?;
     Ok(lowercased)
@@ -105,5 +106,23 @@ mod tests {
     fn group_id_starts_with_digit() {
         let err = validate_group_id("1group").unwrap_err();
         assert!(err.contains("cannot start with a digit"));
+    }
+
+    #[test]
+    fn group_id_with_hyphens() {
+        let r = validate_group_id("my-group-name").unwrap();
+        assert_eq!(r, "my-group-name");
+    }
+
+    #[test]
+    fn group_id_with_hyphens_and_underscores() {
+        let r = validate_group_id("my-group_name").unwrap();
+        assert_eq!(r, "my-group_name");
+    }
+
+    #[test]
+    fn group_id_starts_with_hyphen() {
+        let err = validate_group_id("-group").unwrap_err();
+        assert!(err.contains("cannot start with '-'"));
     }
 }

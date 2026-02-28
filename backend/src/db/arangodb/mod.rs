@@ -602,6 +602,7 @@ impl ArangoDb {
     /// Get all principal IDs for a user: the user's own ID plus all group IDs
     /// reachable through the membership graph (up to 10 levels deep).
     pub async fn get_user_principals(&self, user_id: &str) -> Result<Vec<String>> {
+        // TODO: cache this with 30s TTL, say explicitly in the docs that group membership changes may take up to 30s to propagate to permissions, there is no invalidation and system is vulnerable for 30s after u remove someone from a group or delete a group until the cache expires. This is a good candidate for a Redis cache if we want to optimize it later, but for now let's keep it simple and do it in-process with TTL, as group membership changes are relatively rare and this is not on the critical path of any request (only needed for permission checks which are cached separately).
         let query = r#"
             LET user_principals = UNION_DISTINCT(
                 [@user],
@@ -624,6 +625,8 @@ impl ArangoDb {
     }
 
     pub async fn grant_permission(&self, permission: &str, principal: &str) -> Result<()> {
+        // TODO: add "ensure permission exists" logic to add multiple permissions without worrying about
+        // TODO: add "ensure permission not exists" to mass revoke permissions
         let query = r#"
             UPSERT { _key: @permission }
             INSERT { _key: @permission, principals: [@principal] }
@@ -691,6 +694,7 @@ impl ArangoDb {
     }
 
     pub async fn get_user_permissions(&self, user_id: &str) -> Result<Vec<String>> {
+        // TODO: create separate godmode endpoint to check if the user X has access to Y and with what permission bits or overrides
         let query = r#"
             LET user_principals = UNION_DISTINCT(
                 [@user],
@@ -797,7 +801,7 @@ impl ArangoDb {
     /// For global (non-scoped) resources.
     /// `principals`: pre-resolved user principals (user ID + transitive groups).
     /// `required_perm`: bitmask of required permission bits.
-    /// `super_bypass`: if true, skip ACL check entirely (user is super-admin).
+    /// `super_bypass`: if true, skip ACL check entirely (user is godmode or has specific permission for this operation only).
     pub async fn generic_list_acl(
         &self,
         collection: &str,
@@ -951,6 +955,7 @@ impl ArangoDb {
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<PaginatedResult> {
+        // TODO: get rid of scopes, this logic is shit. Each resource type has permissions defined by it's ACL or project's ACL
         let return_clause = match fields {
             Some(f) => {
                 let quoted: Vec<String> = f.iter().map(|s| format!("\"{}\"", s)).collect();
@@ -1241,6 +1246,8 @@ impl ArangoDb {
 
     /// Write an immutable snapshot of a resource's desired state to `resource_history`.
     /// Revision numbers are 1-based and auto-incremented per resource.
+    /// TODO: actually use this in the controller's create/update handlers and write tests for it. For now it's just a placeholder.
+    /// TODO: implement "with_history" query parameter for "get" endpoints to fetch the latest history entry along with the resource document, to avoid extra round trips when the caller needs both. This should be the only way to fetch history entries, as they are immutable and we want to encourage fetching them together with the resource document when needed.
     pub async fn write_history_entry(
         &self,
         kind: &str,

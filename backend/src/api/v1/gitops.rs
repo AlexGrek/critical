@@ -124,8 +124,8 @@ pub async fn create_object(
     let allowed = godmode || ctrl.can_create(&user_id, &body).await?;
     log::debug!("[HANDLER] create_object: can_create={}, godmode={}, user={}, kind={}, raw_id={}", allowed, godmode, user_id, kind, raw_id);
     if !allowed {
-        log::debug!("[HANDLER] create_object: DENIED, returning 404");
-        return Err(AppError::not_found(format!("{}/{}", kind, raw_id)));
+        log::debug!("[HANDLER] create_object: DENIED, returning 403");
+        return Err(AppError::forbidden(format!("not allowed to create {}/{}", kind, raw_id)));
     }
 
     ctrl.prepare_create(&mut body, &user_id);
@@ -155,12 +155,16 @@ pub async fn create_object(
             }
         })?;
 
-    ctrl.after_create(&final_id, &user_id, &state.db).await?;
+    if let Err(e) = ctrl.after_create(&final_id, &user_id, &state.db).await {
+        log::error!("[HANDLER] create_object: after_create hook failed: kind={}, id={}, error={}", kind, final_id, e);
+        return Err(e);
+    }
 
     Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": final_id }))))
 }
 
 /// GET /global/{kind}/{id} — get a single object.
+/// 404 if not found or if ACL check fails, to avoid leaking existence information.
 pub async fn get_object(
     AuthenticatedUser(user_id): AuthenticatedUser,
     Path((kind, id)): Path<(String, String)>,
@@ -202,6 +206,7 @@ pub async fn upsert_object(
     let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
 
     if is_update {
+        // TODO: check write conflicts if data includes hash, skip this check if not and just always overwrite, document this behavior
         if !godmode && !ctrl.can_write(&user_id, existing.as_ref()).await? {
             return Err(AppError::not_found(format!("{}/{}", kind, id)));
         }
@@ -212,21 +217,29 @@ pub async fn upsert_object(
         ctrl.prepare_create(&mut body, &user_id);
     }
 
+    // TODO: useless because we do a get above, but we need to ensure the collection exists before to_internal in case it needs to read from the db for validation or defaults.
     state.db.ensure_collection(&kind).await?;
 
     let doc = ctrl.to_internal(body, &state.auth)?;
     state.db.generic_upsert(&kind, &id, doc).await?;
 
     if is_update {
-        ctrl.after_update(&id, &state.db).await?;
+        if let Err(e) = ctrl.after_update(&id, &state.db).await {
+            log::error!("[HANDLER] upsert_object: after_update hook failed: kind={}, id={}, error={}", kind, id, e);
+            return Err(e);
+        }
     } else {
-        ctrl.after_create(&id, &user_id, &state.db).await?;
+        if let Err(e) = ctrl.after_create(&id, &user_id, &state.db).await {
+            log::error!("[HANDLER] upsert_object: after_create hook failed: kind={}, id={}, error={}", kind, id, e);
+            return Err(e);
+        }
     }
 
     Ok(Json(json!({ "id": id })))
 }
 
-/// PUT /global/{kind}/{id} — update (fails if not exists).
+/// PUT /global/{kind}/{id} — update (fails if not exists with 404 or on update conflict with 409).
+/// TODO: ensure it does so
 pub async fn update_object(
     AuthenticatedUser(user_id): AuthenticatedUser,
     Path((kind, id)): Path<(String, String)>,
@@ -242,6 +255,9 @@ pub async fn update_object(
     let ctrl = state.controller.for_kind(&kind);
     let existing = state.db.generic_get(&kind, &id).await?;
     let existing = existing.ok_or_else(|| AppError::not_found(format!("{}/{}", kind, id)))?;
+
+    // TODO: add hash validation to prevent lost updates, returning 409 Conflict if the document was modified since it was read. Requires frontend to send the hash it received when fetching the document
+    // TODO: add 409 support to clients: CLI and web
 
     let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
     if !godmode && !ctrl.can_write(&user_id, Some(&existing)).await? {
@@ -262,7 +278,10 @@ pub async fn update_object(
             }
         })?;
 
-    ctrl.after_update(&id, &state.db).await?;
+    if let Err(e) = ctrl.after_update(&id, &state.db).await {
+        log::error!("[HANDLER] update_object: after_update hook failed: kind={}, id={}, error={}", kind, id, e);
+        return Err(e);
+    }
 
     Ok(Json(json!({ "id": id })))
 }
@@ -297,7 +316,10 @@ pub async fn delete_object(
             }
         })?;
 
-    ctrl.after_delete(&id, &state.db).await?;
+    if let Err(e) = ctrl.after_delete(&id, &state.db).await {
+        log::error!("[HANDLER] delete_object: after_delete hook failed: kind={}, id={}, error={}", kind, id, e);
+        return Err(e);
+    }
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }

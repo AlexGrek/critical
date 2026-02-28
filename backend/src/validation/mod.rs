@@ -82,6 +82,18 @@ pub fn not_start_with_digit() -> ValidatorFn {
     })
 }
 
+/// Ensures the string does not start with a specific character.
+pub fn not_start_with_char(ch: char) -> ValidatorFn {
+    Box::new(move |s: &str| {
+        if let Some(first_char) = s.chars().next() {
+            if first_char == ch {
+                return Err(format!("String cannot start with '{}'.", ch));
+            }
+        }
+        Ok(())
+    })
+}
+
 // --- Transformer Generator Functions (for case change) ---
 
 /// Forces the input string to lowercase.
@@ -214,6 +226,23 @@ mod tests {
         let validator = not_start_with_digit();
         assert!(validator("1UserName").is_err());
         assert!(validator("9").is_err());
+    }
+
+    #[test]
+    fn test_not_start_with_char_pass() {
+        let validator = not_start_with_char('-');
+        assert!(validator("user-name").is_ok());
+        assert!(validator("_user").is_ok());
+        assert!(validator("User").is_ok());
+        assert!(validator("123").is_ok());
+        assert!(validator("").is_ok()); // Edge case: empty string
+    }
+
+    #[test]
+    fn test_not_start_with_char_fail() {
+        let validator = not_start_with_char('-');
+        assert!(validator("-user").is_err());
+        assert!(validator("-").is_err());
     }
 
     // Test suite for Pipeline Execution (run_validators)
