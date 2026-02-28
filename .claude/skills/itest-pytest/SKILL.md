@@ -273,6 +273,8 @@ def test_group(admin_token):
 5. **yield fixtures** for resource lifecycle: create before yield, delete after.
 6. **Accept 201 or 409** on register in auth fixtures — safe for parallel xdist workers.
 7. **Inline cleanup** at the end of each test that creates ad-hoc resources; fixture teardown for shared resources.
+8. **Use `DebugClient` in teardown and assertion messages** to inspect DB state on failures.
+9. Always have root token fixture available for debug route access and admin-bypass tests. Print it so you can use it to send debug requests manually if needed.
 
 ---
 

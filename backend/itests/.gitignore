@@ -5,4 +5,6 @@ __pycache__/
 .ruff_cache/
 .pdm-python
 .venv/
-temp/
+temp/**
+!temp/storage/
+!temp/storage/.gitkeep

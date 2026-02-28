@@ -1,3 +1,6 @@
 **/.DS_store
 **/target
 **/*.log
+backend/itests/temp/**
+!backend/itests/temp/storage/
+!backend/itests/temp/storage/.gitkeep

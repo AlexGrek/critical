@@ -52,7 +52,9 @@
       "Bash(ps -p 82620 -o command=)",
       "Bash(cargo expand --package crit-shared)",
       "Read(//dev/**)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(file /Users/vedmedik/dev/critical/backend/itests/assets/*)",
+      "Bash(git check-ignore -v backend/itests/temp/storage/.gitkeep)"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"
