@@ -54,7 +54,9 @@
       "Read(//dev/**)",
       "Read(//private/tmp/**)",
       "Bash(file /Users/vedmedik/dev/critical/backend/itests/assets/*)",
-      "Bash(git check-ignore -v backend/itests/temp/storage/.gitkeep)"
+      "Bash(git check-ignore -v backend/itests/temp/storage/.gitkeep)",
+      "Bash(bash test-db/populate.sh)",
+      "Bash(bash /Users/vedmedik/dev/critical/test-db/show.sh)"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"

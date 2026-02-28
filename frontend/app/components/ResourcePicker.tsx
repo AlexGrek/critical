@@ -37,7 +37,15 @@ import { cn } from "~/lib/utils";
 export interface PickerItem {
   id: string;
   name?: string;
+  /** Users return `personal.name` instead of top-level `name`. */
+  personal?: { name?: string };
   [key: string]: unknown;
+}
+
+/** Resolve the display name from a picker item.
+ *  Groups/service_accounts/pipeline_accounts use `name`; users use `personal.name`. */
+export function resolvePickerName(item: PickerItem): string | undefined {
+  return item.name || item.personal?.name || undefined;
 }
 
 export interface ResourcePickerProps {
@@ -313,9 +321,9 @@ export function ResourcePicker({
                   <span className="shrink-0 font-mono text-xs text-gray-500 dark:text-gray-400">
                     {item.id}
                   </span>
-                  {item.name && (
+                  {resolvePickerName(item) && (
                     <span className="truncate text-gray-600 dark:text-gray-300">
-                      {item.name}
+                      {resolvePickerName(item)}
                     </span>
                   )}
                 </button>

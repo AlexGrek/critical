@@ -3,7 +3,7 @@ COMPOSE ?= $(shell (command -v docker >/dev/null 2>&1 && echo "docker compose") 
 BACKEND_PORT ?= 3742
 BACKEND_URL ?= http://localhost:$(BACKEND_PORT)
 
-.PHONY: dev dev-api dev-frontend run run-fresh kill test test-unit test-cli test-api test-e2e run-db stop-db reset-db logs-db wait-db wait-backend itests itests-seq itests-parallel
+.PHONY: dev dev-api dev-frontend run run-fresh kill test test-unit test-cli test-api test-e2e run-db stop-db reset-db logs-db wait-db wait-backend itests itests-seq itests-parallel populate-db show-db
 
 dev:
 	@bash -c ' \
@@ -50,6 +50,16 @@ run:
 		cd backend && cargo run
 
 run-fresh: reset-db run
+
+# Populate dev database with test data (requires backend running)
+populate-db:
+	@$(MAKE) wait-backend
+	@bash test-db/populate.sh
+
+# Show all data in the dev database (requires backend running, logs in as admin)
+show-db:
+	@$(MAKE) wait-backend
+	@bash test-db/show.sh
 
 # Kill any stalled axum-api backend processes (by binary name and port)
 kill:

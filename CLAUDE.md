@@ -33,6 +33,7 @@ make dev                    # Quick dev build (all crates)
 ```bash
 make run                    # Start ArangoDB + run backend (persistent DB, stops container on exit)
 make run-fresh              # Reset DB volumes, then run (clean slate)
+make populate-db            # Populate dev DB with test users, groups, projects (requires backend running)
 make kill                   # Kill any stalled axum-api backend processes (by name + port 3742)
 make test                   # Start ephemeral ArangoDB, run tests, tear down DB on exit
 ```
@@ -57,6 +58,37 @@ make logs-db                # Tail container logs
 ArangoDB web UI is at `http://localhost:8529`. Makefile prefers docker, falls back to podman-compose.
 
 > **IMPORTANT**: After resetting or restarting the dev database (`make reset-db`, `make run-fresh`, or any `make reset`), you **must restart the backend** (`make run` or rerun `cargo run --bin axum-api`). The backend creates all collections and initial schema on startup via `connect_basic` — if ArangoDB was not running when the backend started, the database will not be initialized and all API calls will fail with 500 errors.
+
+### Test Database Seed Data (`test-db/`)
+
+`make populate-db` imports predefined test data into a running dev database using `cr1t apply`. Idempotent — safe to run multiple times.
+
+```bash
+make run-fresh          # Terminal 1: clean DB + backend
+make populate-db        # Terminal 2: populate with test data
+```
+
+**Bootstrap flow** (`test-db/populate.sh`):
+1. Registers `admin` user via `/api/v1/register`
+2. Logs in as `admin` via `cr1t login`
+3. Applies YAML files in numbered order: permissions → users → groups → memberships → projects
+
+**Test users** (all passwords are `{username}123`):
+
+| User    | Password   | Role / Permissions |
+| ------- | ---------- | ------------------ |
+| admin   | admin123   | Godmode (all super-permissions) |
+| alice   | alice123   | Engineering lead, group/project creator |
+| bob     | bob123     | Senior dev, group/project creator |
+| carol   | carol123   | DevOps engineer, group creator |
+| dave    | dave123    | Junior dev (basic permissions) |
+| eve     | eve123     | QA engineer (basic permissions) |
+
+**Test groups**: `g_platform_admins`, `g_engineering`, `g_devops`, `g_viewers` — each with different ACLs and members.
+
+**Test projects**: `critical`, `infra`, `docs` — with tiered ACLs (ROOT/WRITE/READ per group).
+
+YAML files in `test-db/`: `00-permissions.yaml`, `01-users.yaml`, `02-groups.yaml`, `03-memberships.yaml`, `04-projects.yaml`.
 
 ### Cross-Compilation
 ```bash

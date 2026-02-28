@@ -1,0 +1,55 @@
+# Projects with different ACL configurations.
+#
+# ACL permissions (bitflags):
+#   READ=7, WRITE=31, ROOT=127
+
+kind: project
+id: critical
+name: Critical
+description: The Critical platform itself
+labels:
+  priority: high
+  status: active
+acl:
+  list:
+    - permissions: 127
+      principals: [u_admin, u_alice]
+    - permissions: 31
+      principals: [g_engineering]
+    - permissions: 7
+      principals: [g_viewers]
+  last_mod_date: "2025-01-01T00:00:00Z"
+---
+kind: project
+id: infra
+name: Infrastructure
+description: Cloud infrastructure and deployment tooling
+labels:
+  priority: high
+  status: active
+acl:
+  list:
+    - permissions: 127
+      principals: [u_admin, u_carol]
+    - permissions: 31
+      principals: [g_devops]
+    - permissions: 7
+      principals: [g_engineering]
+  last_mod_date: "2025-01-01T00:00:00Z"
+---
+kind: project
+id: docs
+name: Documentation
+description: Internal documentation and runbooks
+labels:
+  priority: medium
+  status: active
+acl:
+  list:
+    - permissions: 127
+      principals: [u_admin]
+    - permissions: 31
+      principals: [g_engineering, g_devops]
+    - permissions: 7
+      principals: [g_viewers]
+  last_mod_date: "2025-01-01T00:00:00Z"

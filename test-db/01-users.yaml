@@ -1,0 +1,65 @@
+# Test users with different roles and permission levels.
+# The bootstrap "admin" user is created by populate.sh via /register.
+# These users are created via cr1t apply (requires ADM_USER_MANAGER).
+#
+# Passwords are intentionally simple — this is dev-only test data.
+
+kind: user
+id: u_alice
+password: alice123
+personal:
+  name: Alice Johnson
+  job_title: Engineering Lead
+  gender: female
+  manager: null
+labels:
+  department: engineering
+  role: lead
+---
+kind: user
+id: u_bob
+password: bob123
+personal:
+  name: Bob Smith
+  job_title: Senior Developer
+  gender: male
+  manager: u_alice
+labels:
+  department: engineering
+  role: developer
+---
+kind: user
+id: u_carol
+password: carol123
+personal:
+  name: Carol Williams
+  job_title: DevOps Engineer
+  gender: female
+  manager: u_alice
+labels:
+  department: devops
+  role: engineer
+---
+kind: user
+id: u_dave
+password: dave123
+personal:
+  name: Dave Brown
+  job_title: Junior Developer
+  gender: male
+  manager: u_bob
+labels:
+  department: engineering
+  role: junior
+---
+kind: user
+id: u_eve
+password: eve123
+personal:
+  name: Eve Davis
+  job_title: QA Engineer
+  gender: female
+  manager: u_alice
+labels:
+  department: qa
+  role: engineer

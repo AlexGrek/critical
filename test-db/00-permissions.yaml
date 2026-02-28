@@ -1,0 +1,42 @@
+# Super-permissions: grant system-level access to users and groups.
+# Applied first so that the bootstrap admin can manage all resources.
+#
+# Permission keys (from shared/src/util_models.rs):
+#   adm_godmode        — bypass all ACL checks (root)
+#   adm_user_manager   — manage users and groups
+#   adm_config_editor  — edit projects and system config
+#   usr_create_groups   — allow creating new groups
+#   usr_create_projects — allow creating new projects
+
+kind: permission
+id: adm_godmode
+principals:
+  - u_admin
+---
+kind: permission
+id: adm_user_manager
+principals:
+  - u_admin
+  - g_platform_admins
+---
+kind: permission
+id: adm_config_editor
+principals:
+  - u_admin
+  - g_platform_admins
+---
+kind: permission
+id: usr_create_groups
+principals:
+  - u_admin
+  - u_alice
+  - u_bob
+  - u_carol
+  - u_dave
+---
+kind: permission
+id: usr_create_projects
+principals:
+  - u_admin
+  - u_alice
+  - u_bob

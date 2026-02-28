@@ -99,3 +99,38 @@ pub async fn describe_user(id: &str) -> Result<()> {
 
     Ok(())
 }
+
+/// Generic list: `cr1t get <kind>`
+pub async fn list_resources(kind: &str) -> Result<()> {
+    let ctx = context::require_current()?;
+    let response = api::list_kind(&ctx.url, &ctx.token, kind).await?;
+
+    let items = response
+        .get("items")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if items.is_empty() {
+        println!("No {} found.", kind);
+        return Ok(());
+    }
+
+    for item in items {
+        let yaml = serde_yaml::to_string(&item)?;
+        print!("---\n{}", yaml);
+    }
+
+    Ok(())
+}
+
+/// Generic describe: `cr1t get <kind> <id>`
+pub async fn get_resource(kind: &str, id: &str) -> Result<()> {
+    let ctx = context::require_current()?;
+    let response = api::get_kind(&ctx.url, &ctx.token, kind, id).await?;
+
+    let yaml = serde_yaml::to_string(&response)?;
+    print!("{}", yaml);
+
+    Ok(())
+}

@@ -69,6 +69,16 @@ pub async fn get_user(base_url: &str, token: &str, id: &str) -> Result<Value> {
     fetch_authenticated(&url, token).await
 }
 
+pub async fn list_kind(base_url: &str, token: &str, kind: &str) -> Result<Value> {
+    let url = format!("{}/api/v1/global/{}", base_url.trim_end_matches('/'), kind);
+    fetch_authenticated(&url, token).await
+}
+
+pub async fn get_kind(base_url: &str, token: &str, kind: &str, id: &str) -> Result<Value> {
+    let url = format!("{}/api/v1/global/{}/{}", base_url.trim_end_matches('/'), kind, id);
+    fetch_authenticated(&url, token).await
+}
+
 pub async fn apply_object(base_url: &str, token: &str, kind: &str, id: &str, body: Value) -> Result<Value> {
     let url = format!("{}/api/v1/global/{}/{}", base_url.trim_end_matches('/'), kind, id);
     post_authenticated(&url, token, body).await

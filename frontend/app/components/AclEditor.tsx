@@ -84,6 +84,8 @@ export function PermissionBadge({ permissions }: { permissions: number }) {
 interface AclEntry {
   principal: string;
   permissions: number;
+  /** Service-kind scope for project ACL entries (e.g. "tasks", "*"). */
+  scope?: string;
   /** Stable local key for React rendering */
   _id: string;
 }
@@ -93,22 +95,32 @@ function flattenAcl(acl: AccessControlStore): AclEntry[] {
     entry.principals.map((principal) => ({
       principal,
       permissions: entry.permissions,
-      _id: `${principal}::${entry.permissions}::${Math.random()}`,
+      scope: entry.scope,
+      _id: `${principal}::${entry.permissions}::${entry.scope ?? ""}::${Math.random()}`,
     }))
   );
 }
 
 function buildAcl(entries: AclEntry[]): AccessControlStore {
-  const byPerms = new Map<number, Set<string>>();
+  // Group by (permissions, scope) to preserve scoped ACL entries.
+  const groupKey = (e: AclEntry) => `${e.permissions}::${e.scope ?? ""}`;
+  const groups = new Map<string, { permissions: number; scope?: string; principals: Set<string> }>();
+
   for (const entry of entries) {
-    const set = byPerms.get(entry.permissions) ?? new Set<string>();
-    set.add(entry.principal);
-    byPerms.set(entry.permissions, set);
+    const key = groupKey(entry);
+    let group = groups.get(key);
+    if (!group) {
+      group = { permissions: entry.permissions, scope: entry.scope, principals: new Set() };
+      groups.set(key, group);
+    }
+    group.principals.add(entry.principal);
   }
+
   return {
-    list: Array.from(byPerms.entries()).map(([permissions, principals]) => ({
+    list: Array.from(groups.values()).map(({ permissions, scope, principals }) => ({
       permissions,
       principals: Array.from(principals),
+      ...(scope ? { scope } : {}),
     })),
     last_mod_date: new Date().toISOString(),
   };
@@ -152,7 +164,14 @@ function PermissionToggle({
 // KindToggle — Users / Groups selector
 // ---------------------------------------------------------------------------
 
-type PrincipalKind = "users" | "groups";
+type PrincipalKind = "users" | "groups" | "service_accounts" | "pipeline_accounts";
+
+const PRINCIPAL_KINDS: { value: PrincipalKind; label: string }[] = [
+  { value: "users", label: "Users" },
+  { value: "groups", label: "Groups" },
+  { value: "service_accounts", label: "SAs" },
+  { value: "pipeline_accounts", label: "PAs" },
+];
 
 function KindToggle({
   value,
@@ -163,21 +182,21 @@ function KindToggle({
 }) {
   return (
     <div className="flex rounded-(--radius-component) overflow-hidden border border-gray-200 dark:border-gray-700 shrink-0">
-      {(["users", "groups"] as const).map((kind, idx) => (
+      {PRINCIPAL_KINDS.map((kind, idx) => (
         <button
-          key={kind}
+          key={kind.value}
           type="button"
-          onClick={() => onChange(kind)}
-          data-testid={`add-kind-${kind}`}
+          onClick={() => onChange(kind.value)}
+          data-testid={`add-kind-${kind.value}`}
           className={cn(
-            "px-2.5 py-1 text-xs font-medium capitalize transition-colors",
+            "px-2.5 py-1 text-xs font-medium transition-colors",
             idx > 0 && "border-l border-gray-200 dark:border-gray-700",
-            value === kind
+            value === kind.value
               ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900"
               : "bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800"
           )}
         >
-          {kind}
+          {kind.label}
         </button>
       ))}
     </div>
@@ -226,21 +245,23 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
 
   /** Called when a principal is selected in the ResourcePicker. */
   const handleSelect = (principalId: string) => {
-    // Skip if this exact (principal, permission) pair already exists
-    if (
-      entries.some(
-        (e) => e.principal === principalId && e.permissions === addPermissions
-      )
-    )
-      return;
-    setEntries((prev) => [
-      ...prev,
-      {
-        principal: principalId,
-        permissions: addPermissions,
-        _id: `${principalId}::${addPermissions}::${Math.random()}`,
-      },
-    ]);
+    setEntries((prev) => {
+      // If this exact (principal, permission) pair already exists, skip.
+      if (prev.some((e) => e.principal === principalId && e.permissions === addPermissions))
+        return prev;
+
+      // Remove any existing entry for this principal (at a different permission level)
+      // so we don't create conflicting overlapping entries.
+      const filtered = prev.filter((e) => e.principal !== principalId);
+      return [
+        ...filtered,
+        {
+          principal: principalId,
+          permissions: addPermissions,
+          _id: `${principalId}::${addPermissions}::${Math.random()}`,
+        },
+      ];
+    });
   };
 
   return (
@@ -330,9 +351,7 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
             <KindToggle value={addKind} onChange={setAddKind} />
             <ResourcePicker
               kind={addKind}
-              placeholder={
-                addKind === "users" ? "Search users…" : "Search groups…"
-              }
+              placeholder={`Search ${PRINCIPAL_KINDS.find((k) => k.value === addKind)?.label ?? addKind}…`}
               onSelect={handleSelect}
               className="flex-1"
               data-testid="acl-principal-picker"

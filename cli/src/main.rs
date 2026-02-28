@@ -45,6 +45,15 @@ enum Commands {
         action: UsersAction,
     },
 
+    /// Get resources by kind (list all or describe one)
+    Get {
+        /// Resource kind (e.g. users, groups, projects, memberships, permissions)
+        kind: String,
+
+        /// Resource ID (omit to list all)
+        id: Option<String>,
+    },
+
     /// Apply a resource from a file or stdin (create or update)
     Apply {
         /// File to apply. Reads from stdin if not specified.
@@ -103,6 +112,10 @@ async fn main() {
         Commands::Users { action } => match action {
             UsersAction::List => commands::gitops::list_users().await,
             UsersAction::Describe { id } => commands::gitops::describe_user(&id).await,
+        },
+        Commands::Get { kind, id } => match id {
+            Some(id) => commands::gitops::get_resource(&kind, &id).await,
+            None => commands::gitops::list_resources(&kind).await,
         },
         Commands::Apply { filename } => {
             commands::apply::run(filename.as_deref()).await

@@ -1,0 +1,68 @@
+# Groups with different ACL configurations.
+#
+# ACL permissions (bitflags, numeric values used in API):
+#   FETCH=1, LIST=2, NOTIFY=4, CREATE=8, MODIFY=16
+#   READ=7 (FETCH|LIST|NOTIFY), WRITE=31 (CREATE|MODIFY|READ)
+#   ROOT=127 (WRITE|CUSTOM1|CUSTOM2)
+
+# Platform admins — restricted group, only admin can modify
+kind: group
+id: g_platform_admins
+name: Platform Admins
+description: System administrators with full platform access
+labels:
+  tier: admin
+acl:
+  list:
+    - permissions: 127
+      principals: [u_admin]
+    - permissions: 7
+      principals: [g_platform_admins]
+  last_mod_date: "2025-01-01T00:00:00Z"
+---
+# Engineering team — Alice owns, members can read
+kind: group
+id: g_engineering
+name: Engineering
+description: Software engineering team
+labels:
+  department: engineering
+acl:
+  list:
+    - permissions: 127
+      principals: [u_alice]
+    - permissions: 7
+      principals: [g_engineering]
+  last_mod_date: "2025-01-01T00:00:00Z"
+---
+# DevOps team — Carol owns, engineering group can read
+kind: group
+id: g_devops
+name: DevOps
+description: DevOps and infrastructure team
+labels:
+  department: devops
+acl:
+  list:
+    - permissions: 127
+      principals: [u_carol]
+    - permissions: 31
+      principals: [g_devops]
+    - permissions: 7
+      principals: [g_engineering]
+  last_mod_date: "2025-01-01T00:00:00Z"
+---
+# Read-only viewers — everyone can read, only admin can modify
+kind: group
+id: g_viewers
+name: Viewers
+description: Read-only access group for stakeholders
+labels:
+  tier: readonly
+acl:
+  list:
+    - permissions: 127
+      principals: [u_admin]
+    - permissions: 7
+      principals: [g_viewers]
+  last_mod_date: "2025-01-01T00:00:00Z"

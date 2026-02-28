@@ -1,0 +1,52 @@
+# Group memberships (edge collection).
+# ID format: "{principal}::{group}"
+# principal/group fields are used by MembershipController to build _from/_to edges.
+
+# --- Platform Admins ---
+kind: membership
+id: "u_admin::g_platform_admins"
+principal: u_admin
+group: g_platform_admins
+---
+# --- Engineering ---
+kind: membership
+id: "u_alice::g_engineering"
+principal: u_alice
+group: g_engineering
+---
+kind: membership
+id: "u_bob::g_engineering"
+principal: u_bob
+group: g_engineering
+---
+kind: membership
+id: "u_dave::g_engineering"
+principal: u_dave
+group: g_engineering
+---
+kind: membership
+id: "u_eve::g_engineering"
+principal: u_eve
+group: g_engineering
+---
+# --- DevOps ---
+kind: membership
+id: "u_carol::g_devops"
+principal: u_carol
+group: g_devops
+---
+kind: membership
+id: "u_bob::g_devops"
+principal: u_bob
+group: g_devops
+---
+# --- Viewers (everyone) ---
+kind: membership
+id: "u_dave::g_viewers"
+principal: u_dave
+group: g_viewers
+---
+kind: membership
+id: "u_eve::g_viewers"
+principal: u_eve
+group: g_viewers
