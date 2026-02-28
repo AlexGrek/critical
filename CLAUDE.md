@@ -33,6 +33,7 @@ make dev                    # Quick dev build (all crates)
 ```bash
 make run                    # Start ArangoDB + run backend (persistent DB, stops container on exit)
 make run-fresh              # Reset DB volumes, then run (clean slate)
+make kill                   # Kill any stalled axum-api backend processes (by name + port 3742)
 make test                   # Start ephemeral ArangoDB, run tests, tear down DB on exit
 ```
 

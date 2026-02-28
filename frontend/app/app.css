@@ -85,6 +85,19 @@ html:not(.dark):not(.grayscale):not(.barbie):not(.orange):not(.fusion):not(.nost
   --radius-component: var(--radius-md);
   --radius-component-lg: var(--radius-lg);
   --radius-component-xl: var(--radius-xl);
+
+  /* Nav / topbar colors */
+  --color-topbar-bg: #ffffff;
+  --color-topbar-text: #0f172a;
+  --color-topbar-item-hover: #f1f5f9;
+  --color-nav-bg: #f8fafc;
+  --color-nav-border: #e2e8f0;
+  --color-nav-text: #0f172a;
+  --color-nav-text-muted: #64748b;
+  --color-nav-item-hover: #f1f5f9;
+  --color-nav-item-hover-text: #0f172a;
+  --color-nav-item-active: #dcfce7;
+  --color-nav-item-active-text: #166534;
 }
 
 /* Barbie: pink-focused light theme */
@@ -108,6 +121,19 @@ html.barbie {
   --radius-component: var(--radius-2xl);      /* 1rem = very round */
   --radius-component-lg: var(--radius-full);  /* pill-shaped buttons */
   --radius-component-xl: var(--radius-2xl);   /* large modals still 2xl (not full circle) */
+
+  /* Nav / topbar colors */
+  --color-topbar-bg: #fbcfe8;
+  --color-topbar-text: #831843;
+  --color-topbar-item-hover: #f9a8d4;
+  --color-nav-bg: #fce7f3;
+  --color-nav-border: #f9a8d4;
+  --color-nav-text: #831843;
+  --color-nav-text-muted: #be185d;
+  --color-nav-item-hover: #fbcfe8;
+  --color-nav-item-hover-text: #831843;
+  --color-nav-item-active: #f9a8d4;
+  --color-nav-item-active-text: #831843;
 }
 
 /* Fusion light: light blue accent, slightly blue backgrounds, medium roundness */
@@ -144,6 +170,19 @@ html.fusion {
   --radius-component: var(--radius-lg);
   --radius-component-lg: var(--radius-xl);
   --radius-component-xl: var(--radius-2xl);
+
+  /* Nav / topbar colors */
+  --color-topbar-bg: #bae6fd;
+  --color-topbar-text: #0c4a6e;
+  --color-topbar-item-hover: #7dd3fc;
+  --color-nav-bg: #e0f2fe;
+  --color-nav-border: #bae6fd;
+  --color-nav-text: #0c4a6e;
+  --color-nav-text-muted: #0369a1;
+  --color-nav-item-hover: #bae6fd;
+  --color-nav-item-hover-text: #0c4a6e;
+  --color-nav-item-active: #7dd3fc;
+  --color-nav-item-active-text: #0c4a6e;
 }
 
 /* Orange dark: orange-tinted dark theme (uses .dark for layout) */
@@ -178,6 +217,19 @@ html.orange {
   --radius-component: var(--radius-sm);       /* 0.25rem = very minimal */
   --radius-component-lg: var(--radius-sm);    /* even large elements minimal */
   --radius-component-xl: var(--radius-sm);    /* modals also minimal */
+
+  /* Nav / topbar colors */
+  --color-topbar-bg: #200f00;
+  --color-topbar-text: #fed7aa;
+  --color-topbar-item-hover: #3d2200;
+  --color-nav-bg: #150b00;
+  --color-nav-border: #3d2200;
+  --color-nav-text: #fed7aa;
+  --color-nav-text-muted: #fb923c;
+  --color-nav-item-hover: #1f1200;
+  --color-nav-item-hover-text: #fed7aa;
+  --color-nav-item-active: #7c2d12;
+  --color-nav-item-active-text: #fed7aa;
 }
 
 /* Green-tinted dark theme: primary is green; override grays so surfaces/borders match */
@@ -201,6 +253,19 @@ html.dark {
   --radius-component: var(--radius-md);
   --radius-component-lg: var(--radius-lg);
   --radius-component-xl: var(--radius-xl);
+
+  /* Nav / topbar colors */
+  --color-topbar-bg: #0d1b13;
+  --color-topbar-text: #d1fae5;
+  --color-topbar-item-hover: #1a2e22;
+  --color-nav-bg: #0a1510;
+  --color-nav-border: #1a2e22;
+  --color-nav-text: #d1fae5;
+  --color-nav-text-muted: #6ee7b7;
+  --color-nav-item-hover: #0f1f18;
+  --color-nav-item-hover-text: #d1fae5;
+  --color-nav-item-active: #064e3b;
+  --color-nav-item-active-text: #6ee7b7;
 }
 
 /* Grayscale = truly neutral gray, no blue/green tint. Uses .dark for layout;
@@ -215,6 +280,19 @@ html.grayscale {
   --radius-component: 0.125rem;               /* 2px = almost no roundness */
   --radius-component-lg: 0.125rem;            /* all elements sharp */
   --radius-component-xl: 0.125rem;            /* modals also completely sharp */
+
+  /* Nav / topbar colors */
+  --color-topbar-bg: #000000;
+  --color-topbar-text: #e5e5e5;
+  --color-topbar-item-hover: #1f1f1f;
+  --color-nav-bg: #111111;
+  --color-nav-border: #2a2a2a;
+  --color-nav-text: #e5e5e5;
+  --color-nav-text-muted: #888888;
+  --color-nav-item-hover: #1f1f1f;
+  --color-nav-item-hover-text: #ffffff;
+  --color-nav-item-active: #2a2a2a;
+  --color-nav-item-active-text: #ffffff;
 }
 
 html.grayscale .bg-gradient-subtle {
@@ -267,6 +345,19 @@ html.nostalgic95 {
   --radius-component: 0px;
   --radius-component-lg: 0px;
   --radius-component-xl: 0px;
+
+  /* Nav / topbar colors — Win95 style: navy title bar, silver sidebar */
+  --color-topbar-bg: #000080;
+  --color-topbar-text: #ffffff;
+  --color-topbar-item-hover: #1084d0;
+  --color-nav-bg: #d4d0c8;
+  --color-nav-border: #808080;
+  --color-nav-text: #000000;
+  --color-nav-text-muted: #404040;
+  --color-nav-item-hover: #000080;
+  --color-nav-item-hover-text: #ffffff;
+  --color-nav-item-active: #000080;
+  --color-nav-item-active-text: #ffffff;
 }
 
 /* Classic Win95 3D raised button effect */

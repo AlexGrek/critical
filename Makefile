@@ -3,7 +3,7 @@ COMPOSE ?= $(shell (command -v docker >/dev/null 2>&1 && echo "docker compose") 
 BACKEND_PORT ?= 3742
 BACKEND_URL ?= http://localhost:$(BACKEND_PORT)
 
-.PHONY: dev dev-api dev-frontend run run-fresh test test-unit test-cli test-api run-db stop-db reset-db logs-db wait-db wait-backend itests itests-seq itests-parallel
+.PHONY: dev dev-api dev-frontend run run-fresh kill test test-unit test-cli test-api test-e2e run-db stop-db reset-db logs-db wait-db wait-backend itests itests-seq itests-parallel
 
 dev:
 	@bash -c ' \
@@ -51,6 +51,13 @@ run:
 
 run-fresh: reset-db run
 
+# Kill any stalled axum-api backend processes (by binary name and port)
+kill:
+	@echo ">>> Killing stalled axum-api processes..."
+	@pkill -f axum-api 2>/dev/null || true
+	@lsof -ti :$(BACKEND_PORT) 2>/dev/null | xargs kill -9 2>/dev/null || true
+	@echo ">>> Done."
+
 # --- Test targets ---
 
 # --- Internal: start backend in background, wait for it, set trap for cleanup ---
@@ -74,7 +81,7 @@ define _start_backend
 	echo ">>> Backend is ready"
 endef
 
-# Run everything: Rust unit/integration tests, CLI integration tests, Python API tests
+# Run everything: Rust unit/integration tests, CLI integration tests, Python API tests, E2E tests
 test:
 	@echo ">>> Building backend binary..."
 	@cargo build --bin axum-api
@@ -82,14 +89,16 @@ test:
 	@$(COMPOSE) up -d
 	@$(MAKE) wait-db
 	@trap '$(COMPOSE) down -v; echo ">>> Ephemeral ArangoDB removed."' EXIT; \
-		echo ">>> [1/3] Running Rust unit & backend integration tests..." && \
+		echo ">>> [1/4] Running Rust unit & backend integration tests..." && \
 		cargo test -p axum-api -p crit-cli && \
-		echo ">>> [2/3] Starting backend for CLI & API integration tests..." && \
+		echo ">>> [2/4] Starting backend for CLI & API integration tests..." && \
 		$(_start_backend) && \
 		echo ">>> Running CLI integration tests..." && \
 		cargo test -p crit-cli --test cli_test -- --include-ignored && \
-		echo ">>> [3/3] Running Python API integration tests (parallel)..." && \
+		echo ">>> [3/4] Running Python API integration tests (parallel)..." && \
 		cd backend/itests && pdm run pytest tests/ -n auto && cd ../.. && \
+		echo ">>> [4/4] Running E2E tests (Playwright)..." && \
+		cd e2e-tests && npm install --silent && CI=true npx playwright test && cd .. && \
 		echo ">>> All tests passed."
 
 # Rust unit tests + backend integration tests (via axum-test, no backend process needed)
@@ -124,6 +133,18 @@ test-api:
 		echo ">>> Running Python API tests (parallel)..." && \
 		cd backend/itests && pdm run pytest tests/ -n auto && cd ../.. && \
 		echo ">>> API tests passed."
+
+# E2E tests (Playwright) — starts ephemeral DB + backend; Playwright auto-starts frontend dev server
+test-e2e:
+	@echo ">>> Starting ephemeral ArangoDB..."
+	@$(COMPOSE) up -d
+	@$(MAKE) wait-db
+	@echo ">>> Starting backend..."
+	@trap '$(COMPOSE) down -v; echo ">>> Ephemeral ArangoDB removed."' EXIT; \
+		$(_start_backend) && \
+		echo ">>> Running E2E tests (Playwright)..." && \
+		cd e2e-tests && npm install --silent && npx playwright test && cd .. && \
+		echo ">>> E2E tests passed."
 
 # --- Integration test targets (convenience wrappers) ---
 

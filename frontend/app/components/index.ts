@@ -10,3 +10,5 @@ export { Header, H1, H2, H3, H4, H5, H6, headerVariants } from "./Header";
 export { Paragraph, paragraphVariants } from "./Paragraph";
 export { CodeBlock, InlineCode, codeBlockVariants } from "./CodeBlock";
 export { ScrollableLogWindow } from "./ScrollableLogWindow";
+export { TopBar } from "./TopBar";
+export { SideMenu } from "./SideMenu";

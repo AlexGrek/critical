@@ -1,6 +1,6 @@
 import type { Route } from "./+types/home";
 import { Link } from "react-router";
-import { LogoCritical, ThemeCombobox } from "~/components";
+import { LogoCritical } from "~/components";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -19,10 +19,6 @@ const routes = [
 export default function Home() {
   return (
     <div className="min-h-screen px-4 py-12">
-      <div className="fixed top-4 right-4 z-10">
-        <ThemeCombobox />
-      </div>
-
       <div className="max-w-160 mx-auto space-y-8">
         <div className="flex flex-col items-center gap-3 text-center">
           <LogoCritical size="lg" />
@@ -62,3 +58,4 @@ export default function Home() {
     </div>
   );
 }
+
