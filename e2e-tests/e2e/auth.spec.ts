@@ -31,7 +31,7 @@ test.describe('Authentication', () => {
       await page.getByTestId('sign-in-submit').click();
 
       await expect(page).toHaveURL(/\/sign-in/);
-      await expect(page.locator('text=/invalid/i')).toBeVisible();
+      await expect(page.getByTestId('sign-in-error')).toBeVisible();
     }
   );
 });

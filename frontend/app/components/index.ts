@@ -13,5 +13,8 @@ export { ScrollableLogWindow } from "./ScrollableLogWindow";
 export { TopBar } from "./TopBar";
 export { SideMenu } from "./SideMenu";
 export { Table } from "./Table";
+export { Tabs } from "./Tabs";
 export { ResourcePicker } from "./ResourcePicker";
 export type { ResourcePickerProps, PickerItem } from "./ResourcePicker";
+export { AclEditor, PermissionBadge } from "./AclEditor";
+export type { AclEditorProps, AccessControlList, AccessControlStore } from "./AclEditor";

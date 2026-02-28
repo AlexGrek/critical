@@ -35,9 +35,9 @@ test(
     await page.getByTestId('group-id-input').fill(bareId);
     await page.getByTestId('submit-create-group').click();
 
-    // Modal closes and card appears — no reload needed
+    // Modal closes and row appears — no reload needed
     await expect(page.getByTestId('create-group-modal-title')).not.toBeVisible();
-    await expect(page.getByTestId(`group-card-${fullId}`)).toBeVisible();
+    await expect(page.getByTestId(`group-row-${fullId}`)).toBeVisible();
     await expect(page.getByTestId(`group-id-label-${fullId}`)).toContainText(fullId);
 
     await deleteGroup(page, fullId);
@@ -64,12 +64,12 @@ test(
 
     await page.goto('/groups');
 
-    await expect(page.getByTestId('groups-grid')).toBeVisible();
+    await expect(page.getByTestId('groups-table-card')).toBeVisible();
     for (let i = 0; i < groups.length; i++) {
-      const card = page.getByTestId(`group-card-${fullIds[i]}`);
-      await expect(card).toBeVisible();
-      await expect(card.getByText(groups[i].name)).toBeVisible();
-      await expect(card.getByTestId(`group-id-label-${fullIds[i]}`)).toContainText(fullIds[i]);
+      const row = page.getByTestId(`group-row-${fullIds[i]}`);
+      await expect(row).toBeVisible();
+      await expect(row.getByText(groups[i].name)).toBeVisible();
+      await expect(row.getByTestId(`group-id-label-${fullIds[i]}`)).toContainText(fullIds[i]);
     }
 
     for (const id of fullIds) await deleteGroup(page, id);

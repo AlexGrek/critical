@@ -89,7 +89,10 @@ export default function SignIn() {
         <Card>
           <CardContent className="pt-6">
             {actionData?.error && (
-              <div className="mb-4 rounded-(--radius-component) bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-600 dark:text-red-400">
+              <div
+                data-testid="sign-in-error"
+                className="mb-4 rounded-(--radius-component) bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-600 dark:text-red-400"
+              >
                 {actionData.error}
               </div>
             )}

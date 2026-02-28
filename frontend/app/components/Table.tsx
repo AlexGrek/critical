@@ -128,11 +128,12 @@ const TableEmpty = ({
   colSpan,
   children,
   className,
+  ...props
 }: {
   colSpan: number;
   children: React.ReactNode;
   className?: string;
-}) => (
+} & React.TdHTMLAttributes<HTMLTableCellElement>) => (
   <tbody>
     <tr>
       <td
@@ -141,6 +142,7 @@ const TableEmpty = ({
           "py-14 text-center text-sm text-gray-400 dark:text-gray-500",
           className
         )}
+        {...props}
       >
         {children}
       </td>

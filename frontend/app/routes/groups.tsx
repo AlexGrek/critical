@@ -4,14 +4,18 @@ import {
   Button,
   Input,
   MorphModal,
+  AclEditor,
+  PermissionBadge,
   Card,
   H1,
   H2,
   H3,
   Paragraph,
   Table,
+  Tabs,
   ResourcePicker,
 } from "~/components";
+import type { AccessControlStore } from "~/components";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus,
@@ -28,17 +32,6 @@ import { cn, formatDate } from "~/lib/utils";
 // ---------------------------------------------------------------------------
 // API types
 // ---------------------------------------------------------------------------
-
-interface AccessControlList {
-  permissions: number;
-  principals: string[];
-  scope?: string;
-}
-
-interface AccessControlStore {
-  list: AccessControlList[];
-  last_mod_date: string;
-}
 
 interface ResourceState {
   created_at: string;
@@ -299,6 +292,8 @@ export default function Groups() {
     description: "",
     labels: [],
   });
+  // Pending ACL changes — null means "use what came from the server"
+  const [editAcl, setEditAcl] = useState<AccessControlStore | null>(null);
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<
     string | null
   >(null);
@@ -330,6 +325,7 @@ export default function Groups() {
         items.filter((m) => m.group === groupId && !m.deletion)
       );
       setEditForm(groupToEditForm(group));
+      setEditAcl(null);
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to load group details");
     } finally {
@@ -350,6 +346,7 @@ export default function Groups() {
     setSelectedGroupId(null);
     setEditingGroup(null);
     setEditingMembers([]);
+    setEditAcl(null);
     setLoadError("");
     setSaveError("");
     setMemberError("");
@@ -372,6 +369,7 @@ export default function Groups() {
       name: editForm.name,
       description: editForm.description || undefined,
       labels,
+      acl: editAcl ?? editingGroup.acl,
     };
     const form = new FormData();
     form.append("intent", "update-group");
@@ -769,6 +767,8 @@ export default function Groups() {
               saveSuccess={saveSuccess}
               editForm={editForm}
               setEditForm={setEditForm}
+              editAcl={editAcl}
+              onAclChange={setEditAcl}
               isSubmitting={isSubmitting}
               onClose={closeEditor}
               onSave={submitSave}
@@ -800,6 +800,8 @@ interface GroupEditorProps {
   saveSuccess: boolean;
   editForm: EditForm;
   setEditForm: React.Dispatch<React.SetStateAction<EditForm>>;
+  editAcl: AccessControlStore | null;
+  onAclChange: (acl: AccessControlStore) => void;
   isSubmitting: boolean;
   onClose: () => void;
   onSave: () => void;
@@ -821,6 +823,8 @@ function GroupEditor({
   saveSuccess,
   editForm,
   setEditForm,
+  editAcl,
+  onAclChange,
   isSubmitting,
   onClose,
   onSave,
@@ -830,6 +834,8 @@ function GroupEditor({
   onDismissSaveError,
   onDismissMemberError,
 }: GroupEditorProps) {
+  const currentAcl = editAcl ?? group?.acl;
+
   return (
     <Card
       className="overflow-hidden flex flex-col sticky top-4 max-h-[calc(100vh-120px)]"
@@ -838,9 +844,7 @@ function GroupEditor({
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0">
         <div className="min-w-0">
-          <H3 className="text-base truncate">
-            {group?.name ?? groupId}
-          </H3>
+          <H3 className="text-base truncate">{group?.name ?? groupId}</H3>
           <span className="font-mono text-xs text-gray-400 dark:text-gray-500">
             {groupId}
           </span>
@@ -856,91 +860,128 @@ function GroupEditor({
         </Button>
       </div>
 
-      {/* Scrollable body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-6 min-h-0">
-        {loading ? (
-          <div
-            className="flex items-center justify-center py-16"
-            data-testid="editor-loading"
-          >
-            <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
-          </div>
-        ) : (
-          <>
-            {loadError && (
+      {loading ? (
+        <div
+          className="flex flex-1 items-center justify-center py-16"
+          data-testid="editor-loading"
+        >
+          <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
+        </div>
+      ) : (
+        <Tabs.Root
+          defaultValue="details"
+          className="flex flex-col flex-1 min-h-0"
+        >
+          {/* Tab strip */}
+          <Tabs.List className="shrink-0 px-2">
+            <Tabs.Trigger value="details" data-testid="tab-details">
+              Details
+            </Tabs.Trigger>
+            <Tabs.Trigger value="labels" data-testid="tab-labels">
+              Labels
+              {editForm.labels.length > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-mono bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                  {editForm.labels.length}
+                </span>
+              )}
+            </Tabs.Trigger>
+            <Tabs.Trigger value="members" data-testid="tab-members">
+              Members
+              {members.length > 0 && (
+                <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-mono bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300">
+                  {members.length}
+                </span>
+              )}
+            </Tabs.Trigger>
+            <Tabs.Trigger value="access" data-testid="tab-access">
+              Access
+              {editAcl && (
+                <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
+              )}
+            </Tabs.Trigger>
+          </Tabs.List>
+
+          {/* Load error — visible on any tab */}
+          {loadError && (
+            <div className="shrink-0 px-4 pt-3">
               <ErrorBanner
                 message={loadError}
                 onDismiss={onDismissLoadError}
                 data-testid="editor-load-error"
               />
-            )}
+            </div>
+          )}
 
-            {/* Details */}
-            <section>
-              <SectionLabel>Details</SectionLabel>
-              <div className="space-y-3">
-                <div>
-                  <label
-                    htmlFor="edit-group-name"
-                    className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
-                  >
-                    Name
-                  </label>
-                  <Input
-                    id="edit-group-name"
-                    value={editForm.name}
-                    onChange={(e) =>
-                      setEditForm((f) => ({ ...f, name: e.target.value }))
-                    }
-                    placeholder="Group name"
-                    data-testid="edit-group-name"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="edit-group-description"
-                    className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
-                  >
-                    Description
-                  </label>
-                  <Input
-                    id="edit-group-description"
-                    value={editForm.description}
-                    onChange={(e) =>
-                      setEditForm((f) => ({
-                        ...f,
-                        description: e.target.value,
-                      }))
-                    }
-                    placeholder="Optional description"
-                    data-testid="edit-group-description"
-                  />
-                </div>
-                {group?.state && (
-                  <div className="pt-1 space-y-1">
+          {/* Scrollable tab content */}
+          <div className="flex-1 overflow-y-auto min-h-0">
+
+            {/* ── Details ── */}
+            <Tabs.Content value="details" className="p-4 space-y-3">
+              <div>
+                <label
+                  htmlFor="edit-group-name"
+                  className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
+                >
+                  Name
+                </label>
+                <Input
+                  id="edit-group-name"
+                  value={editForm.name}
+                  onChange={(e) =>
+                    setEditForm((f) => ({ ...f, name: e.target.value }))
+                  }
+                  placeholder="Group name"
+                  data-testid="edit-group-name"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="edit-group-description"
+                  className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1"
+                >
+                  Description
+                </label>
+                <Input
+                  id="edit-group-description"
+                  value={editForm.description}
+                  onChange={(e) =>
+                    setEditForm((f) => ({
+                      ...f,
+                      description: e.target.value,
+                    }))
+                  }
+                  placeholder="Optional description"
+                  data-testid="edit-group-description"
+                />
+              </div>
+              {group?.state && (
+                <div className="pt-1 space-y-1">
+                  <Paragraph variant="subtle" className="text-xs">
+                    Created:{" "}
+                    <span className="font-mono">
+                      {formatDate(group.state.created_at)}
+                    </span>
+                  </Paragraph>
+                  {group.state.updated_at && (
                     <Paragraph variant="subtle" className="text-xs">
-                      Created:{" "}
+                      Updated:{" "}
                       <span className="font-mono">
-                        {formatDate(group.state.created_at)}
+                        {formatDate(group.state.updated_at)}
                       </span>
                     </Paragraph>
-                    {group.state.updated_at && (
-                      <Paragraph variant="subtle" className="text-xs">
-                        Updated:{" "}
-                        <span className="font-mono">
-                          {formatDate(group.state.updated_at)}
-                        </span>
-                      </Paragraph>
-                    )}
-                  </div>
-                )}
-              </div>
-            </section>
+                  )}
+                </div>
+              )}
+            </Tabs.Content>
 
-            {/* Labels */}
-            <section>
+            {/* ── Labels ── */}
+            <Tabs.Content value="labels" className="p-4">
               <div className="flex items-center justify-between mb-3">
-                <SectionLabel className="mb-0">Labels</SectionLabel>
+                <Paragraph variant="muted" className="text-xs">
+                  {editForm.labels.length === 0
+                    ? "No labels yet"
+                    : `${editForm.labels.length} label${editForm.labels.length !== 1 ? "s" : ""}`}
+                </Paragraph>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -960,11 +1001,6 @@ function GroupEditor({
                 </Button>
               </div>
               <div className="space-y-2">
-                {editForm.labels.length === 0 && (
-                  <Paragraph variant="subtle" className="text-xs">
-                    No labels
-                  </Paragraph>
-                )}
                 {editForm.labels.map((label, idx) => (
                   <div key={label._id} className="flex gap-2 items-center">
                     <Input
@@ -972,7 +1008,10 @@ function GroupEditor({
                       onChange={(e) =>
                         setEditForm((f) => {
                           const labels = [...f.labels];
-                          labels[idx] = { ...labels[idx], key: e.target.value };
+                          labels[idx] = {
+                            ...labels[idx],
+                            key: e.target.value,
+                          };
                           return { ...f, labels };
                         })
                       }
@@ -1016,11 +1055,10 @@ function GroupEditor({
                   </div>
                 ))}
               </div>
-            </section>
+            </Tabs.Content>
 
-            {/* Members */}
-            <section>
-              <SectionLabel>Members</SectionLabel>
+            {/* ── Members ── */}
+            <Tabs.Content value="members" className="p-4 space-y-3">
               <Table.Root>
                 <Table.Header>
                   <Table.Row>
@@ -1058,34 +1096,86 @@ function GroupEditor({
                 )}
               </Table.Root>
 
-              {/* Add member — search picker */}
               <ResourcePicker
                 kind="users"
                 placeholder="Search users to add…"
                 onSelect={(id) => onAddMember(id)}
                 disabled={isSubmitting}
-                className="mt-3"
                 data-testid="add-member-picker"
               />
 
-              {/* Member operation error — shown directly below the picker */}
               {memberError && (
                 <ErrorBanner
                   message={memberError}
                   onDismiss={onDismissMemberError}
-                  className="mt-2"
                   data-testid="member-error"
                 />
               )}
-            </section>
-          </>
-        )}
-      </div>
+            </Tabs.Content>
+
+            {/* ── Access ── */}
+            <Tabs.Content value="access" className="p-4 space-y-3">
+              {group && currentAcl ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Paragraph variant="muted" className="text-xs">
+                      {currentAcl.list.length === 0
+                        ? "Open to all authenticated users"
+                        : `${currentAcl.list.length} ACL entr${currentAcl.list.length !== 1 ? "ies" : "y"}`}
+                    </Paragraph>
+                    <AclEditor
+                      acl={currentAcl}
+                      onSave={onAclChange}
+                      trigger={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid="edit-acl-button"
+                        >
+                          Edit
+                        </Button>
+                      }
+                    />
+                  </div>
+
+                  {currentAcl.list.length > 0 && (
+                    <div className="space-y-1.5">
+                      {currentAcl.list.flatMap((entry) =>
+                        entry.principals.map((principal) => (
+                          <div
+                            key={`${principal}-${entry.permissions}`}
+                            className="flex items-center gap-2"
+                          >
+                            <span className="font-mono text-xs text-gray-600 dark:text-gray-400 truncate flex-1">
+                              {principal}
+                            </span>
+                            <PermissionBadge permissions={entry.permissions} />
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+
+                  {editAcl && (
+                    <Paragraph variant="warning" className="text-xs">
+                      Unsaved ACL changes — click "Save Changes" to apply.
+                    </Paragraph>
+                  )}
+                </>
+              ) : (
+                <Paragraph variant="subtle" className="text-xs">
+                  Load a group to view its access control list.
+                </Paragraph>
+              )}
+            </Tabs.Content>
+
+          </div>
+        </Tabs.Root>
+      )}
 
       {/* Footer */}
       {!loading && group && (
         <div className="border-t border-gray-200 dark:border-gray-800 px-4 py-3 shrink-0 space-y-3">
-          {/* Save error — shown just above the buttons */}
           {saveError && (
             <ErrorBanner
               message={saveError}
@@ -1095,7 +1185,6 @@ function GroupEditor({
           )}
 
           <div className="flex items-center gap-2 justify-end">
-            {/* Transient success indicator */}
             {saveSuccess && (
               <span
                 className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400"
@@ -1176,24 +1265,6 @@ function ErrorBanner({
   );
 }
 
-function SectionLabel({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <p
-      className={cn(
-        "mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500",
-        className
-      )}
-    >
-      {children}
-    </p>
-  );
-}
 
 function LabelBadges({
   labels,
