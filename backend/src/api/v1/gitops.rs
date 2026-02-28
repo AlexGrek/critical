@@ -16,6 +16,11 @@ pub struct ListQuery {
     pub cursor: Option<String>,
 }
 
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub startwith: Option<String>,
+}
+
 /// Validate that a kind string is a safe collection name (alphanumeric + underscores).
 pub fn validate_kind(kind: &str) -> Result<(), AppError> {
     if kind.is_empty() {
@@ -295,4 +300,50 @@ pub async fn delete_object(
     ctrl.after_delete(&id, &state.db).await?;
 
     Ok(axum::http::StatusCode::NO_CONTENT)
+}
+
+/// GET /global/{kind}/search?startwith={prefix} — quick prefix search on _key.
+/// Returns up to 15 brief results. ACL-filtered the same way as the list endpoint.
+pub async fn search_objects(
+    AuthenticatedUser(user_id): AuthenticatedUser,
+    Path(kind): Path<String>,
+    Query(query): Query<SearchQuery>,
+    State(state): State<Arc<AppState>>,
+) -> Result<impl IntoResponse, AppError> {
+    validate_kind(&kind)?;
+    state.db.ensure_collection(&kind).await?;
+
+    let startwith = query.startwith.as_deref().unwrap_or("");
+
+    let ctrl = state.controller.for_kind(&kind);
+
+    let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
+    let principals = state.db.get_user_principals(&user_id).await?;
+
+    let super_bypass = godmode || match ctrl.super_permission() {
+        Some(perm) => state
+            .db
+            .has_permission_with_principals(&principals, perm)
+            .await?,
+        None => true,
+    };
+
+    let docs = state
+        .db
+        .generic_search_acl(
+            &kind,
+            &principals,
+            ctrl.read_permission_bits(),
+            super_bypass,
+            ctrl.list_projection_fields(),
+            startwith,
+        )
+        .await?;
+
+    let items: Vec<Value> = docs
+        .into_iter()
+        .map(|doc| ctrl.to_list_external(doc))
+        .collect();
+
+    Ok(Json(json!({ "items": items })))
 }

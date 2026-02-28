@@ -3,6 +3,21 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 
+/// Map a principal ID to its ArangoDB collection name based on the ID prefix.
+fn collection_for_principal(principal: &str) -> &'static str {
+    if principal.starts_with("u_") {
+        "users"
+    } else if principal.starts_with("g_") {
+        "groups"
+    } else if principal.starts_with("sa_") {
+        "service_accounts"
+    } else if principal.starts_with("pa_") {
+        "pipeline_accounts"
+    } else {
+        "users"
+    }
+}
+
 use crate::db::ArangoDb;
 use crate::error::AppError;
 use crate::middleware::auth::Auth;
@@ -124,11 +139,28 @@ impl KindController for MembershipController {
     }
 
     fn to_internal(&self, body: Value, _auth: &Auth) -> Result<Value, AppError> {
-        Ok(standard_to_internal(body))
+        let mut doc = standard_to_internal(body);
+        // ArangoDB edge collections require _from and _to in "collection/key" format.
+        if let Some(obj) = doc.as_object_mut() {
+            if let Some(principal) = obj.get("principal").and_then(|v| v.as_str()).map(String::from) {
+                let col = collection_for_principal(&principal);
+                obj.insert("_from".to_string(), Value::String(format!("{}/{}", col, principal)));
+            }
+            if let Some(group) = obj.get("group").and_then(|v| v.as_str()).map(String::from) {
+                obj.insert("_to".to_string(), Value::String(format!("groups/{}", group)));
+            }
+        }
+        Ok(doc)
     }
 
     fn to_external(&self, doc: Value) -> Value {
-        standard_to_external(doc)
+        let mut doc = standard_to_external(doc);
+        // Strip ArangoDB edge fields — not part of the external API contract.
+        if let Some(obj) = doc.as_object_mut() {
+            obj.remove("_from");
+            obj.remove("_to");
+        }
+        doc
     }
 
     fn super_permission(&self) -> Option<&str> {

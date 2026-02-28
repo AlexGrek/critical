@@ -61,6 +61,10 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                     get(api::v1::gitops::list_objects).post(api::v1::gitops::create_object),
                 )
                 .route(
+                    "/global/{kind}/search",
+                    get(api::v1::gitops::search_objects),
+                )
+                .route(
                     "/global/{kind}/{id}",
                     get(api::v1::gitops::get_object)
                         .post(api::v1::gitops::upsert_object)

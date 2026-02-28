@@ -12,3 +12,6 @@ export { CodeBlock, InlineCode, codeBlockVariants } from "./CodeBlock";
 export { ScrollableLogWindow } from "./ScrollableLogWindow";
 export { TopBar } from "./TopBar";
 export { SideMenu } from "./SideMenu";
+export { Table } from "./Table";
+export { ResourcePicker } from "./ResourcePicker";
+export type { ResourcePickerProps, PickerItem } from "./ResourcePicker";

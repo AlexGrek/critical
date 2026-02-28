@@ -882,6 +882,60 @@ impl ArangoDb {
         })
     }
 
+    /// Search documents by `_key` prefix with ACL filtering pushed into AQL.
+    /// Always returns at most 15 results. Uses brief projection fields if provided.
+    pub async fn generic_search_acl(
+        &self,
+        collection: &str,
+        principals: &[String],
+        required_perm: u8,
+        super_bypass: bool,
+        fields: Option<&[&str]>,
+        startwith: &str,
+    ) -> Result<Vec<Value>> {
+        let return_clause = match fields {
+            Some(f) => {
+                let quoted: Vec<String> = f.iter().map(|s| format!("\"{}\"", s)).collect();
+                format!("RETURN KEEP(doc, {})", quoted.join(", "))
+            }
+            None => "RETURN doc".to_string(),
+        };
+
+        let vars = std::collections::HashMap::from([
+            ("@col", Value::String(collection.to_string())),
+            ("principals", serde_json::to_value(principals)?),
+            ("required_perm", json!(required_perm)),
+            ("super_bypass", Value::Bool(super_bypass)),
+            ("startwith", Value::String(startwith.to_string())),
+        ]);
+
+        let query = format!(
+            r#"
+            FOR doc IN @@col
+                FILTER doc.deletion == null
+                FILTER STARTS_WITH(doc._key, @startwith)
+
+                LET acl_pass = @super_bypass OR (
+                    LENGTH(doc.acl.list || []) == 0 OR
+                    LENGTH(
+                        FOR entry IN (doc.acl.list || [])
+                            FILTER BIT_AND(entry.permissions, @required_perm) == @required_perm
+                            FILTER LENGTH(INTERSECTION(entry.principals, @principals)) > 0
+                            LIMIT 1
+                            RETURN 1
+                    ) > 0
+                )
+                FILTER acl_pass
+
+                SORT doc._key ASC
+                LIMIT 15
+                {return_clause}
+            "#
+        );
+
+        self.aql(&query, vars).await
+    }
+
     /// List project-scoped documents with hybrid ACL resolution in a single AQL query.
     /// If a document has its own ACL entries, they are used.
     /// Otherwise, falls back to the project's ACL filtered by `resource_kind` scope.
