@@ -132,7 +132,7 @@ Stack architecture: nginx gateway (:3742) routes `/api/*` to the backend and `/*
   - `DB_NAME` — database name (default: `unnamed`)
   - `DB_USER` — ArangoDB user (default: `root`)
   - `DB_PASSWORD` — ArangoDB password (default: empty)
-  - `PORT`, `HOST`, `JWT_SECRET`, `MGMT_TOKEN`, `CLIENT_API_KEYS`
+  - `PORT`, `HOST`, `JWT_SECRET`, `CLIENT_API_KEYS`
 - Re-exports models from `crit-shared` via `pub use crit_shared::models` in `main.rs`
 
 ### Database Schema
@@ -172,8 +172,12 @@ Controllers use a **trait-based dispatch** pattern for the generic gitops API (`
   - `after_create(key, user_id, db)` — post-creation hook (e.g. insert creator as group member)
   - `after_delete(key, db)` — post-deletion hook (e.g. cascade removal of memberships for users and groups)
   - `after_update(key, db)` — post-update hook (e.g. empty-group auto-deletion; only fires on actual updates, NOT on upsert-creates)
+  - `is_scoped()` — returns `true` for project-scoped resource kinds (served at `/v1/projects/{project}/{kind}`)
+  - `super_permission()` — returns a super-permission key that short-circuits ACL checks, or `None`
+  - `check_hybrid_acl(doc, principals, required, project_acl)` — checks a document's own ACL; if empty, falls back to the project's full ACL (no scope filtering)
 - **Dispatch**: `Controller::for_kind(kind)` in `mod.rs` returns `&dyn KindController`, matching `"users"` → `UserController`, `"groups"` → `GroupController`, `"projects"` → `ProjectController`, `"memberships"` → `MembershipController`, and falling back to `DefaultKindController` (fully permissive) for unknown kinds.
 - **Shared helpers** (`gitops_controller.rs`): `standard_to_internal()`, `standard_to_external()`, `rename_id_to_key()`, `rename_key_to_id()`, `parse_acl()` — reused by all controller implementations.
+- **Scoped ACL model**: Project-scoped resources (e.g. tasks, deployments) use a two-level ACL fallback. Each resource checks its own `acl.list` first; if empty, the parent project's full `acl.list` is used — **all entries apply regardless of `scope` field**. The `scope` field on `AccessControlList` is retained for backwards compatibility with old documents but is no longer evaluated during permission checks. Group membership changes may take up to 5 seconds to propagate to permission checks — principal resolution is cached with a 5s TTL via `AppState::get_cached_principals()` (see `cache::PRINCIPALS_CACHE`). There is no cache invalidation; the system relies on TTL expiry, which is acceptable because group membership changes are infrequent.
 
 **When adding a new resource kind:**
 1. Create a new controller file in `controllers/` with a struct holding `Arc<ArangoDb>`

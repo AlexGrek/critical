@@ -163,6 +163,34 @@ impl KindController for MembershipController {
         doc
     }
 
+    async fn after_create(&self, key: &str, _user_id: &str, db: &ArangoDb) -> Result<(), AppError> {
+        // Key format: "{principal}::{group}"
+        // Grant READ ACL on the group to the new member
+        let parts: Vec<&str> = key.splitn(2, "::").collect();
+        if parts.len() != 2 {
+            return Ok(());
+        }
+        let principal_id = parts[0];
+        let group_id = parts[1];
+
+        db.add_principal_to_group_acl(group_id, principal_id, Permissions::READ.bits())
+            .await
+            .map_err(|e| {
+                log::error!(
+                    "[LIFECYCLE] MembershipController::after_create: failed to add READ ACL for {} on {}: {}",
+                    principal_id, group_id, e
+                );
+                AppError::Internal(e)
+            })?;
+
+        log::debug!(
+            "[LIFECYCLE] MembershipController::after_create: granted READ ACL to {} on group {}",
+            principal_id, group_id
+        );
+
+        Ok(())
+    }
+
     fn super_permission(&self) -> Option<&str> {
         Some(super_permissions::ADM_USER_MANAGER)
     }

@@ -62,7 +62,7 @@ pub async fn list_objects(
     let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
 
     // Resolve principals once for the entire request
-    let principals = state.db.get_user_principals(&user_id).await?;
+    let principals = state.get_cached_principals(&user_id).await?;
 
     // Check super-permission bypass. If None (no super-permission defined),
     // treat as fully permissive (matches DefaultKindController behavior).
@@ -153,6 +153,9 @@ pub async fn create_object(
         .and_then(|v| v.as_str())
         .unwrap_or(&raw_id)
         .to_string();
+
+    // Validate ACL principals (e.g. group members check) before writing
+    ctrl.validate_acl_principals(&doc, &state.db).await?;
 
     state
         .db
@@ -273,6 +276,10 @@ pub async fn upsert_object(
     if let Some(obj) = doc.as_object_mut() {
         obj.insert("hash_code".to_string(), json!(hash));
     }
+
+    // Validate ACL principals (e.g. group members check) before writing
+    ctrl.validate_acl_principals(&doc, &state.db).await?;
+
     state.db.generic_upsert(&kind, &id, doc).await?;
 
     if is_update {
@@ -346,6 +353,10 @@ pub async fn update_object(
     if let Some(obj) = doc.as_object_mut() {
         obj.insert("hash_code".to_string(), json!(hash));
     }
+
+    // Validate ACL principals (e.g. group members check) before writing
+    ctrl.validate_acl_principals(&doc, &state.db).await?;
+
     state
         .db
         .generic_update(&kind, &id, doc)
@@ -428,7 +439,7 @@ pub async fn search_objects(
     let ctrl = state.controller.for_kind(&kind);
 
     let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
-    let principals = state.db.get_user_principals(&user_id).await?;
+    let principals = state.get_cached_principals(&user_id).await?;
 
     let super_bypass = godmode || match ctrl.super_permission() {
         Some(perm) => state

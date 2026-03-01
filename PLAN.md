@@ -1,6 +1,6 @@
 # Refactoring Plan — Remaining TODOs
 
-## 1. Hash-Based Optimistic Concurrency Control (OCC)
+## 1. Hash-Based Optimistic Concurrency Control (OCC) - DONE
 
 **Goal**: Prevent lost updates by computing and validating `hash_code` on every write.
 
@@ -80,7 +80,7 @@ if let Some(obj) = doc.as_object_mut() {
 
 ---
 
-## 2. Resource History Integration
+## 2. Resource History Integration - DONE
 
 **Goal**: Wire up `write_history_entry` into create/update flows; add `?with_history=true` query param to GET.
 
@@ -158,7 +158,7 @@ pub async fn get_object(
 
 ---
 
-## 3. Principal Caching (30s TTL)
+## 3. Principal Caching (5s TTL)
 
 **Goal**: Cache `get_user_principals()` results to avoid repeated graph traversals on every ACL check.
 
@@ -178,8 +178,6 @@ pub async fn get_object(
 
 **Option A — Cache at call site (AppState helper)**: Add `get_cached_principals()` on `AppState` that wraps `db.get_user_principals()` with cache logic. Callers use `state.get_cached_principals()` instead of `state.db.get_user_principals()`.
 
-**Option B — Pass cache into ArangoDb**: Add `Arc<CacheStore>` to `ArangoDb` struct. More invasive.
-
 **Recommended: Option A** — minimal changes, follows the existing `has_godmode()` pattern.
 
 ### Exact Changes
@@ -187,7 +185,7 @@ pub async fn get_object(
 **`cache.rs`** — add constant and registration:
 ```rust
 pub const PRINCIPALS_CACHE: &str = "principals";
-pub const PRINCIPALS_TTL: Duration = Duration::from_secs(30);
+pub const PRINCIPALS_TTL: Duration = Duration::from_secs(5);
 
 // In create_default_cache():
 store.register_cache(PRINCIPALS_CACHE, PRINCIPALS_TTL).await;
@@ -230,7 +228,7 @@ impl AppState {
 
 ### Documentation
 Add a note to `CLAUDE.md` under Architecture:
-> Group membership changes may take up to 30 seconds to propagate to permission checks. There is no cache invalidation — the system relies on TTL expiry. This is acceptable because group membership changes are infrequent.
+> Group membership changes may take up to 5 seconds to propagate to permission checks. There is no cache invalidation — the system relies on TTL expiry. This is acceptable because group membership changes are infrequent.
 
 ---
 
@@ -298,7 +296,7 @@ pub async fn revoke_permissions_batch(&self, permissions: &[&str], principal: &s
 ```rust
 /// GET /v1/debug/access?user={user_id}&resource={kind}/{id}&permission={perm_bits}
 ///
-/// Management-token-only endpoint. Returns a JSON report:
+/// Godmode-only endpoint. Returns a JSON report:
 /// - user's resolved principals (direct + transitive groups)
 /// - user's super-permissions
 /// - resource's ACL entries
@@ -306,7 +304,7 @@ pub async fn revoke_permissions_batch(&self, permissions: &[&str], principal: &s
 /// - whether access is granted and why (direct ACL match, group match, super-permission bypass)
 ```
 
-This endpoint is gated on management token (`MGMT_TOKEN` from config), not regular JWT auth. It never modifies state.
+This endpoint is gated on `godmode_middleware` (requires `ADM_GODMODE` super-permission), not a separate management token. It never modifies state.
 
 ### Integration Tests
 - Test batch grant: grant 3 permissions, verify all present
@@ -315,7 +313,7 @@ This endpoint is gated on management token (`MGMT_TOKEN` from config), not regul
 
 ---
 
-## 5. Scoped ACL Refactor
+## 5. Scoped ACL Refactor - DONE, not tested
 
 **Goal**: Simplify `generic_list_scoped` by removing the `scope` field from ACL matching. Each resource checks its own ACL first, then falls back to the parent project's full ACL without scope filtering.
 
@@ -383,3 +381,90 @@ fn check_hybrid_acl(doc, principals, required, project_acl) {
 
 ### Migration
 No data migration needed — `scope` stays on documents, it's just ignored. New documents can omit it (it's `Option<String>`). Over time, stop setting scope on new ACL entries.
+
+---
+
+## 6. Scoped ACL Integration Tests
+
+**Goal**: Verify the scoped ACL refactor (item 5) behaves correctly end-to-end via Python integration tests.
+
+**Effort**: Medium — new test file only, no backend changes.
+
+**Status**: `DefaultKindController.is_scoped()` was changed to `true` so that ad-hoc kinds (e.g. "tasks") route through the scoped endpoints without a dedicated controller. The backend changes from item 5 are complete.
+
+### File to Create
+
+`backend/itests/tests/scoped_gitops_test.py`
+
+### Test Scenarios
+
+| # | Scenario | Expected |
+|---|----------|----------|
+| 1 | Root creates a project with ROOT ACL for itself | 201 |
+| 2 | Root creates a task under the project | 201 |
+| 3 | Root lists tasks — sees the task | items non-empty |
+| 4 | Root gets a single task | 200 |
+| 5 | Root updates the task | 200 |
+| 6 | Root deletes the task | 204 |
+| 7 | Non-scoped kind (`users`) via scoped endpoint | 400 |
+| 8 | Non-existent project → list/get/create → 404 | 404 |
+| 9 | User with project READ permission can list and get | 200 |
+| 10 | User with NO project ACL cannot list/get | 404 |
+| 11 | User with NO project ACL cannot create | 404 |
+| 12 | User with CREATE permission on project can create | 201 |
+| 13 | **Scope field ignored (regression)**: project ACL entry has `scope="other"` — user can still list tasks | items non-empty |
+| 14 | **Scope field ignored (regression)**: project ACL entry has `scope="other"` — user can still GET a task | 200 |
+| 15 | Task with its own ACL — user in resource ACL but NOT in project ACL can GET | 200 |
+| 16 | Task with its own ACL — user NOT in resource ACL cannot GET (even if in project ACL for other perms) | 404 |
+| 17 | Cross-project isolation: task in project A is not visible when listing project B | items is empty |
+| 18 | Root (godmode) bypasses all ACLs | 200/201 always |
+
+### Key Fixtures
+
+```python
+@pytest.fixture(scope="module")
+def admin_token():
+    """Login as root (ADM_GODMODE, all bypasses)."""
+
+@pytest.fixture(scope="module")
+def project_owner():
+    """Random user with USR_CREATE_PROJECTS super-perm granted by root."""
+
+@pytest.fixture(scope="module")
+def reader_user():
+    """Random user — will be given READ-only on the test project."""
+
+@pytest.fixture(scope="module")
+def outsider_user():
+    """Random user — never given any project ACL."""
+
+@pytest.fixture(scope="module")
+def test_project(admin_token, project_owner):
+    """Create a project with ROOT ACL for project_owner; yield project_id; delete after."""
+
+@pytest.fixture(scope="module")
+def reader_project(admin_token, project_owner, reader_user):
+    """Separate project where reader_user has READ permission (scope field set to unrelated value)."""
+```
+
+### Regression Test Detail (scenarios 13–14)
+
+**Important: Principal Caching (5s TTL)**
+
+The critical scenario: a project ACL entry carries `scope="other"` (a different resource kind). Under the old code this entry would be filtered out when listing "tasks", so the user would see an empty list. Under the new code the scope field is ignored, so the user sees their task.
+
+```python
+def test_scope_field_ignored_on_list(reader_user, reader_project, ...):
+    # Project ACL: [{ permissions: READ, principals: [reader_id], scope: "other" }]
+    # Task has no own ACL, so project ACL is used.
+    # Old: scope="other" != "tasks" → filtered out → 0 items
+    # New: scope ignored → 1 item
+    resp = requests.get(f"{URL_PROJECTS}/{reader_project}/tasks", headers=...)
+    assert resp.status_code == 200
+    assert len(resp.json()["items"]) == 1
+```
+
+### Cleanup Requirements
+- Every created resource (project, tasks) must be deleted in fixture teardown
+- Use `yield` in all resource fixtures
+- Inline DELETE for ad-hoc resources created within individual tests

@@ -61,11 +61,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "critical.secretName" . }}
                   key: JWT_SECRET
-            - name: MGMT_TOKEN
-              valueFrom:
-                secretKeyRef:
-                  name: {{ include "critical.secretName" . }}
-                  key: MGMT_TOKEN
             - name: ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:

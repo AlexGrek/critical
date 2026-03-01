@@ -4,7 +4,7 @@ use serde_json::json;
 use tokio::sync::Semaphore;
 
 use crate::{
-    cache::CacheStore,
+    cache::{self, CacheStore},
     config::{AppConfig, RuntimeConfig},
     controllers::Controller,
     db::ArangoDb,
@@ -43,6 +43,37 @@ impl AppState {
             objectstore: Arc::new(objectstore),
             image_processing_semaphore: Arc::new(Semaphore::new(1)),
         }
+    }
+
+    /// Return the resolved principals (direct user ID + transitive group IDs) for a user,
+    /// using the principals cache with 5s TTL. Falls back to a DB query on cache miss.
+    ///
+    /// Note: group membership changes may take up to 5 seconds to propagate to
+    /// permission checks (no cache invalidation — relies on TTL expiry).
+    pub async fn get_cached_principals(&self, user_id: &str) -> Result<Vec<String>, anyhow::Error> {
+        if let Some(cached) = self.cache.get(cache::PRINCIPALS_CACHE, user_id).await {
+            if let Some(arr) = cached.as_array() {
+                let principals: Vec<String> = arr
+                    .iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect();
+                log::debug!("[PRINCIPALS] cache hit for {}: {:?}", user_id, principals);
+                return Ok(principals);
+            }
+        }
+
+        let principals = self.db.get_user_principals(user_id).await?;
+        log::debug!("[PRINCIPALS] cache miss for {}, queried DB: {:?}", user_id, principals);
+
+        self.cache
+            .set(
+                cache::PRINCIPALS_CACHE,
+                user_id.to_string(),
+                json!(principals),
+            )
+            .await;
+
+        Ok(principals)
     }
 
     /// Check if a user has ADM_GODMODE, using the special_access_cache with

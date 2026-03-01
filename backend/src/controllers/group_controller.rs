@@ -186,6 +186,65 @@ impl KindController for GroupController {
         Some(super_permissions::ADM_USER_MANAGER)
     }
 
+    async fn validate_acl_principals(&self, body: &Value, db: &ArangoDb) -> Result<(), AppError> {
+        // Extract the group ID from the body (_key after to_internal, or id before)
+        let group_id = body
+            .get("_key")
+            .or_else(|| body.get("id"))
+            .and_then(|v| v.as_str());
+
+        let Some(group_id) = group_id else {
+            return Ok(()); // No group ID — skip validation (create_object will catch this)
+        };
+
+        // Parse ACL entries from the body
+        let acl = match parse_acl(body) {
+            Ok(acl) => acl,
+            Err(_) => return Ok(()), // No ACL or unparseable — nothing to validate
+        };
+
+        if acl.list.is_empty() {
+            return Ok(());
+        }
+
+        // Collect all unique principals from ACL entries
+        let mut acl_principals: Vec<&str> = Vec::new();
+        for entry in &acl.list {
+            for p in &entry.principals {
+                if !acl_principals.contains(&p.as_str()) {
+                    acl_principals.push(p);
+                }
+            }
+        }
+
+        if acl_principals.is_empty() {
+            return Ok(());
+        }
+
+        // Get all transitive members of this group
+        let members = db.get_all_group_members_transitive(group_id).await?;
+        log::debug!(
+            "[ACL] GroupController::validate_acl_principals: group={}, members={:?}, acl_principals={:?}",
+            group_id, members, acl_principals
+        );
+
+        // Check that every ACL principal is a member
+        let invalid: Vec<&str> = acl_principals
+            .into_iter()
+            .filter(|p| !members.contains(&p.to_string()))
+            .collect();
+
+        if !invalid.is_empty() {
+            return Err(AppError::bad_request(format!(
+                "ACL contains principals that are not members of group {}: {}",
+                group_id,
+                invalid.join(", ")
+            )));
+        }
+
+        Ok(())
+    }
+
     fn prepare_create(&self, body: &mut Value, user_id: &str) {
         log::debug!("[ACL] GroupController::prepare_create: user={}", user_id);
         inject_create_defaults(body, user_id);

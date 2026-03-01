@@ -172,7 +172,6 @@ Three auth strategies:
 | Strategy | Description |
 |----------|-------------|
 | **JWT** | Primary method. Issued on `/login`, required for `/v1/*` routes |
-| **Management token** | For admin/ops tooling (`MGMT_TOKEN` env var) |
 | **API key** | For service-to-service calls (`CLIENT_API_KEYS` env var) |
 
 JWT middleware is applied to all `/v1` routes via the `Auth` struct initialized with `JWT_SECRET`.
@@ -214,5 +213,4 @@ Environment variables loaded via `dotenvy` from `backend/.env`:
 | `HOST` | `0.0.0.0` | Bind address |
 | `JWT_SECRET` | *(required)* | JWT signing secret |
 | `JWT_LIFETIME_SECS` | *(see config)* | JWT token lifetime in seconds |
-| `MGMT_TOKEN` | *(optional)* | Management API token |
 | `CLIENT_API_KEYS` | *(optional)* | Comma-separated API keys |

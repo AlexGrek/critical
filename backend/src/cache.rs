@@ -12,6 +12,9 @@ use tokio::sync::RwLock;
 
 use crate::godmode;
 
+pub const PRINCIPALS_CACHE: &str = "principals";
+pub const PRINCIPALS_TTL: Duration = Duration::from_secs(5);
+
 /// A single cached entry with its insertion timestamp.
 struct CacheEntry {
     value: Value,
@@ -108,5 +111,6 @@ pub async fn create_default_cache() -> Arc<CacheStore> {
     store
         .register_cache(godmode::SPECIAL_ACCESS_CACHE, godmode::SPECIAL_ACCESS_TTL)
         .await;
+    store.register_cache(PRINCIPALS_CACHE, PRINCIPALS_TTL).await;
     store
 }

@@ -26,7 +26,6 @@ services:
       DB_USER: root
       DB_PASSWORD: ${DB_PASSWORD:-changeme}
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      MGMT_TOKEN: ${MGMT_TOKEN:-change-me-in-production}
       ROOT_PASSWORD: ${ROOT_PASSWORD:-changeme}
       PORT: "3069"
       HOST: "0.0.0.0"

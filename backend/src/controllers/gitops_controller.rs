@@ -82,14 +82,11 @@ pub trait KindController: Send + Sync {
 
     /// Whether this resource kind is project-scoped.
     /// Scoped resources live under `/v1/projects/{project}/{kind}`.
+    /// Defaults to `false`; override to `true` for project-scoped kinds.
+    /// `DefaultKindController` returns `true` so that ad-hoc / unregistered kinds
+    /// can be used as scoped resources without a dedicated controller.
     fn is_scoped(&self) -> bool {
         false
-    }
-
-    /// The service kind name used for ACL scope matching on the parent project.
-    /// Only meaningful when `is_scoped()` returns true (e.g. "tasks", "deployments").
-    fn resource_kind_name(&self) -> &str {
-        ""
     }
 
     /// Super-permission that short-circuits ACL checks for this kind.
@@ -108,9 +105,17 @@ pub trait KindController: Send + Sync {
         Permissions::MODIFY.bits()
     }
 
+    /// Validate that all principals referenced in the document's ACL are allowed.
+    /// For groups, this means every ACL principal must be a member (direct or transitive).
+    /// Returns Ok(()) if valid, or a BadRequest error listing invalid principals.
+    /// Default is a no-op (all principals allowed).
+    async fn validate_acl_principals(&self, _body: &Value, _db: &ArangoDb) -> Result<(), AppError> {
+        Ok(())
+    }
+
     /// Check hybrid ACL permission for a single document.
     /// Uses the resource's own ACL if non-empty, otherwise falls back to
-    /// the project's ACL filtered by scope.
+    /// the project's full ACL (all entries, no scope filtering).
     fn check_hybrid_acl(
         &self,
         doc: &Value,
@@ -124,13 +129,9 @@ pub trait KindController: Send + Sync {
                 return acl.check_permission(principals, required);
             }
         }
-        // Fallback to project ACL with scope filtering
+        // Fallback to full project ACL — no scope filtering
         if let Some(proj_acl) = project_acl {
-            return proj_acl.check_permission_scoped(
-                principals,
-                required,
-                self.resource_kind_name(),
-            );
+            return proj_acl.check_permission(principals, required);
         }
         false
     }
@@ -290,6 +291,13 @@ impl KindController for DefaultKindController {
 
     fn to_external(&self, doc: Value) -> Value {
         standard_to_external(doc)
+    }
+
+    /// Ad-hoc / unregistered kinds are treated as project-scoped resources so that
+    /// new resource types can be used via the scoped endpoints without needing a
+    /// dedicated controller. They still require the project ACL to allow access.
+    fn is_scoped(&self) -> bool {
+        true
     }
 }
 

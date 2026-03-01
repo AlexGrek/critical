@@ -93,38 +93,6 @@ pub async fn jwt_auth_middleware(
     }
 }
 
-pub async fn token_auth_middleware_mgmt(
-    State(app_state): State<Arc<AppState>>,
-    req: Request<Body>,
-    next: Next,
-) -> Result<Response, AppError> {
-    let (parts, body) = req.into_parts();
-
-    let path = parts.uri.path();
-
-    if path == "/register" || path == "/login" {
-        let req = Request::from_parts(parts, body);
-        return Ok(next.run(req).await);
-    }
-
-    let auth_header = parts
-        .headers
-        .get("Authorization")
-        .and_then(|header| header.to_str().ok());
-
-    let token =
-        auth_header.and_then(|header| header.strip_prefix("Bearer ").map(|s| s.to_string()));
-
-    let token = token.ok_or(AppError::Authorization("Unauthorized".to_string()))?;
-
-    if token == app_state.config.management_token {
-        let req = Request::from_parts(parts, body);
-        Ok(next.run(req).await)
-    } else {
-        Err(AppError::Authorization("Unauthorized".to_string()))
-    }
-}
-
 /// Middleware that allows only users with ADM_GODMODE through.
 /// Must be placed after `jwt_auth_middleware` so that the user identity
 /// is already in request extensions.

@@ -157,7 +157,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     info!("  Database name: {}", config.database_name);
     info!("  Client API keys: {:?}", config.client_api_keys);
-    info!("  Management token: {}", config.management_token);
 
     let db = ArangoDb::connect_basic(&config.database_connection_string, &config.database_user, &config.database_password, &config.database_name).await?;
 

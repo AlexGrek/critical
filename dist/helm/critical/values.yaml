@@ -94,11 +94,10 @@ secrets:
   create: true
   dbPassword: "changeme"
   jwtSecret: "change-me-in-production"
-  mgmtToken: "change-me-in-production"
   rootPassword: "changeme"
 
 # Use an existing Secret instead of creating one.
-# The Secret must contain keys: DB_PASSWORD, JWT_SECRET, MGMT_TOKEN, ROOT_PASSWORD
+# The Secret must contain keys: DB_PASSWORD, JWT_SECRET, ROOT_PASSWORD
 existingSecret: ""
 
 # --- Config (non-secret environment) ---

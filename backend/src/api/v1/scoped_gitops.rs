@@ -31,7 +31,7 @@ async fn resolve_auth(
     super_perm: Option<&str>,
 ) -> Result<(Vec<String>, bool), AppError> {
     let godmode = state.has_godmode(user_id).await.unwrap_or(false);
-    let principals = state.db.get_user_principals(user_id).await?;
+    let principals = state.get_cached_principals(user_id).await?;
     let super_bypass = godmode || match super_perm {
         Some(perm) => state
             .db
@@ -73,7 +73,6 @@ pub async fn list_scoped_objects(
             &project_id,
             &principals,
             ctrl.read_permission_bits(),
-            ctrl.resource_kind_name(),
             super_bypass,
             ctrl.list_projection_fields(),
             query.limit,
@@ -169,10 +168,10 @@ pub async fn create_scoped_object(
         resolve_auth(&state, &user_id, ctrl.super_permission()).await?;
 
     if !super_bypass {
-        // For creation, check project-level CREATE permission
+        // For creation, check project-level CREATE permission (no scope filtering)
         let project_acl = parse_acl(&project_doc).ok();
         let has_create = project_acl.as_ref().map_or(false, |acl| {
-            acl.check_permission_scoped(&principals, Permissions::CREATE, ctrl.resource_kind_name())
+            acl.check_permission(&principals, Permissions::CREATE)
         });
         if !has_create {
             return Err(AppError::not_found(format!("{}/{}", kind, id)));

@@ -482,6 +482,82 @@ impl ArangoDb {
         Ok(result.into_iter().next().unwrap_or(0))
     }
 
+    /// Add a principal to a group document's ACL with the given permissions.
+    /// If the principal already appears in any ACL entry, this is a no-op.
+    /// Uses an AQL UPDATE to atomically append to the ACL list.
+    pub async fn add_principal_to_group_acl(
+        &self,
+        group_id: &str,
+        principal_id: &str,
+        permissions_bits: u8,
+    ) -> Result<()> {
+        let query = r#"
+            LET doc = DOCUMENT("groups", @group)
+            FILTER doc != null
+            FILTER doc.deletion == null
+            LET already = (
+                FOR entry IN (doc.acl.list || [])
+                    FILTER @principal IN entry.principals
+                    RETURN 1
+            )
+            FILTER LENGTH(already) == 0
+            UPDATE doc WITH {
+                acl: {
+                    list: APPEND(doc.acl.list || [], [{
+                        permissions: @permissions,
+                        principals: [@principal]
+                    }]),
+                    last_mod_date: DATE_ISO8601(DATE_NOW())
+                }
+            } IN groups
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            (
+                "group",
+                serde_json::Value::String(group_id.to_string()),
+            ),
+            (
+                "principal",
+                serde_json::Value::String(principal_id.to_string()),
+            ),
+            (
+                "permissions",
+                serde_json::Value::Number(serde_json::Number::from(permissions_bits)),
+            ),
+        ]);
+
+        self.aql::<serde_json::Value>(query, vars).await?;
+        Ok(())
+    }
+
+    /// Get all principals that are members of a group, including transitive members
+    /// (members of sub-groups, up to 10 levels deep).
+    /// Returns a flat set of all user and group IDs that are direct or indirect members.
+    pub async fn get_all_group_members_transitive(&self, group_id: &str) -> Result<Vec<String>> {
+        let query = r#"
+            LET members = UNION_DISTINCT(
+                (FOR m IN memberships
+                    FILTER m.group == @group
+                    FILTER m.deletion == null
+                    RETURN m.principal),
+                (FOR v IN 1..10 INBOUND CONCAT("groups/", @group) memberships
+                    OPTIONS { uniqueVertices: "global", order: "bfs" }
+                    FILTER v.deletion == null
+                    RETURN v._key)
+            )
+            RETURN members
+        "#;
+
+        let vars = std::collections::HashMap::from([(
+            "group",
+            serde_json::Value::String(group_id.to_string()),
+        )]);
+
+        let result: Vec<Vec<String>> = self.aql(query, vars).await?;
+        Ok(result.into_iter().next().unwrap_or_default())
+    }
+
     /// Remove all membership edges where this group is the target (members OF this group).
     pub async fn remove_all_members_of_group(&self, group_id: &str) -> Result<()> {
         let query = r#"
@@ -942,20 +1018,18 @@ impl ArangoDb {
 
     /// List project-scoped documents with hybrid ACL resolution in a single AQL query.
     /// If a document has its own ACL entries, they are used.
-    /// Otherwise, falls back to the project's ACL filtered by `resource_kind` scope.
+    /// Otherwise, falls back to the project's full ACL (all entries, no scope filtering).
     pub async fn generic_list_scoped(
         &self,
         collection: &str,
         project_id: &str,
         principals: &[String],
         required_perm: u8,
-        resource_kind: &str,
         super_bypass: bool,
         fields: Option<&[&str]>,
         limit: Option<u32>,
         cursor: Option<&str>,
     ) -> Result<PaginatedResult> {
-        // TODO: get rid of scopes, this logic is shit. Each resource type has permissions defined by it's ACL or project's ACL
         let return_clause = match fields {
             Some(f) => {
                 let quoted: Vec<String> = f.iter().map(|s| format!("\"{}\"", s)).collect();
@@ -969,7 +1043,6 @@ impl ArangoDb {
             ("project_id", Value::String(project_id.to_string())),
             ("principals", serde_json::to_value(principals)?),
             ("required_perm", json!(required_perm)),
-            ("resource_kind", Value::String(resource_kind.to_string())),
             ("super_bypass", Value::Bool(super_bypass)),
         ]);
 
@@ -996,11 +1069,7 @@ impl ArangoDb {
 
                 LET effective_acl = LENGTH(doc.acl.list || []) > 0
                     ? (doc.acl.list || [])
-                    : (
-                        FOR entry IN project_acl
-                            FILTER entry.scope == null OR entry.scope == "*" OR entry.scope == @resource_kind
-                            RETURN entry
-                    )
+                    : project_acl
 
                 LET acl_pass = @super_bypass OR (
                     LENGTH(

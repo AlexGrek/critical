@@ -44,7 +44,6 @@ Set in shell or `.env` file next to `docker-compose.yml`:
 | `DB_PASSWORD` | `changeme` | ArangoDB root password |
 | `DB_NAME` | `critical` | Database name |
 | `JWT_SECRET` | `change-me-in-production` | JWT signing secret |
-| `MGMT_TOKEN` | `change-me-in-production` | Management API token |
 | `ROOT_PASSWORD` | `changeme` | Default root user password |
 
 ### Images
@@ -101,10 +100,9 @@ secrets:
   create: true
   dbPassword: "changeme"
   jwtSecret: "change-me-in-production"
-  mgmtToken: "change-me-in-production"
   rootPassword: "changeme"
 
-# Or reference an existing Secret (must contain DB_PASSWORD, JWT_SECRET, MGMT_TOKEN, ROOT_PASSWORD)
+# Or reference an existing Secret (must contain DB_PASSWORD, JWT_SECRET, ROOT_PASSWORD)
 existingSecret: ""
 
 # Non-secret config
