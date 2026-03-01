@@ -3,3 +3,4 @@ pub mod util_models;
 
 pub use crit_derive::Brief;
 pub use crit_derive::crit_resource;
+pub use util_models::compute_value_hash;

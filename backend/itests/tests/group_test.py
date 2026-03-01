@@ -673,8 +673,8 @@ def test_membership_create_requires_group_modify(regular_user, second_user):
         },
         headers=second_headers,
     )
-    assert resp.status_code == 404, (
-        f"Expected 404 (denied), got {resp.status_code}: {resp.text}"
+    assert resp.status_code == 403, (
+        f"Expected 403 (denied), got {resp.status_code}: {resp.text}"
     )
 
     # Creator (has MODIFY via ROOT) CAN add a membership

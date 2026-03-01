@@ -75,7 +75,7 @@ def test_regular_user_cannot_create_user(regular_user):
         },
         headers=auth_headers(regular_user["token"]),
     )
-    assert resp.status_code == 404, f"Expected 404, got {resp.status_code}: {resp.text}"
+    assert resp.status_code == 403, f"Expected 403, got {resp.status_code}: {resp.text}"
 
 
 def test_admin_can_create_and_delete_user(admin_token):

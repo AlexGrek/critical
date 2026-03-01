@@ -79,6 +79,30 @@ pub async fn get_kind(base_url: &str, token: &str, kind: &str, id: &str) -> Resu
     fetch_authenticated(&url, token).await
 }
 
+/// Fetch an existing resource, returning `None` if it does not exist (404).
+/// Other HTTP errors are returned as `Err`.
+pub async fn try_get_kind(base_url: &str, token: &str, kind: &str, id: &str) -> Result<Option<Value>> {
+    let url = format!("{}/api/v1/global/{}/{}", base_url.trim_end_matches('/'), kind, id);
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await?;
+
+    if resp.status().as_u16() == 404 {
+        return Ok(None);
+    }
+    if resp.status().is_success() {
+        return Ok(Some(resp.json::<Value>().await?));
+    }
+    let status = resp.status();
+    match resp.json::<ApiErrorBody>().await {
+        Ok(body) => bail!("{} ({})", body.error.message, status),
+        Err(_) => bail!("request failed with status {}", status),
+    }
+}
+
 pub async fn apply_object(base_url: &str, token: &str, kind: &str, id: &str, body: Value) -> Result<Value> {
     let url = format!("{}/api/v1/global/{}/{}", base_url.trim_end_matches('/'), kind, id);
     post_authenticated(&url, token, body).await

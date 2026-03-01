@@ -71,9 +71,29 @@ pub async fn run(filename: Option<&Path>) -> Result<()> {
         bail!("no valid YAML documents found in input");
     }
 
-    for (kind, id, body) in documents {
+    for (kind, id, mut body) in documents {
         let api_kind = to_api_kind(&kind);
-        api::apply_object(&ctx.url, &ctx.token, &api_kind, &id, body).await?;
+
+        // Fetch the existing resource to obtain its hash_code. If the resource
+        // does not exist yet this is a create, and no hash is injected. Any
+        // other error (auth, network) is surfaced immediately.
+        if let Some(existing) = api::try_get_kind(&ctx.url, &ctx.token, &api_kind, &id).await? {
+            if let Some(hash) = existing.get("hash_code").and_then(|v| v.as_str()) {
+                if let Some(obj) = body.as_object_mut() {
+                    obj.insert("hash_code".to_string(), serde_json::Value::String(hash.to_string()));
+                }
+            }
+        }
+
+        api::apply_object(&ctx.url, &ctx.token, &api_kind, &id, body).await
+            .map_err(|e| {
+                // api.rs formats errors as "{message} ({status})" — detect 409 by suffix.
+                if e.to_string().contains("(409 Conflict)") {
+                    anyhow::anyhow!("{}/{} was modified since last read — re-run apply to retry", kind, id)
+                } else {
+                    e
+                }
+            })?;
         println!("{}/{} applied", kind, id);
     }
 

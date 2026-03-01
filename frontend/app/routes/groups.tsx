@@ -17,7 +17,7 @@ import {
   YamlEditor,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   Plus,
   X,
@@ -170,6 +170,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
           body: groupJson,
         }
       );
+      if (res.status === 409)
+        return { error: "This group was modified by someone else. Reload and try again.", intent };
       if (!res.ok) return { error: await parseApiError(res), intent };
       return { success: true, intent };
     }
@@ -870,6 +872,24 @@ function GroupEditor({
 }: GroupEditorProps) {
   const currentAcl = editAcl ?? group?.acl;
 
+  /** Stable object passed to YamlEditor — only recomputes when edit state changes. */
+  const yamlValue = useMemo<Record<string, unknown>>(() => {
+    if (!group) return {};
+    const labels = Object.fromEntries(
+      editForm.labels
+        .filter((l) => l.key.trim())
+        .map((l) => [l.key.trim(), l.value])
+    );
+    return {
+      id: group.id,
+      name: editForm.name,
+      ...(editForm.description ? { description: editForm.description } : {}),
+      labels,
+      annotations: group.annotations,
+      acl: currentAcl,
+    };
+  }, [group, editForm, currentAcl]);
+
   return (
     <Card
       className="overflow-hidden flex flex-col sticky top-4 max-h-[calc(100vh-120px)]"
@@ -1210,21 +1230,7 @@ function GroupEditor({
             <Tabs.Content value="yaml" className="p-4 flex flex-col flex-1 min-h-0">
               {group ? (
                 <YamlEditor
-                  value={(() => {
-                    const labels = Object.fromEntries(
-                      editForm.labels
-                        .filter((l) => l.key.trim())
-                        .map((l) => [l.key.trim(), l.value])
-                    );
-                    return {
-                      id: group.id,
-                      name: editForm.name,
-                      description: editForm.description || undefined,
-                      labels,
-                      annotations: group.annotations,
-                      acl: currentAcl,
-                    };
-                  })()}
+                  value={yamlValue}
                   onChange={onYamlChange}
                   data-testid="yaml-editor"
                 />

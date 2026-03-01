@@ -8,6 +8,8 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crit_shared::compute_value_hash;
+
 use crate::{error::AppError, middleware::auth::AuthenticatedUser, state::AppState};
 
 #[derive(Deserialize)]
@@ -19,6 +21,11 @@ pub struct ListQuery {
 #[derive(Deserialize)]
 pub struct SearchQuery {
     pub startwith: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct GetObjectQuery {
+    pub with_history: Option<String>,
 }
 
 /// Validate that a kind string is a safe collection name (alphanumeric + underscores).
@@ -124,7 +131,7 @@ pub async fn create_object(
     let allowed = godmode || ctrl.can_create(&user_id, &body).await?;
     log::debug!("[HANDLER] create_object: can_create={}, godmode={}, user={}, kind={}, raw_id={}", allowed, godmode, user_id, kind, raw_id);
     if !allowed {
-        log::debug!("[HANDLER] create_object: DENIED, returning 403");
+        log::debug!("[HANDLER] create_object: DENIED for user={}, kind={}, id={}", user_id, kind, raw_id);
         return Err(AppError::forbidden(format!("not allowed to create {}/{}", kind, raw_id)));
     }
 
@@ -135,7 +142,12 @@ pub async fn create_object(
     // to_internal may transform the id (e.g. add a kind prefix, rename to _key).
     // Extract the final _key from the transformed document so that after_create,
     // error messages, and the success response all use the canonical stored key.
-    let doc = ctrl.to_internal(body, &state.auth)?;
+    let mut doc = ctrl.to_internal(body, &state.auth)?;
+    // Compute and inject the desired-state hash before writing to DB.
+    let hash = compute_value_hash(&doc);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("hash_code".to_string(), json!(hash));
+    }
     let final_id = doc
         .get("_key")
         .and_then(|v| v.as_str())
@@ -160,14 +172,23 @@ pub async fn create_object(
         return Err(e);
     }
 
+    // Write initial history entry — non-fatal
+    if let Ok(Some(snap)) = state.db.generic_get(&kind, &final_id).await {
+        if let Err(e) = state.db.write_history_entry(&kind, &final_id, snap, &user_id).await {
+            log::error!("[HANDLER] create_object: write_history_entry failed: kind={}, id={}, error={}", kind, final_id, e);
+        }
+    }
+
     Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": final_id }))))
 }
 
 /// GET /global/{kind}/{id} — get a single object.
 /// 404 if not found or if ACL check fails, to avoid leaking existence information.
+/// Supports `?with_history=true` to attach the latest history revision as `_history`.
 pub async fn get_object(
     AuthenticatedUser(user_id): AuthenticatedUser,
     Path((kind, id)): Path<(String, String)>,
+    Query(params): Query<GetObjectQuery>,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
     validate_kind(&kind)?;
@@ -180,7 +201,15 @@ pub async fn get_object(
             if !godmode && !ctrl.can_read(&user_id, Some(&d)).await? {
                 return Err(AppError::not_found(format!("{}/{}", kind, id)));
             }
-            Ok(Json(ctrl.to_external(d)))
+            let mut result = ctrl.to_external(d);
+            if params.with_history.as_deref() == Some("true") {
+                if let Ok(Some(history)) = state.db.get_latest_history_entry(&kind, &id).await {
+                    if let Some(obj) = result.as_object_mut() {
+                        obj.insert("_history".to_string(), history);
+                    }
+                }
+            }
+            Ok(Json(result))
         }
         None => Err(AppError::not_found(format!("{}/{}", kind, id))),
     }
@@ -205,8 +234,27 @@ pub async fn upsert_object(
 
     let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
 
+    // Extract client hash before `to_internal` consumes `body`.
+    let client_hash = body
+        .get("hash_code")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
     if is_update {
-        // TODO: check write conflicts if data includes hash, skip this check if not and just always overwrite, document this behavior
+        // Validate hash if client sent one — prevent lost updates.
+        if let Some(ref ch) = client_hash {
+            let server_hash = existing
+                .as_ref()
+                .and_then(|d| d.get("hash_code"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            if !server_hash.is_empty() && ch != server_hash {
+                return Err(AppError::conflict(format!(
+                    "{}/{} was modified since last read (expected hash {}, server has {})",
+                    kind, id, ch, server_hash
+                )));
+            }
+        }
         if !godmode && !ctrl.can_write(&user_id, existing.as_ref()).await? {
             return Err(AppError::not_found(format!("{}/{}", kind, id)));
         }
@@ -217,10 +265,14 @@ pub async fn upsert_object(
         ctrl.prepare_create(&mut body, &user_id);
     }
 
-    // TODO: useless because we do a get above, but we need to ensure the collection exists before to_internal in case it needs to read from the db for validation or defaults.
     state.db.ensure_collection(&kind).await?;
 
-    let doc = ctrl.to_internal(body, &state.auth)?;
+    let mut doc = ctrl.to_internal(body, &state.auth)?;
+    // Compute and inject the desired-state hash before writing to DB.
+    let hash = compute_value_hash(&doc);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("hash_code".to_string(), json!(hash));
+    }
     state.db.generic_upsert(&kind, &id, doc).await?;
 
     if is_update {
@@ -232,6 +284,13 @@ pub async fn upsert_object(
         if let Err(e) = ctrl.after_create(&id, &user_id, &state.db).await {
             log::error!("[HANDLER] upsert_object: after_create hook failed: kind={}, id={}, error={}", kind, id, e);
             return Err(e);
+        }
+    }
+
+    // Write history entry after upsert — non-fatal
+    if let Ok(Some(snap)) = state.db.generic_get(&kind, &id).await {
+        if let Err(e) = state.db.write_history_entry(&kind, &id, snap, &user_id).await {
+            log::error!("[HANDLER] upsert_object: write_history_entry failed: kind={}, id={}, error={}", kind, id, e);
         }
     }
 
@@ -256,15 +315,37 @@ pub async fn update_object(
     let existing = state.db.generic_get(&kind, &id).await?;
     let existing = existing.ok_or_else(|| AppError::not_found(format!("{}/{}", kind, id)))?;
 
-    // TODO: add hash validation to prevent lost updates, returning 409 Conflict if the document was modified since it was read. Requires frontend to send the hash it received when fetching the document
-    // TODO: add 409 support to clients: CLI and web
+    // Extract client hash before `to_internal` consumes `body`.
+    let client_hash = body
+        .get("hash_code")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    // Validate hash if client sent one — prevent lost updates.
+    if let Some(ref ch) = client_hash {
+        let server_hash = existing
+            .get("hash_code")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if !server_hash.is_empty() && ch != server_hash {
+            return Err(AppError::conflict(format!(
+                "{}/{} was modified since last read (expected hash {}, server has {})",
+                kind, id, ch, server_hash
+            )));
+        }
+    }
 
     let godmode = state.has_godmode(&user_id).await.unwrap_or(false);
     if !godmode && !ctrl.can_write(&user_id, Some(&existing)).await? {
         return Err(AppError::not_found(format!("{}/{}", kind, id)));
     }
 
-    let doc = ctrl.to_internal(body, &state.auth)?;
+    let mut doc = ctrl.to_internal(body, &state.auth)?;
+    // Compute and inject the desired-state hash before writing to DB.
+    let hash = compute_value_hash(&doc);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("hash_code".to_string(), json!(hash));
+    }
     state
         .db
         .generic_update(&kind, &id, doc)
@@ -281,6 +362,13 @@ pub async fn update_object(
     if let Err(e) = ctrl.after_update(&id, &state.db).await {
         log::error!("[HANDLER] update_object: after_update hook failed: kind={}, id={}, error={}", kind, id, e);
         return Err(e);
+    }
+
+    // Write history entry on update — non-fatal
+    if let Ok(Some(snap)) = state.db.generic_get(&kind, &id).await {
+        if let Err(e) = state.db.write_history_entry(&kind, &id, snap, &user_id).await {
+            log::error!("[HANDLER] update_object: write_history_entry failed: kind={}, id={}, error={}", kind, id, e);
+        }
     }
 
     Ok(Json(json!({ "id": id })))

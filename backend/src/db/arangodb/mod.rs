@@ -1246,8 +1246,6 @@ impl ArangoDb {
 
     /// Write an immutable snapshot of a resource's desired state to `resource_history`.
     /// Revision numbers are 1-based and auto-incremented per resource.
-    /// TODO: actually use this in the controller's create/update handlers and write tests for it. For now it's just a placeholder.
-    /// TODO: implement "with_history" query parameter for "get" endpoints to fetch the latest history entry along with the resource document, to avoid extra round trips when the caller needs both. This should be the only way to fetch history entries, as they are immutable and we want to encourage fetching them together with the resource document when needed.
     pub async fn write_history_entry(
         &self,
         kind: &str,
@@ -1288,6 +1286,24 @@ impl ArangoDb {
             .map_err(|e| anyhow!(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// Fetch the most recent history entry for a resource (highest revision).
+    /// Returns `None` if no history exists yet.
+    pub async fn get_latest_history_entry(&self, kind: &str, key: &str) -> Result<Option<Value>> {
+        let query = r#"
+            FOR h IN resource_history
+                FILTER h.resource_kind == @kind AND h.resource_key == @key
+                SORT h.revision DESC
+                LIMIT 1
+                RETURN h
+        "#;
+        let vars = std::collections::HashMap::from([
+            ("kind", Value::String(kind.to_string())),
+            ("key", Value::String(key.to_string())),
+        ]);
+        let mut result: Vec<Value> = self.aql(query, vars).await?;
+        Ok(result.pop())
     }
 
     /// Write a runtime event associated with a resource to `resource_events`.

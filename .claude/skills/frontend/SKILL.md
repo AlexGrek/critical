@@ -269,6 +269,7 @@ Always use the project's custom components instead.
 | `Paragraph` | `~/components` | Text blocks. Variants: `default`, `muted`, `subtle`, `primary`, `success`, `warning`, `danger` |
 | `CodeBlock`, `InlineCode` | `~/components` | Code display (block and inline) |
 | `ScrollableLogWindow` | `~/components` | Terminal-style log viewer with auto-scroll |
+| `YamlEditor` | `~/components` | Textarea-based YAML editor for resource documents. Props: `value` (object), `onChange(parsed)`, `readOnlyFields?` (strips server-managed keys like `state`, `hash_code`, `deletion` from display). Use `useMemo` for `value` to avoid spurious re-serialization. |
 | `LogoCritical`, `LogoCriticalAnimated` | `~/components` | `{!}` branding logo |
 | `ThemeCombobox` | `~/components` | Theme picker dropdown |
 | `TopBar` | `~/components` | Fixed app header (h-14, z-50) with animated logo toggle and user button. Props: `isOpen`, `onToggle` |
@@ -427,7 +428,10 @@ frontend/
 │   │   ├── LogoCritical.tsx
 │   │   ├── ThemeCombobox.tsx
 │   │   ├── TopBar.tsx             # Fixed top bar; uses --color-topbar-* CSS vars
-│   │   └── SideMenu.tsx           # Collapsible sidebar; uses --color-nav-* CSS vars
+│   │   ├── SideMenu.tsx           # Collapsible sidebar; uses --color-nav-* CSS vars
+│   │   ├── AclEditor.tsx          # ACL modal editor (AccessControlStore)
+│   │   ├── ResourcePicker.tsx     # Async search-as-you-type dropdown for any kind
+│   │   └── YamlEditor.tsx         # Textarea YAML editor for resource documents
 │   ├── contexts/
 │   │   └── ThemeContext.tsx        # Theme state management
 │   └── lib/
@@ -437,6 +441,49 @@ frontend/
 ├── tsconfig.json                  # Strict, ~ alias, bundler resolution
 └── package.json
 ```
+
+---
+
+## Resource Editor Convention — YAML Tab (MANDATORY)
+
+Every resource editor panel/modal that has tabs **must include a "YAML" tab as the last tab**. This gives power users a `kubectl edit`-style raw document view.
+
+### Pattern
+
+```tsx
+// 1. Import YamlEditor
+import { YamlEditor } from "~/components";
+
+// 2. Memoize the editable view of the resource (stable reference = no spurious re-serialization)
+const yamlValue = useMemo<Record<string, unknown>>(() => ({
+  id: group.id,
+  name: editForm.name,
+  labels: ...,
+  acl: currentAcl,
+  // Include all user-editable fields; omit server-managed ones (state, hash_code, deletion)
+}), [group, editForm, currentAcl]);
+
+// 3. Handle sync-back from YAML → form state
+const handleYamlChange = (parsed: Record<string, unknown>) => {
+  setEditForm({ name: parsed.name as string, ... });
+  if (parsed.acl) setEditAcl(parsed.acl as AccessControlStore);
+};
+
+// 4. Add tab trigger (always last)
+<Tabs.Trigger value="yaml" data-testid="tab-yaml">YAML</Tabs.Trigger>
+
+// 5. Add tab content
+<Tabs.Content value="yaml" className="p-4 flex flex-col flex-1 min-h-0">
+  <YamlEditor value={yamlValue} onChange={handleYamlChange} data-testid="yaml-editor" />
+</Tabs.Content>
+```
+
+### Rules
+- `YamlEditor` always goes on the **last tab**, after all structured form tabs
+- Pass `useMemo`-stabilized `value` — never an inline object literal (causes re-serialization on every render)
+- The `handleYamlChange` must sync parsed fields back to the same state as the form tabs (so edits are reflected across tabs and saved via the same submit path)
+- `readOnlyFields` (e.g. `["state", "hash_code", "deletion"]`) strips server-managed fields from the YAML view; the parent preserves them on save by merging over the original document
+- `yaml` package (`import { stringify, parse } from "yaml"`) is already installed
 
 ---
 
