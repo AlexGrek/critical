@@ -14,6 +14,7 @@ import {
   Table,
   Tabs,
   ResourcePicker,
+  YamlEditor,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -376,6 +377,36 @@ export default function Groups() {
     form.append("groupId", editingGroup.id);
     form.append("groupJson", JSON.stringify(updated));
     fetcher.submit(form, { method: "POST" });
+  };
+
+  /** Sync parsed YAML back into editForm + editAcl so all tabs stay in sync. */
+  const handleYamlChange = (parsed: Record<string, unknown>) => {
+    // Update form fields
+    setEditForm({
+      name: typeof parsed.name === "string" ? parsed.name : "",
+      description: typeof parsed.description === "string" ? parsed.description : "",
+      labels: Object.entries(
+        (parsed.labels && typeof parsed.labels === "object" && !Array.isArray(parsed.labels))
+          ? (parsed.labels as Record<string, string>)
+          : {}
+      ).map(([key, value]) => ({
+        key,
+        value: String(value),
+        _id: `${key}-${Math.random()}`,
+      })),
+    });
+
+    // Update ACL if present
+    if (parsed.acl && typeof parsed.acl === "object") {
+      setEditAcl(parsed.acl as AccessControlStore);
+    }
+
+    // Update annotations on the editingGroup directly
+    if (editingGroup && parsed.annotations && typeof parsed.annotations === "object") {
+      setEditingGroup((prev) =>
+        prev ? { ...prev, annotations: parsed.annotations as Record<string, string> } : prev
+      );
+    }
   };
 
   const submitAddMember = (principalId: string) => {
@@ -777,6 +808,7 @@ export default function Groups() {
               onDismissLoadError={() => setLoadError("")}
               onDismissSaveError={() => setSaveError("")}
               onDismissMemberError={() => setMemberError("")}
+              onYamlChange={handleYamlChange}
             />
           )}
         </div>
@@ -810,6 +842,7 @@ interface GroupEditorProps {
   onDismissLoadError: () => void;
   onDismissSaveError: () => void;
   onDismissMemberError: () => void;
+  onYamlChange: (parsed: Record<string, unknown>) => void;
 }
 
 function GroupEditor({
@@ -833,6 +866,7 @@ function GroupEditor({
   onDismissLoadError,
   onDismissSaveError,
   onDismissMemberError,
+  onYamlChange,
 }: GroupEditorProps) {
   const currentAcl = editAcl ?? group?.acl;
 
@@ -898,6 +932,9 @@ function GroupEditor({
               {editAcl && (
                 <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
               )}
+            </Tabs.Trigger>
+            <Tabs.Trigger value="yaml" data-testid="tab-yaml">
+              YAML
             </Tabs.Trigger>
           </Tabs.List>
 
@@ -1165,6 +1202,35 @@ function GroupEditor({
               ) : (
                 <Paragraph variant="subtle" className="text-xs">
                   Load a group to view its access control list.
+                </Paragraph>
+              )}
+            </Tabs.Content>
+
+            {/* ── YAML ── */}
+            <Tabs.Content value="yaml" className="p-4 flex flex-col flex-1 min-h-0">
+              {group ? (
+                <YamlEditor
+                  value={(() => {
+                    const labels = Object.fromEntries(
+                      editForm.labels
+                        .filter((l) => l.key.trim())
+                        .map((l) => [l.key.trim(), l.value])
+                    );
+                    return {
+                      id: group.id,
+                      name: editForm.name,
+                      description: editForm.description || undefined,
+                      labels,
+                      annotations: group.annotations,
+                      acl: currentAcl,
+                    };
+                  })()}
+                  onChange={onYamlChange}
+                  data-testid="yaml-editor"
+                />
+              ) : (
+                <Paragraph variant="subtle" className="text-xs">
+                  Load a group to edit as YAML.
                 </Paragraph>
               )}
             </Tabs.Content>

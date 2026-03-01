@@ -62,6 +62,11 @@ export interface ResourcePickerProps {
   disabled?: boolean;
   className?: string;
   "data-testid"?: string;
+  /**
+   * When set, the dropdown is portalled into this element instead of document.body.
+   * Use inside a modal so the dropdown is not made inert by the dialog.
+   */
+  portalRootRef?: React.RefObject<HTMLElement | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -94,6 +99,7 @@ export function ResourcePicker({
   disabled,
   className,
   "data-testid": testId,
+  portalRootRef,
 }: ResourcePickerProps) {
   const resolvedPrefix = prefix ?? KIND_PREFIX[kind] ?? "";
   const listboxId = useId();
@@ -279,14 +285,15 @@ export function ResourcePicker({
 
       {/* Dropdown */}
       {open && (
-        <FloatingPortal>
+        <FloatingPortal root={portalRootRef ?? undefined}>
           <div
             ref={refs.setFloating}
             style={floatingStyles}
             id={listboxId}
             role="listbox"
+            data-resource-picker-dropdown
             className={cn(
-              "z-50 overflow-hidden py-1",
+              "z-100 overflow-hidden py-1",
               "rounded-(--radius-component-lg)",
               "border border-gray-200 dark:border-gray-700",
               "bg-white dark:bg-gray-900",

@@ -61,11 +61,13 @@ show-db:
 	@$(MAKE) wait-backend
 	@bash test-db/show.sh
 
-# Kill any stalled axum-api backend processes (by binary name and port)
+# Kill any stalled backend and frontend processes (by binary name and port)
 kill:
 	@echo ">>> Killing stalled axum-api processes..."
 	@pkill -f axum-api 2>/dev/null || true
 	@lsof -ti :$(BACKEND_PORT) 2>/dev/null | xargs kill -9 2>/dev/null || true
+	@echo ">>> Killing stalled frontend processes..."
+	@lsof -ti :5173 2>/dev/null | xargs kill -9 2>/dev/null || true
 	@echo ">>> Done."
 
 # --- Test targets ---

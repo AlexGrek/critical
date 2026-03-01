@@ -11,7 +11,7 @@
  * then groups back by permission level on save.
  */
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Shield, X } from "lucide-react";
 import { cn } from "~/lib/utils";
 
@@ -224,6 +224,7 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
   const [entries, setEntries] = useState<AclEntry[]>([]);
   const [addKind, setAddKind] = useState<PrincipalKind>("users");
   const [addPermissions, setAddPermissions] = useState<number>(7);
+  const pickerPortalRef = useRef<HTMLDivElement>(null);
 
   const handleOpenChange = (isOpen: boolean) => {
     if (isOpen) {
@@ -268,8 +269,17 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
     <Modal.Root open={open} onOpenChange={handleOpenChange}>
       <Modal.Trigger asChild>{trigger}</Modal.Trigger>
 
-      <Modal.Content className="max-w-xl" data-testid="acl-editor-modal">
-        <Modal.Header>
+      <Modal.Content
+        className="max-w-xl max-h-[90vh] flex flex-col"
+        data-testid="acl-editor-modal"
+        onPointerDownOutside={(e) => {
+          const target = e.target as Element;
+          if (target.closest?.("[data-resource-picker-dropdown]")) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <Modal.Header className="shrink-0">
           <Modal.Title>Access Control</Modal.Title>
           <Modal.Description>
             Manage who can read or modify this resource. An empty list grants
@@ -277,98 +287,105 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
           </Modal.Description>
         </Modal.Header>
 
-        {/* ── Current entries ──────────────────────────────────────────── */}
-        <div className="mt-4">
-          {entries.length === 0 ? (
-            <div className="flex items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
-              <Shield className="w-4 h-4 shrink-0" />
-              <span>No entries — all authenticated users have access.</span>
-            </div>
-          ) : (
-            <div className="max-h-56 overflow-y-auto rounded-(--radius-component) border border-gray-200 dark:border-gray-700">
-              <Table.Root>
-                <Table.Header>
-                  <Table.Row>
-                    <Table.Head>Principal</Table.Head>
-                    <Table.Head>Access</Table.Head>
-                    <Table.Head className="w-10" />
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {entries.map((entry) => (
-                    <Table.Row
-                      key={entry._id}
-                      data-testid={`acl-entry-${entry.principal}`}
-                    >
-                      <Table.Cell className="font-mono text-xs">
-                        {entry.principal}
-                      </Table.Cell>
-                      <Table.Cell>
-                        <PermissionBadge permissions={entry.permissions} />
-                      </Table.Cell>
-                      <Table.Cell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          type="button"
-                          onClick={() => handleRemove(entry._id)}
-                          data-testid={`remove-acl-${entry.principal}`}
-                          className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      </Table.Cell>
+        <div className="flex-1 min-h-0 overflow-y-auto mt-4">
+          {/* ── Current entries ──────────────────────────────────────────── */}
+          <div>
+            {entries.length === 0 ? (
+              <div className="flex items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
+                <Shield className="w-4 h-4 shrink-0" />
+                <span>No entries — all authenticated users have access.</span>
+              </div>
+            ) : (
+              <div className="max-h-56 overflow-y-auto rounded-(--radius-component) border border-gray-200 dark:border-gray-700">
+                <Table.Root>
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.Head>Principal</Table.Head>
+                      <Table.Head>Access</Table.Head>
+                      <Table.Head className="w-10" />
                     </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Root>
+                  </Table.Header>
+                  <Table.Body>
+                    {entries.map((entry) => (
+                      <Table.Row
+                        key={entry._id}
+                        data-testid={`acl-entry-${entry.principal}`}
+                      >
+                        <Table.Cell className="font-mono text-xs">
+                          {entry.principal}
+                        </Table.Cell>
+                        <Table.Cell>
+                          <PermissionBadge permissions={entry.permissions} />
+                        </Table.Cell>
+                        <Table.Cell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            type="button"
+                            onClick={() => handleRemove(entry._id)}
+                            data-testid={`remove-acl-${entry.principal}`}
+                            className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Root>
+              </div>
+            )}
+          </div>
+
+          {/* ── Add entry ─────────────────────────────────────────────────── */}
+          <div className="mt-5 space-y-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+              Add Entry
+            </p>
+
+            {/* Permission selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-14">
+                Access:
+              </span>
+              <PermissionToggle
+                value={addPermissions}
+                onChange={setAddPermissions}
+              />
             </div>
-          )}
+
+            {/* Kind toggle */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-14">
+                Search:
+              </span>
+              <KindToggle value={addKind} onChange={setAddKind} />
+            </div>
+
+            {/* Picker on its own line (dropdown portalled here so it is not inert inside the modal) */}
+            <div ref={pickerPortalRef} className="overflow-visible">
+              <ResourcePicker
+                kind={addKind}
+                placeholder={`Search ${PRINCIPAL_KINDS.find((k) => k.value === addKind)?.label ?? addKind}…`}
+                onSelect={handleSelect}
+                portalRootRef={pickerPortalRef}
+                className="w-full"
+                data-testid="acl-principal-picker"
+              />
+            </div>
+
+            <Paragraph variant="subtle" className="text-xs">
+              Select a user or group — they'll be added immediately with{" "}
+              <strong>
+                {PERMISSION_PRESETS.find((p) => p.value === addPermissions)
+                  ?.label ?? addPermissions}
+              </strong>{" "}
+              access.
+            </Paragraph>
+          </div>
         </div>
 
-        {/* ── Add entry ─────────────────────────────────────────────────── */}
-        <div className="mt-5 space-y-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-            Add Entry
-          </p>
-
-          {/* Permission selector */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-14">
-              Access:
-            </span>
-            <PermissionToggle
-              value={addPermissions}
-              onChange={setAddPermissions}
-            />
-          </div>
-
-          {/* Kind toggle + ResourcePicker */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-14">
-              Search:
-            </span>
-            <KindToggle value={addKind} onChange={setAddKind} />
-            <ResourcePicker
-              kind={addKind}
-              placeholder={`Search ${PRINCIPAL_KINDS.find((k) => k.value === addKind)?.label ?? addKind}…`}
-              onSelect={handleSelect}
-              className="flex-1"
-              data-testid="acl-principal-picker"
-            />
-          </div>
-
-          <Paragraph variant="subtle" className="text-xs">
-            Select a user or group — they'll be added immediately with{" "}
-            <strong>
-              {PERMISSION_PRESETS.find((p) => p.value === addPermissions)
-                ?.label ?? addPermissions}
-            </strong>{" "}
-            access.
-          </Paragraph>
-        </div>
-
-        <Modal.Footer>
+        <Modal.Footer className="shrink-0">
           <Button
             variant="secondary"
             type="button"
