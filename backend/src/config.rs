@@ -22,6 +22,7 @@ pub struct AppConfig {
     pub port: u16,
     pub root_password: String,
     pub jwt_expiry_days: u64,
+    pub cors_allowed_origins: Vec<String>,
     // Object store
     pub object_store_backend: String,
     pub object_store_path: String,
@@ -85,6 +86,13 @@ impl AppConfig {
             .unwrap_or_else(|_| "3069".to_string())
             .parse::<u16>()?;
 
+        let cors_allowed_origins = env::var("CORS_ALLOWED_ORIGINS")
+            .unwrap_or_else(|_| String::new())
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(|s| s.trim().to_string())
+            .collect();
+
         let object_store_backend =
             env::var("OBJECT_STORE_BACKEND").unwrap_or_else(|_| String::new());
         let object_store_path =
@@ -107,6 +115,7 @@ impl AppConfig {
             database_user,
             database_password,
             client_api_keys,
+            cors_allowed_origins,
             host,
             port,
             root_password,

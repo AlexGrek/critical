@@ -43,6 +43,12 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
         "http://localhost:5173".parse::<HeaderValue>().unwrap(), // Standard Vite
         "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
     ];
+    for origin in &shared_state.config.cors_allowed_origins {
+        match origin.parse::<HeaderValue>() {
+            Ok(v) => allowed_origins.push(v),
+            Err(_) => log::warn!("Invalid CORS origin ignored: {origin}"),
+        }
+    }
 
     let mainrt = Router::new()
         // Unauthenticated routes — outside the /v1 auth nest so no JWT is required.
@@ -188,6 +194,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     info!("  Database name: {}", config.database_name);
     info!("  Client API keys: {:?}", config.client_api_keys);
+    info!("  CORS extra origins: {:?}", config.cors_allowed_origins);
 
     let db = ArangoDb::connect_basic(
         &config.database_connection_string,
