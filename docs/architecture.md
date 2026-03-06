@@ -36,7 +36,13 @@ Cargo workspace with three crates plus a frontend:
 - **Package**: `axum-api`
 - **Entry point**: `src/main.rs` — creates `AppState`, connects to DB, builds router
 - **State** (`src/state.rs`): `AppState` holds config, auth, DB (`Arc<ArangoDb>`), controllers, optional services, and `image_processing_semaphore: Arc<Semaphore>` (limits background image conversion to one task at a time); shared via `Arc<AppState>`
-- **Database layer** (`src/db/arangodb/mod.rs`): Direct `ArangoDb` struct using `arangors` crate — auto-creates collections on startup
+- **Database layer** (`src/db/arangodb/`): `ArangoDb` struct using `arangors` crate, split across focused sub-modules:
+  - `mod.rs` — struct definition, connection methods (`connect_basic`, `connect_anon`, `connect_jwt`), query helpers (`aql`, `aql_str_query`), transaction support
+  - `init.rs` — startup bootstrap: `ensure_database`, `ensure_collections`, `open_collections`, `ensure_indexes`
+  - `entities.rs` — user/group CRUD and membership edge operations
+  - `permissions.rs` — permission checks, grant/revoke, principal graph resolution, seeding
+  - `gitops.rs` — generic document CRUD (`generic_list`, `generic_get`, `generic_create`, `generic_upsert`, `generic_update`, `generic_delete`) with ACL-filtering and pagination variants
+  - `audit.rs` — soft-delete, history snapshots, runtime events, collection introspection
 - **Controllers** (`src/controllers/`): `user_controller`, `group_controller`, `membership_controller`; all implement `KindController` trait
 - **Middleware** (`src/middleware/`): JWT auth applied to all `/v1` routes; `/v1/static/*` is registered on the outer router and intentionally bypasses this layer
 - **Services** (`src/services/`):

@@ -140,11 +140,17 @@ Stack architecture: nginx gateway (:3742) routes `/api/*` to the backend and `/*
 - **Always update `DATABASE.md`** when making schema changes (new collections, key changes, new edges/indexes)
 
 ### Database Layer (`backend/src/db/`)
-- **`ArangoDb`** (`src/db/arangodb/mod.rs`): database layer using `arangors` crate (no trait abstraction — direct struct usage)
-- `connect_basic` auto-creates the database and collections on first connection (idempotent — silently ignores "already exists" errors)
+- **`ArangoDb`** struct uses `arangors` crate directly (no trait abstraction). Split across focused sub-modules under `src/db/arangodb/`:
+  - `mod.rs` — struct definition, connection methods, query helpers (`aql`, `aql_str_query`), transaction support, `upsert_with_retry` helper, `collection_for_principal` free function
+  - `init.rs` — startup bootstrap: `ensure_database`, `ensure_collections`, `open_collections`, `ensure_indexes`, `VERTEX_COLLECTIONS` / `EDGE_COLLECTIONS` / `WRITE_COLLECTIONS` constants
+  - `entities.rs` — user/group CRUD and membership edge operations
+  - `permissions.rs` — permission checks, grant/revoke, principal graph resolution, `seed_permissions`
+  - `gitops.rs` — generic document CRUD with ACL filtering and keyset pagination
+  - `audit.rs` — soft-delete, history snapshots, runtime events, collection introspection
+- `connect_basic` auto-creates the database and all collections on first connection (idempotent — silently ignores "already exists" errors)
 - **No migration system**: ArangoDB is schemaless; Rust structs define the application-level schema, not a DB-enforced one
 - Adding `Option<T>` or `#[serde(default)]` fields is safe — old documents deserialize fine. Adding required fields without defaults breaks deserialization of old documents. Renames require manual data fixup.
-- Adding a new collection requires a `create_collection` call in both `connect_basic` and `connect_anon`, plus a new field on the `ArangoDb` struct
+- **Adding a new collection**: add it to `VERTEX_COLLECTIONS` (or `EDGE_COLLECTIONS`) in `init.rs`, add a handle in `open_collections`, and add a field on the `ArangoDb` struct in `mod.rs`
 
 ### Routing
 - `/health` — health check (unauthenticated)

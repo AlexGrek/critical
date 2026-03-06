@@ -21,7 +21,7 @@ There are no migration files, no versioning, and no automated schema diffing. Th
 | Add required field (no default) | Old documents fail to deserialize | Manual backfill or add default |
 | Remove a field | Old documents keep the extra field in DB, ignored on read | None (orphaned data remains) |
 | Rename a field | Old documents have the old field name, new writes use the new name | Manual data fixup |
-| Add a new collection | Must add `create_collection` call in `connect_basic` and `connect_anon`, plus a field on `ArangoDb` | Code change required |
+| Add a new collection | Add `create_collection` call in `init.rs` (`VERTEX_COLLECTIONS` / `EDGE_COLLECTIONS` constants + `open_collections`), add a field on `ArangoDb` in `mod.rs` | Code change required |
 
 ## Entity-Relationship Diagram
 
@@ -231,7 +231,7 @@ Resources belonging to a project carry a `project: String` field matching the pa
 | `project` field | String — parent project `_key` (no prefix) |
 | Required index | Persistent on `["project", "deletion"]` per collection |
 | Access control | Hybrid ACL: resource ACL if non-empty, else project ACL filtered by `scope` |
-| New collection | Add `create_collection` call in `connect_basic`/`connect_anon`, add index in `ensure_indexes`, implement `KindController` with `is_scoped() = true` |
+| New collection | Add to `init.rs` constants + `open_collections`, add field on `ArangoDb` in `mod.rs`, add index in `ensure_indexes`, implement `KindController` with `is_scoped() = true` |
 
 **AQL traversal optimization** (used in `get_user_principals`):
 
