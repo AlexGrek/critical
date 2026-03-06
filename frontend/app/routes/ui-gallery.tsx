@@ -232,6 +232,191 @@ export default function UiGallery() {
           </div>
         </section>
 
+        {/* Disabled States Section */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            Disabled States
+          </h2>
+          <Paragraph variant="muted" className="text-sm">
+            All interactive elements support disabled states with consistent styling:
+            opacity reduction, cursor change, and pointer events disabled.
+          </Paragraph>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Disabled Primary Buttons */}
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Primary</CardTitle>
+              <div className="space-y-2">
+                <Button variant="primary" size="sm" disabled>
+                  Small Disabled
+                </Button>
+                <Button variant="primary" size="default" disabled>
+                  Default Disabled
+                </Button>
+                <Button variant="primary" size="lg" disabled>
+                  Large Disabled
+                </Button>
+              </div>
+            </Card>
+
+            {/* Disabled Secondary Buttons */}
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Secondary</CardTitle>
+              <div className="space-y-2">
+                <Button variant="secondary" size="sm" disabled>
+                  Small Disabled
+                </Button>
+                <Button variant="secondary" size="default" disabled>
+                  Default Disabled
+                </Button>
+                <Button variant="secondary" size="lg" disabled>
+                  Large Disabled
+                </Button>
+              </div>
+            </Card>
+
+            {/* Disabled Destructive Buttons */}
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Destructive</CardTitle>
+              <div className="space-y-2">
+                <Button variant="destructive" size="sm" disabled>
+                  Delete Disabled
+                </Button>
+                <Button variant="destructive" size="default" disabled>
+                  Remove Disabled
+                </Button>
+                <Button variant="destructive" size="lg" disabled>
+                  Confirm Disabled
+                </Button>
+              </div>
+            </Card>
+
+            {/* Disabled Outline Buttons */}
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Outline</CardTitle>
+              <div className="space-y-2">
+                <Button variant="outline" size="sm" disabled>
+                  Outline Disabled
+                </Button>
+                <Button variant="outline" size="default" disabled>
+                  Outline Disabled
+                </Button>
+                <Button variant="outline" size="lg" disabled>
+                  Outline Disabled
+                </Button>
+              </div>
+            </Card>
+
+            {/* Disabled Ghost Buttons */}
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Ghost</CardTitle>
+              <div className="space-y-2">
+                <Button variant="ghost" size="sm" disabled>
+                  Ghost Disabled
+                </Button>
+                <Button variant="ghost" size="default" disabled>
+                  Ghost Disabled
+                </Button>
+                <Button variant="ghost" size="lg" disabled>
+                  Ghost Disabled
+                </Button>
+              </div>
+            </Card>
+
+            {/* Disabled Link Buttons */}
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Link</CardTitle>
+              <div className="space-y-2">
+                <Button variant="link" size="sm" disabled>
+                  Link Disabled
+                </Button>
+                <Button variant="link" size="default" disabled>
+                  Link Disabled
+                </Button>
+                <Button variant="link" size="lg" disabled>
+                  Link Disabled
+                </Button>
+              </div>
+            </Card>
+          </div>
+
+          {/* Disabled Inputs & Modals */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Inputs</CardTitle>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Disabled Text Input
+                  </label>
+                  <Input
+                    disabled
+                    placeholder="This input is disabled"
+                    defaultValue="Read-only content"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Disabled Monospace Input
+                  </label>
+                  <Input
+                    disabled
+                    monospace
+                    placeholder="Disabled monospace input"
+                    defaultValue="const locked = true;"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Disabled Copyable Input
+                  </label>
+                  <Input
+                    disabled
+                    copyable
+                    placeholder="Disabled copyable"
+                    defaultValue="Copy button is greyed out"
+                  />
+                </div>
+              </div>
+            </Card>
+
+            {/* Disabled Modal Buttons */}
+            <Card className="p-6 space-y-3">
+              <CardTitle>Disabled Modal Actions</CardTitle>
+              <Paragraph variant="muted" size="sm">
+                Buttons within modals can also be disabled to prevent actions when
+                conditions aren't met (e.g., form validation).
+              </Paragraph>
+              <Modal.Root>
+                <Modal.Trigger asChild>
+                  <Button>Open Modal with Disabled Action</Button>
+                </Modal.Trigger>
+                <Modal.Content>
+                  <Modal.Header>
+                    <Modal.Title>Disabled Action Example</Modal.Title>
+                    <Modal.Description>
+                      The confirm button below is disabled until you complete the required
+                      action.
+                    </Modal.Description>
+                  </Modal.Header>
+                  <div className="py-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                      This might represent a form with missing required fields or other
+                      validation errors.
+                    </p>
+                    <Input disabled placeholder="Example disabled field" />
+                  </div>
+                  <Modal.Footer>
+                    <Modal.Close asChild>
+                      <Button variant="outline">Cancel</Button>
+                    </Modal.Close>
+                    <Button disabled>Confirm (Disabled)</Button>
+                  </Modal.Footer>
+                </Modal.Content>
+              </Modal.Root>
+            </Card>
+          </div>
+        </section>
+
         {/* Typography Section */}
         <section className="space-y-4">
           <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">

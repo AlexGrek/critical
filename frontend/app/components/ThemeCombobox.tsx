@@ -4,14 +4,14 @@ import {
   ListboxOption,
   ListboxOptions,
 } from "@headlessui/react";
-import { Check, ChevronDown, Moon, Sun, Eye, Heart, Flame, Droplets, Monitor } from "lucide-react";
+import { Check, ChevronDown, Moon, Sun, Eye, Heart, Flame, Droplets, Monitor, Apple, Leaf } from "lucide-react";
 import { useTheme, type Theme } from "~/contexts/ThemeContext";
 
 type ThemeOption = {
   value: Theme;
   label: string;
   description: string;
-  icon: typeof Sun | typeof Moon | typeof Eye | typeof Heart | typeof Flame | typeof Droplets | typeof Monitor;
+  icon: typeof Sun | typeof Moon | typeof Eye | typeof Heart | typeof Flame | typeof Droplets | typeof Monitor | typeof Apple | typeof Leaf;
 };
 
 const themes: ThemeOption[] = [
@@ -56,6 +56,18 @@ const themes: ThemeOption[] = [
     label: "Nostalgic 95",
     description: "Windows 95/98 silver chrome, navy blue, zero roundness",
     icon: Monitor,
+  },
+  {
+    value: "itheme",
+    label: "iTheme",
+    description: "macOS-inspired light theme with soft neutrals",
+    icon: Apple,
+  },
+  {
+    value: "lime",
+    label: "Lime",
+    description: "Vibrant lime green with bubbly roundness",
+    icon: Leaf,
   },
 ];
 

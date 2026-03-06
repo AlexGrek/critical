@@ -76,7 +76,7 @@ body {
 
 /* Theme-specific styles */
 html.light,
-html:not(.dark):not(.grayscale):not(.barbie):not(.orange):not(.fusion):not(.nostalgic95) {
+html:not(.dark):not(.grayscale):not(.barbie):not(.orange):not(.fusion):not(.nostalgic95):not(.itheme):not(.lime) {
   background-color: #ffffff;
   color: #111827;
   color-scheme: light;
@@ -118,9 +118,9 @@ html.barbie {
   --color-primary-950: #500724;
 
   /* Barbie theme: VERY round - playful, soft, bubbly */
-  --radius-component: var(--radius-2xl);      /* 1rem = very round */
-  --radius-component-lg: var(--radius-full);  /* pill-shaped buttons */
-  --radius-component-xl: var(--radius-2xl);   /* large modals still 2xl (not full circle) */
+  --radius-component: var(--radius-2xl);      /* 1rem = very round buttons */
+  --radius-component-lg: var(--radius-2xl);   /* cards: round but not full circle */
+  --radius-component-xl: var(--radius-2xl);   /* modals: 1rem roundness */
 
   /* Nav / topbar colors */
   --color-topbar-bg: #fbcfe8;
@@ -420,6 +420,101 @@ html.nostalgic95 *::after {
   animation-duration: 0.001ms !important;
 }
 
+/* iTheme: macOS-inspired light theme with subtle rounded corners and soft grays */
+html.itheme {
+  background-color: #f5f5f7;
+  color: #1d1d1f;
+  color-scheme: light;
+
+  /* Apple-inspired gray palette (macOS system colors) */
+  --color-gray-50: #ffffff;
+  --color-gray-100: #f5f5f7;
+  --color-gray-200: #e5e5e7;
+  --color-gray-300: #d5d5d7;
+  --color-gray-400: #a1a1a6;
+  --color-gray-500: #86868b;
+  --color-gray-600: #6f6f74;
+  --color-gray-700: #525252;
+  --color-gray-800: #3a3a3c;
+  --color-gray-900: #1d1d1f;
+  --color-gray-950: #000000;
+
+  /* Subtle sky blue primary (modern macOS accent) */
+  --color-primary-50: #f0f9ff;
+  --color-primary-100: #e0f2fe;
+  --color-primary-200: #bae6fd;
+  --color-primary-300: #7dd3fc;
+  --color-primary-400: #38bdf8;
+  --color-primary-500: #0ea5e9;
+  --color-primary-600: #0284c7;
+  --color-primary-700: #0369a1;
+  --color-primary-800: #075985;
+  --color-primary-900: #0c4a6e;
+  --color-primary-950: #082f49;
+
+  /* iTheme: Subtle roundness (slightly more than standard light) */
+  --radius-component: var(--radius-md);
+  --radius-component-lg: var(--radius-lg);
+  --radius-component-xl: var(--radius-xl);
+
+  /* Nav / topbar colors — soft, Apple-inspired */
+  --color-topbar-bg: #ffffff;
+  --color-topbar-text: #1d1d1f;
+  --color-topbar-item-hover: #f5f5f7;
+  --color-nav-bg: #f5f5f7;
+  --color-nav-border: #e5e5e7;
+  --color-nav-text: #1d1d1f;
+  --color-nav-text-muted: #86868b;
+  --color-nav-item-hover: #e5e5e7;
+  --color-nav-item-hover-text: #1d1d1f;
+  --color-nav-item-active: #bae6fd;
+  --color-nav-item-active-text: #0369a1;
+}
+
+/* iTheme soft shadows (subtler than default) */
+html.itheme {
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.02);
+  --shadow-md: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-xl: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+}
+
+/* Lime: vibrant lime green focused light theme, same bubbly roundness as barbie */
+html.lime {
+  background-color: #fafce8;
+  color: #365314;
+  color-scheme: light;
+  --color-primary-50: #f7fee5;
+  --color-primary-100: #ecfccb;
+  --color-primary-200: #d9f99d;
+  --color-primary-300: #bef264;
+  --color-primary-400: #a3e635;
+  --color-primary-500: #84cc16;
+  --color-primary-600: #65a30d;
+  --color-primary-700: #4d7c0f;
+  --color-primary-800: #3f6212;
+  --color-primary-900: #365314;
+  --color-primary-950: #1a2e05;
+
+  /* Lime theme: VERY round - playful, soft, bubbly (same as barbie) */
+  --radius-component: var(--radius-2xl);      /* 1rem = very round buttons */
+  --radius-component-lg: var(--radius-2xl);   /* cards: round but not full circle */
+  --radius-component-xl: var(--radius-2xl);   /* modals: 1rem roundness */
+
+  /* Nav / topbar colors — lime themed */
+  --color-topbar-bg: #d9f99d;
+  --color-topbar-text: #365314;
+  --color-topbar-item-hover: #bef264;
+  --color-nav-bg: #ecfccb;
+  --color-nav-border: #bef264;
+  --color-nav-text: #365314;
+  --color-nav-text-muted: #65a30d;
+  --color-nav-item-hover: #d9f99d;
+  --color-nav-item-hover-text: #365314;
+  --color-nav-item-active: #bef264;
+  --color-nav-item-active-text: #365314;
+}
+
 /* Keyframe animations */
 @keyframes fadeIn {
   from {
@@ -473,6 +568,14 @@ html.nostalgic95 *::after {
 }
 
 @layer utilities {
+  .animate-fade-in {
+    animation: fadeIn var(--duration-fast) ease-out;
+  }
+
+  .animate-scale-in {
+    animation: scaleIn var(--duration-fast) ease-out;
+  }
+
   .animate-text-flash {
     animation: textFlash 0.6s ease-out;
   }

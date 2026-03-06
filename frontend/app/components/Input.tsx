@@ -95,7 +95,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             type="button"
             onClick={handleCopy}
             className={cn(
-              "absolute right-2 p-2 rounded-(--radius-component) transition-colors",
+              "absolute right-2 p-2 rounded-(--radius-component) transition-colors cursor-pointer disabled:cursor-not-allowed",
               isCopied
                 ? "bg-primary-100 dark:bg-primary-900"
                 : "hover:bg-gray-100 dark:hover:bg-gray-800"
