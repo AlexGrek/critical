@@ -56,7 +56,14 @@
       "Bash(file /Users/vedmedik/dev/critical/backend/itests/assets/*)",
       "Bash(git check-ignore -v backend/itests/temp/storage/.gitkeep)",
       "Bash(bash test-db/populate.sh)",
-      "Bash(bash /Users/vedmedik/dev/critical/test-db/show.sh)"
+      "Bash(bash /Users/vedmedik/dev/critical/test-db/show.sh)",
+      "Bash(cp /Users/vedmedik/dev/critical/target/debug/cr1t /Users/vedmedik/.local/bin/cr1t)",
+      "Bash(cr1t --version)",
+      "Bash(cr1t get projects)",
+      "Bash(cr1t groups list)",
+      "Bash(cr1t login --url http://localhost:3742 --user admin)",
+      "Bash(cr1t login --url http://localhost:3742 --user root)",
+      "Bash(cr1t get projects huioject)"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"

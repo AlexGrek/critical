@@ -287,7 +287,7 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
           </Modal.Description>
         </Modal.Header>
 
-        <div className="flex-1 min-h-0 overflow-y-auto mt-4">
+        <div className="flex-1 min-h-0 overflow-y-auto mt-4 px-4">
           {/* ── Current entries ──────────────────────────────────────────── */}
           <div>
             {entries.length === 0 ? (

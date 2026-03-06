@@ -12,7 +12,9 @@ import {
   Paragraph,
   PermissionBadge,
   MorphModal,
+  AclEditor,
 } from "~/components";
+import type { AccessControlStore } from "~/components";
 import { AlertCircle, Lock, History } from "lucide-react";
 import { formatDate } from "~/lib/utils";
 import { useState } from "react";
@@ -40,11 +42,11 @@ interface Project {
   annotations?: Record<string, string>;
   acl?: {
     list?: Array<{
-      principal?: string;
-      group?: string;
-      permission_bits?: number;
+      permissions: number;
+      principals: string[];
       scope?: "ROOT" | "WRITE" | "READ";
     }>;
+    last_mod_date?: string;
   };
   state?: ResourceState;
   deletion?: DeletionInfo | null;
@@ -99,8 +101,34 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export default function ProjectPage() {
   const { project } = useLoaderData<typeof loader>();
-  const [accessOpen, setAccessOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [currentAcl, setCurrentAcl] = useState<AccessControlStore>(
+    project.acl || { list: [], last_mod_date: new Date().toISOString() }
+  );
+  const [isSavingAcl, setIsSavingAcl] = useState(false);
+
+  const handleAclSave = async (newAcl: AccessControlStore) => {
+    setIsSavingAcl(true);
+    try {
+      const response = await fetch(
+        `http://localhost:3742/api/v1/global/projects/${project.id}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...project, acl: newAcl }),
+        }
+      );
+
+      if (response.ok) {
+        setCurrentAcl(newAcl);
+      }
+    } finally {
+      setIsSavingAcl(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
@@ -213,11 +241,13 @@ export default function ProjectPage() {
                 </MorphModal>
               </>
 
-              {/* Access control button */}
-              <>
-                {/* Desktop: text + icon */}
-                <MorphModal
-                  trigger={
+              {/* Access control editor */}
+              <AclEditor
+                acl={currentAcl}
+                onSave={handleAclSave}
+                trigger={
+                  <div className="flex items-center gap-2">
+                    {/* Desktop: text + icon */}
                     <Button
                       variant="outline"
                       size="sm"
@@ -227,62 +257,8 @@ export default function ProjectPage() {
                       <Lock className="w-4 h-4" />
                       <span>Access</span>
                     </Button>
-                  }
-                  modalWidth={600}
-                  modalHeight={500}
-                  isOpen={accessOpen}
-                  onOpenChange={setAccessOpen}
-                >
-                  {(close) => (
-                    <div className="flex flex-col h-full">
-                      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
-                        <h3 className="text-xs font-mono uppercase tracking-wider text-gray-900 dark:text-gray-100">
-                          Access Control
-                        </h3>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={close}
-                          data-testid="close-access"
-                          className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                        >
-                          ✕
-                        </Button>
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        {project.acl?.list && project.acl.list.length > 0 ? (
-                          <div className="space-y-2">
-                            {project.acl.list.map((entry, idx) => {
-                              const principal =
-                                entry.principal || entry.group || "Unknown";
-                              const permissionBits = entry.permission_bits || 0;
-                              return (
-                                <div
-                                  key={idx}
-                                  className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-(--radius-component) text-sm"
-                                >
-                                  <code className="font-mono text-gray-900 dark:text-gray-100">
-                                    {principal}
-                                  </code>
-                                  <PermissionBadge permissions={permissionBits} />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            No custom access control entries
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </MorphModal>
 
-                {/* Mobile: icon only */}
-                <MorphModal
-                  trigger={
+                    {/* Mobile: icon only */}
                     <Button
                       variant="outline"
                       size="icon"
@@ -292,59 +268,9 @@ export default function ProjectPage() {
                     >
                       <Lock className="w-4 h-4" />
                     </Button>
-                  }
-                  modalWidth={600}
-                  modalHeight={500}
-                  isOpen={accessOpen}
-                  onOpenChange={setAccessOpen}
-                >
-                  {(close) => (
-                    <div className="flex flex-col h-full">
-                      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
-                        <h3 className="text-xs font-mono uppercase tracking-wider text-gray-900 dark:text-gray-100">
-                          Access Control
-                        </h3>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={close}
-                          data-testid="close-access"
-                          className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                        >
-                          ✕
-                        </Button>
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        {project.acl?.list && project.acl.list.length > 0 ? (
-                          <div className="space-y-2">
-                            {project.acl.list.map((entry, idx) => {
-                              const principal =
-                                entry.principal || entry.group || "Unknown";
-                              const permissionBits = entry.permission_bits || 0;
-                              return (
-                                <div
-                                  key={idx}
-                                  className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded-(--radius-component) text-sm"
-                                >
-                                  <code className="font-mono text-gray-900 dark:text-gray-100">
-                                    {principal}
-                                  </code>
-                                  <PermissionBadge permissions={permissionBits} />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            No custom access control entries
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </MorphModal>
-              </>
+                  </div>
+                }
+              />
             </div>
           </div>
         </div>

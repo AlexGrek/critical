@@ -6,22 +6,19 @@ pub mod db;
 pub mod error;
 pub mod middleware;
 pub use crit_shared::{data_models, util_models};
+pub mod godmode;
 pub mod schema;
 pub mod services;
 pub mod state;
 pub mod test;
 pub mod utils;
 pub mod validation;
-pub mod godmode;
 
 use std::sync::Arc;
 
-use crate::{
-    api::v1::ws::ws_handler,
-    db::ArangoDb,
-    middleware::auth::Auth,
-    state::AppState,
-};
+use crate::{api::v1::ws::ws_handler, db::ArangoDb, middleware::auth::Auth, state::AppState};
+use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
+use axum::http::{HeaderValue, Method};
 use axum::{Json, Router, middleware::from_fn_with_state, routing::*};
 use log::info;
 use serde_json::{Value, json};
@@ -42,9 +39,17 @@ use utoipa_swagger_ui::SwaggerUi;
 struct ApiDoc;
 
 pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
+    let mut allowed_origins = vec![
+        "http://localhost:5173".parse::<HeaderValue>().unwrap(), // Standard Vite
+        "http://127.0.0.1:5173".parse::<HeaderValue>().unwrap(),
+    ];
+
     let mainrt = Router::new()
         // Unauthenticated routes — outside the /v1 auth nest so no JWT is required.
-        .route("/v1/register", post(api::v1::authentication::login::register))
+        .route(
+            "/v1/register",
+            post(api::v1::authentication::login::register),
+        )
         .route("/v1/login", post(api::v1::authentication::login::login))
         .route("/v1/logout", post(api::v1::authentication::login::logout))
         // Unauthenticated object-store static files (avatars / wallpapers).
@@ -112,18 +117,12 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                 .nest(
                     "/debug",
                     Router::new()
-                        .route(
-                            "/collections",
-                            get(api::v1::debug::list_collections),
-                        )
+                        .route("/collections", get(api::v1::debug::list_collections))
                         .route(
                             "/collections/{name}",
                             get(api::v1::debug::get_collection_data),
                         )
-                        .route(
-                            "/access",
-                            get(api::v1::debug::get_access_debug),
-                        )
+                        .route("/access", get(api::v1::debug::get_access_debug))
                         .layer(from_fn_with_state(
                             shared_state.clone(),
                             middleware::godmode_middleware,
@@ -138,9 +137,16 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
         .layer(TraceLayer::new_for_http())
         .layer(
             CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
+                .allow_origin(allowed_origins)
+                .allow_methods([
+                    Method::GET,
+                    Method::POST,
+                    Method::PUT,
+                    Method::DELETE,
+                    Method::OPTIONS,
+                ])
+                .allow_headers([CONTENT_TYPE, AUTHORIZATION])
+                .allow_credentials(true),
         );
     let (router, api) = OpenApiRouter::with_openapi(ApiDoc::openapi())
         .nest("/api", mainrt.into())
@@ -154,16 +160,15 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
 pub async fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::Error>> {
     let config = config::AppConfig::from_env()?;
     let auth = Auth::new(config.jwt_secret.as_bytes(), config.jwt_expiry_days);
-    let db = ArangoDb::connect_basic(&config.database_connection_string, &config.database_user, &config.database_password, &config.database_name).await?;
+    let db = ArangoDb::connect_basic(
+        &config.database_connection_string,
+        &config.database_user,
+        &config.database_password,
+        &config.database_name,
+    )
+    .await?;
     let cache = cache::create_default_cache().await;
-    Ok(AppState::new(
-        config,
-        auth,
-        Arc::new(db),
-        cache,
-        None,
-        None,
-    ))
+    Ok(AppState::new(config, auth, Arc::new(db), cache, None, None))
 }
 
 #[tokio::main]
@@ -184,7 +189,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("  Database name: {}", config.database_name);
     info!("  Client API keys: {:?}", config.client_api_keys);
 
-    let db = ArangoDb::connect_basic(&config.database_connection_string, &config.database_user, &config.database_password, &config.database_name).await?;
+    let db = ArangoDb::connect_basic(
+        &config.database_connection_string,
+        &config.database_user,
+        &config.database_password,
+        &config.database_name,
+    )
+    .await?;
 
     // Seed root account if it doesn't exist
     let auth = Auth::new(config.jwt_secret.as_bytes(), config.jwt_expiry_days);
@@ -212,14 +223,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create app state
     let cache = cache::create_default_cache().await;
     let objectstore = services::objectstore::ObjectStoreService::try_from_config(&config);
-    let app_state = AppState::new(
-        config.clone(),
-        auth,
-        db.clone(),
-        cache,
-        None,
-        objectstore,
-    );
+    let app_state = AppState::new(config.clone(), auth, db.clone(), cache, None, objectstore);
     let shared_state = Arc::new(app_state);
 
     // Build the application router
