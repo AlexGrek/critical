@@ -26,6 +26,7 @@ export interface YamlEditorProps {
   readOnlyFields?: string[];
   className?: string;
   "data-testid"?: string;
+  disabled?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +57,7 @@ export function YamlEditor({
   onChange,
   readOnlyFields = [],
   className,
+  disabled = false,
   "data-testid": testId,
 }: YamlEditorProps) {
   const [text, setText] = useState("");
@@ -114,14 +116,16 @@ export function YamlEditor({
         value={text}
         onChange={handleChange}
         spellCheck={false}
+        disabled={disabled}
         data-testid={testId}
         className={cn(
-          "flex-1 min-h-[200px] w-full resize-none font-mono text-xs leading-relaxed",
+          "flex-1 min-h-50 w-full resize-none font-mono text-xs leading-relaxed",
           "p-3 rounded-(--radius-component-lg)",
           "border bg-white text-gray-900",
           "dark:bg-gray-950 dark:text-gray-100",
           "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
           "placeholder:text-gray-400 dark:placeholder:text-gray-500",
+          "disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none",
           error
             ? "border-red-400 dark:border-red-600"
             : "border-gray-200 dark:border-gray-700"

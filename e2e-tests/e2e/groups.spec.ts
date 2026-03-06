@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { registerAndLogin, loginAsRoot } from './helpers/auth';
+import { generateUsername, registerAndLogin, loginAs, loginAsRoot, TEST_PASSWORD } from './helpers/auth';
 import { createGroup, deleteGroup } from './helpers/groups';
 
 test(
@@ -77,48 +77,62 @@ test(
 );
 
 test(
-  'Given a user without write access to a group, ' +
+  'Given a user with read-only access to a group, ' +
   'when they view the groups page, ' +
-  'then the Edit and Delete buttons are disabled (greyed out) for that group',
+  'then the Edit and Delete buttons are disabled for that group',
   async ({ page }) => {
-    // Create a group as user A
-    const userA = await registerAndLogin(page);
+    // Register the read-only user first so we have their ID before creating the group.
+    const readerUsername = generateUsername();
+    await page.request.post('/api/v1/register', {
+      data: { user: readerUsername, password: TEST_PASSWORD },
+    });
+    const readerId = `u_${readerUsername}`;
+
+    // Create the group as root, granting the reader READ-only (FETCH|LIST|NOTIFY = 7)
+    // access in the ACL at creation time.
+    await loginAsRoot(page);
     const suffix = Math.random().toString(36).slice(2, 8);
     const bareId = `e2e_perm_${suffix}`;
     const fullId = `g_${bareId}`;
-    const groupName = `Permission Test Group ${suffix}`;
+    const READ_BITS = 1 | 2 | 4; // FETCH | LIST | NOTIFY
 
+    const createRes = await page.request.post('/api/v1/global/groups', {
+      data: {
+        id: bareId,
+        name: `Permission Test ${suffix}`,
+        acl: {
+          list: [{ permissions: READ_BITS, principals: [readerId] }],
+          last_mod_date: new Date().toISOString(),
+        },
+      },
+    });
+    expect(createRes.ok()).toBeTruthy();
+
+    // Root (godmode) sees the group with ENABLED edit/delete.
     await page.goto('/groups');
-    const createdId = await createGroup(page, bareId, groupName);
-    expect(createdId).toBe(fullId);
-
-    // Verify the group is visible and Edit button is enabled (user A has write access)
     const groupRow = page.getByTestId(`group-row-${fullId}`);
     await expect(groupRow).toBeVisible();
-
     const editBtn = page.getByTestId(`edit-group-${fullId}`);
     await expect(editBtn).toBeEnabled();
 
-    // Log in as a different user (user B) who doesn't have access
-    const userB = await registerAndLogin(page);
-    expect(userB).not.toBe(userA); // Ensure different user
-
-    // Navigate to groups as user B
+    // Reader logs in — has FETCH but not MODIFY on this group.
+    await loginAs(page, readerUsername);
     await page.goto('/groups');
-    await expect(groupRow).toBeVisible(); // Group still visible (not hidden)
 
-    // Edit button should be disabled (no write access)
+    // Group is still visible (reader has FETCH access via ACL).
+    await expect(groupRow).toBeVisible();
+
+    // Edit button is disabled and carries the right tooltip.
     await expect(editBtn).toBeDisabled();
     await expect(editBtn).toHaveAttribute('title', /don't have write access/i);
 
-    // Delete button should also be disabled
+    // Delete button is also disabled.
     const deleteBtn = page.getByTestId(`delete-group-${fullId}`);
     await expect(deleteBtn).toBeDisabled();
     await expect(deleteBtn).toHaveAttribute('title', /don't have write access/i);
 
-    // Cleanup: log in as root (godmode) to delete the group
+    // Cleanup.
     await loginAsRoot(page);
-    await page.goto('/groups');
     await deleteGroup(page, fullId);
   }
 );
