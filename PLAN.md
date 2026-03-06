@@ -158,7 +158,7 @@ pub async fn get_object(
 
 ---
 
-## 3. Principal Caching (5s TTL)
+## 3. Principal Caching (5s TTL) - done
 
 **Goal**: Cache `get_user_principals()` results to avoid repeated graph traversals on every ACL check.
 
@@ -232,7 +232,7 @@ Add a note to `CLAUDE.md` under Architecture:
 
 ---
 
-## 4. Permission Batch Operations & Debug Endpoint
+## 4. Permission Batch Operations & Debug Endpoint - done
 
 **Goal**: Add batch grant/revoke helpers and an admin debug endpoint for permission inspection.
 

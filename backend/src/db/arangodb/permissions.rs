@@ -173,6 +173,63 @@ impl ArangoDb {
         }
     }
 
+    /// Grant a permission to a principal for each key in the batch.
+    /// Silently succeeds if the principal already has any of the permissions.
+    pub async fn grant_permissions_batch(&self, permissions: &[&str], principal: &str) -> Result<()> {
+        if permissions.is_empty() {
+            return Ok(());
+        }
+
+        let query = r#"
+            FOR perm_key IN @permissions
+                UPSERT { _key: perm_key }
+                INSERT { _key: perm_key, principals: [@principal] }
+                UPDATE { principals: UNION_DISTINCT(OLD.principals, [@principal]) }
+                IN permissions
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            ("permissions", serde_json::json!(permissions)),
+            ("principal", serde_json::Value::String(principal.to_string())),
+        ]);
+
+        // Each UPSERT in the FOR loop is subject to write-write conflicts on parallel writes.
+        // Retry transparently.
+        super::upsert_with_retry(|| {
+            let vars = vars.clone();
+            async move {
+                self.aql::<serde_json::Value>(query, vars).await
+                    .map(|_| ())
+            }
+        })
+        .await
+    }
+
+    /// Revoke a permission from a principal for each key in the batch.
+    /// Silently succeeds if the permission doesn't exist.
+    pub async fn revoke_permissions_batch(&self, permissions: &[&str], principal: &str) -> Result<()> {
+        if permissions.is_empty() {
+            return Ok(());
+        }
+
+        let query = r#"
+            FOR perm_key IN @permissions
+                LET perm = DOCUMENT("permissions", perm_key)
+                FILTER perm != null
+                UPDATE perm WITH {
+                    principals: REMOVE_VALUE(perm.principals, @principal)
+                } IN permissions
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            ("permissions", serde_json::json!(permissions)),
+            ("principal", serde_json::Value::String(principal.to_string())),
+        ]);
+
+        self.aql::<serde_json::Value>(query, vars).await?;
+        Ok(())
+    }
+
     pub async fn get_user_permissions(&self, user_id: &str) -> Result<Vec<String>> {
         // TODO: create separate godmode endpoint to check if the user X has access to Y and with what permission bits or overrides
         let query = r#"

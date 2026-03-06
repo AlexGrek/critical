@@ -1,6 +1,8 @@
+pub mod access_check;
 pub mod authentication;
 pub mod debug;
 pub mod gitops;
+pub mod permissions;
 pub mod scoped_gitops;
 pub mod static_files;
 pub mod upload;

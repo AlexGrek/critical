@@ -68,6 +68,15 @@ interface MembershipBrief {
   deletion?: DeletionInfo;
 }
 
+interface AccessCheckResult {
+  can_fetch: boolean;
+  can_list: boolean;
+  can_notify: boolean;
+  can_create: boolean;
+  can_modify: boolean;
+  permission_bits: number;
+}
+
 // ---------------------------------------------------------------------------
 // Meta
 // ---------------------------------------------------------------------------
@@ -84,8 +93,10 @@ export function meta({}: Route.MetaArgs) {
 // ---------------------------------------------------------------------------
 
 export async function loader({ request }: Route.LoaderArgs) {
+  const cookie = request.headers.get("Cookie") || "";
+
   const res = await fetch("http://localhost:3742/api/v1/global/groups", {
-    headers: { Cookie: request.headers.get("Cookie") || "" },
+    headers: { Cookie: cookie },
   });
 
   if (!res.ok) {
@@ -96,7 +107,39 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   const data: { items: GroupBrief[] } = await res.json();
-  return { groups: data.items };
+  const groups = data.items;
+
+  // Fetch access-check results in parallel for all groups
+  const accessEntries = await Promise.all(
+    groups.map(async (g) => {
+      const r = await fetch(
+        `http://localhost:3742/api/v1/accesscheck/global/groups/${g.id}`,
+        { headers: { Cookie: cookie } }
+      );
+      if (!r.ok) {
+        // 404 or other error = no access
+        return [
+          g.id,
+          {
+            can_fetch: false,
+            can_list: false,
+            can_notify: false,
+            can_create: false,
+            can_modify: false,
+            permission_bits: 0,
+          },
+        ] as const;
+      }
+      const check: AccessCheckResult = await r.json();
+      return [g.id, check] as const;
+    })
+  );
+
+  const accessMap: Record<string, AccessCheckResult> = Object.fromEntries(
+    accessEntries
+  );
+
+  return { groups, accessMap };
 }
 
 // ---------------------------------------------------------------------------
@@ -264,7 +307,7 @@ function groupToEditForm(group: GroupFull): EditForm {
 // ---------------------------------------------------------------------------
 
 export default function Groups() {
-  const { groups } = useLoaderData<typeof loader>();
+  const { groups, accessMap } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<ActionResult>();
   const revalidator = useRevalidator();
   const prevFetcherState = useRef<string>("idle");
@@ -751,6 +794,12 @@ export default function Groups() {
                                 onClick={() =>
                                   setConfirmDeleteGroupId(group.id)
                                 }
+                                disabled={!accessMap[group.id]?.can_modify}
+                                title={
+                                  !accessMap[group.id]?.can_modify
+                                    ? "You don't have write access to this group"
+                                    : undefined
+                                }
                                 data-testid={`delete-group-${group.id}`}
                                 className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
                               >
@@ -763,6 +812,16 @@ export default function Groups() {
                                     : "outline"
                                 }
                                 size="sm"
+                                disabled={
+                                  !accessMap[group.id]?.can_modify &&
+                                  group.id !== selectedGroupId
+                                }
+                                title={
+                                  !accessMap[group.id]?.can_modify &&
+                                  group.id !== selectedGroupId
+                                    ? "You don't have write access to this group"
+                                    : undefined
+                                }
                                 onClick={() =>
                                   group.id === selectedGroupId
                                     ? closeEditor()

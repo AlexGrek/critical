@@ -159,6 +159,22 @@ Stack architecture: nginx gateway (:3742) routes `/api/*` to the backend and `/*
 - `/swagger-ui` — OpenAPI docs (utoipa auto-discovery is commented out due to IDE issues)
 - All API routes are nested under `/api` in the OpenAPI router
 
+**Key `/v1` route groups:**
+
+| Prefix | Description |
+|--------|-------------|
+| `GET /v1/global/{kind}` | List resources |
+| `POST /v1/global/{kind}` | Create resource |
+| `GET/POST/PUT/DELETE /v1/global/{kind}/{id}` | Get / upsert / update / delete |
+| `POST /v1/global/permissions/{key}/grant` | Grant a super-permission to one or more principals (requires `ADM_USER_MANAGER` or `ADM_GODMODE`) |
+| `POST /v1/global/permissions/{key}/revoke` | Revoke a super-permission (same auth requirement) |
+| `GET /v1/accesscheck/me/permissions` | Return caller's own super-permissions (for UI button visibility) |
+| `GET /v1/accesscheck/global/{kind}/{id}` | Caller's effective permission bits on a global resource; 404 if no FETCH access |
+| `GET /v1/accesscheck/projects/{project}/{kind}/{id}` | Same for project-scoped resources (falls back to project ACL when resource ACL is empty) |
+| `GET /v1/projects/{project}/{kind}` | List project-scoped resources |
+| `GET/PUT/DELETE /v1/projects/{project}/{kind}/{id}` | Get / update / delete scoped resource |
+| `GET /v1/debug/*` | Godmode-only introspection (`/collections`, `/collections/{name}`, `/access`) |
+
 ### Auth & Middleware (`backend/src/middleware/`)
 - JWT authentication middleware applied to `/v1` routes
 - `Auth` struct initialized with JWT secret bytes

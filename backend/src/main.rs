@@ -75,6 +75,28 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                     "/global/{kind}/{id}/upload/{upload_type}",
                     post(api::v1::upload::upload_media),
                 )
+                .route(
+                    "/global/permissions/{key}/grant",
+                    post(api::v1::permissions::grant_permission),
+                )
+                .route(
+                    "/global/permissions/{key}/revoke",
+                    post(api::v1::permissions::revoke_permission),
+                )
+                // Access-check routes — return the caller's effective permissions
+                // on a resource, or 404 if they have no FETCH access.
+                .route(
+                    "/accesscheck/me/permissions",
+                    get(api::v1::access_check::get_my_permissions),
+                )
+                .route(
+                    "/accesscheck/global/{kind}/{id}",
+                    get(api::v1::access_check::check_global_access),
+                )
+                .route(
+                    "/accesscheck/projects/{project}/{kind}/{id}",
+                    get(api::v1::access_check::check_scoped_access),
+                )
                 // Project-scoped routes
                 .route(
                     "/projects/{project}/{kind}",
@@ -97,6 +119,10 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                         .route(
                             "/collections/{name}",
                             get(api::v1::debug::get_collection_data),
+                        )
+                        .route(
+                            "/access",
+                            get(api::v1::debug::get_access_debug),
                         )
                         .layer(from_fn_with_state(
                             shared_state.clone(),
