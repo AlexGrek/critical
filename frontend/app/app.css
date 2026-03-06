@@ -222,6 +222,42 @@ html.dark {
   --color-nav-item-active-text: #6ee7b7;
 }
 
+html.darkred {
+  background-color: #0f0f0f;
+  color: #e5e5e5;
+  color-scheme: dark;
+  /* Neutral dark grays — no green tint on surfaces */
+  --color-gray-950: #080808;
+  --color-gray-900: #111111;
+  --color-gray-800: #1c1c1c;
+  --color-gray-700: #2a2a2a;
+  --color-gray-600: #3d3d3d;
+  --color-gray-500: #525252;
+  --color-gray-400: #737373;
+  --color-gray-300: #a3a3a3;
+  --color-gray-200: #d4d4d4;
+  --color-gray-100: #e5e5e5;
+  --color-gray-50: #f5f5f5;
+
+  /* Dark theme: standard roundness */
+  --radius-component: var(--radius-md);
+  --radius-component-lg: var(--radius-lg);
+  --radius-component-xl: var(--radius-xl);
+
+  /* Nav: neutral dark — red only for active item */
+  --color-topbar-bg: #141414;
+  --color-topbar-text: #d4d4d4;
+  --color-topbar-item-hover: #1f1f1f;
+  --color-nav-bg: #0f0f0f;
+  --color-nav-border: #242424;
+  --color-nav-text: #d4d4d4;
+  --color-nav-text-muted: #737373;
+  --color-nav-item-hover: #1a1a1a;
+  --color-nav-item-hover-text: #e5e5e5;
+  --color-nav-item-active: #7f1d1d;
+  --color-nav-item-active-text: #fca5a5;
+}
+
 /* Orange dark: neutral dark base so vivid orange accents pop.
    MUST come after html.dark — orange adds both .orange and .dark to <html>,
    so html.dark also matches; orange must be later to win the cascade. */

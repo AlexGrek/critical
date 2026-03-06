@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-export type Theme = "light" | "dark" | "grayscale" | "barbie" | "orange" | "fusion" | "nostalgic95" | "itheme" | "lime";
+export type Theme = "light" | "dark" | "darkred" | "grayscale" | "barbie" | "orange" | "fusion" | "nostalgic95" | "itheme" | "lime";
 
 interface ThemeContextType {
   theme: Theme;
@@ -17,7 +17,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     if (typeof window === "undefined") return "light";
 
     const stored = localStorage.getItem(THEME_STORAGE_KEY) as Theme | null;
-    if (stored && ["light", "dark", "grayscale", "barbie", "orange", "fusion", "nostalgic95", "itheme", "lime"].includes(stored)) {
+    if (stored && ["light", "dark", "darkred", "grayscale", "barbie", "orange", "fusion", "nostalgic95", "itheme", "lime"].includes(stored)) {
       return stored;
     }
 
@@ -38,11 +38,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
 
     // Remove all theme classes
-    root.classList.remove("light", "dark", "grayscale", "barbie", "orange", "fusion", "nostalgic95", "itheme", "lime");
+    root.classList.remove("light", "dark", "darkred", "grayscale", "barbie", "orange", "fusion", "nostalgic95", "itheme", "lime");
 
     // Add the current theme class. Grayscale and orange are dark variants.
     root.classList.add(theme);
-    if (theme === "grayscale" || theme === "orange") {
+    if (theme === "grayscale" || theme === "orange" || theme === "darkred") {
       root.classList.add("dark");
     }
 

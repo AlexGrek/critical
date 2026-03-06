@@ -40,7 +40,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   const theme = localStorage.getItem('critical-theme') ||
                     (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
                   document.documentElement.classList.add(theme);
-                  if (theme === 'grayscale' || theme === 'orange') document.documentElement.classList.add('dark');
+                  if (theme === 'grayscale' || theme === 'orange' || theme === 'darkred') document.documentElement.classList.add('dark');
                   document.documentElement.style.colorScheme = (theme === 'light' || theme === 'barbie' || theme === 'fusion' || theme === 'nostalgic95') ? 'light' : 'dark';
                 } catch (e) {}
               })();

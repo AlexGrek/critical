@@ -28,6 +28,12 @@ const themes: ThemeOption[] = [
     icon: Moon,
   },
   {
+    value: "darkred",
+    label: "Dark Red",
+    description: "Dark theme with red accents",
+    icon: Flame,
+  },
+  {
     value: "barbie",
     label: "Barbie",
     description: "Pink-focused light theme",
