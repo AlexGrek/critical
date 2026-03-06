@@ -556,6 +556,88 @@ Tabs.Content, etc.).
 
 ---
 
+## Mobile Responsiveness (CRITICAL — always think about small screens)
+
+Every UI element must work on small mobile screens (320px–375px wide). This is not
+optional — always design mobile-first and use responsive Tailwind breakpoints to
+enhance for larger screens.
+
+### Action Buttons in Tables and Lists
+
+Tables and list rows often have action buttons (Edit, Delete, View, etc.). On small
+screens these buttons with labels overflow or crowd the row.
+
+**Rule**: In tables and tight list rows, use `size="icon"` (`Button` variant) on small
+screens and show the label only on larger screens:
+
+```tsx
+{/* BAD — overflows on mobile */}
+<Button variant="ghost" size="sm" onClick={onEdit}>
+  <Pencil className="w-4 h-4" /> Edit
+</Button>
+
+{/* GOOD — icon-only on mobile, labeled on sm+ */}
+<Button variant="ghost" size="icon" onClick={onEdit} title="Edit">
+  <Pencil className="w-4 h-4" />
+  <span className="sr-only sm:not-sr-only sm:ml-1">Edit</span>
+</Button>
+```
+
+Always add a `title` prop to icon-only buttons so the tooltip identifies the action.
+
+### Table Action Column Layout
+
+For rows with multiple actions (e.g. Edit + Delete), stack them or use a tight flex
+row. On very small screens, collapse actions into a single dropdown menu if there are
+more than 2 actions:
+
+```tsx
+{/* 1–2 actions: icon buttons side by side */}
+<div className="flex items-center gap-1">
+  <Button variant="ghost" size="icon" title="Edit"><Pencil className="w-4 h-4" /></Button>
+  <Button variant="ghost" size="icon" title="Delete"><Trash2 className="w-4 h-4" /></Button>
+</div>
+
+{/* 3+ actions: use a dropdown on mobile, inline on md+ */}
+<div className="flex items-center gap-1">
+  {/* Mobile: dropdown */}
+  <div className="md:hidden">
+    <DropdownMenu>...</DropdownMenu>
+  </div>
+  {/* Desktop: inline */}
+  <div className="hidden md:flex items-center gap-1">
+    <Button ...>Edit</Button>
+    <Button ...>Duplicate</Button>
+    <Button ...>Delete</Button>
+  </div>
+</div>
+```
+
+### Responsive Table Columns
+
+Hide non-essential columns on small screens using `hidden sm:table-cell` /
+`hidden md:table-cell` on `<th>` and `<td>` pairs. Always keep the primary
+identifier column and the actions column visible:
+
+```tsx
+<th className="hidden md:table-cell">Created</th>
+<th className="hidden sm:table-cell">Owner</th>
+<th>Name</th>          {/* always visible */}
+<th>Actions</th>       {/* always visible */}
+```
+
+### General Mobile Rules
+
+- **Padding**: Use `px-3 sm:px-6` on containers — full padding on desktop, tighter on mobile
+- **Font sizes**: Prefer `text-sm` in tables; `text-xs` is acceptable for secondary info
+- **Wrap flex rows**: Use `flex-wrap` on button groups that might overflow
+- **Touch targets**: Minimum 44×44px tap area — `size="icon"` Button is 36px; add
+  `p-2` wrapper if the touch area is too small
+- **Never truncate primary identifiers** — IDs and names must be readable; use
+  `truncate max-w-[120px] sm:max-w-none` if space is tight rather than hiding them
+
+---
+
 ## Self-Review Before Finishing
 
 - [ ] **Custom components used**: No bare `<button>`, `<input>`, or ad-hoc cards/modals
@@ -569,3 +651,4 @@ Tabs.Content, etc.).
 - [ ] **Types**: Using auto-generated `Route` types from `./+types/`
 - [ ] **Imports**: Using `~/` path alias, components from `~/components` barrel
 - [ ] **`npm run typecheck`** passes
+- [ ] **Mobile responsive**: Table action buttons use `size="icon"` on small screens; non-essential columns hidden on mobile; touch targets ≥44px
