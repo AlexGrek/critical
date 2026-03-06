@@ -448,17 +448,17 @@ export default function ProjectsListPage() {
 
         {/* Projects grid */}
         {projects.length === 0 ? (
-          <Card className="text-center py-16" data-testid="projects-empty-state">
-            <div className="max-w-sm mx-auto">
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-(--radius-component-lg) bg-gray-100 dark:bg-gray-800 mb-4">
+          <Card className="w-full py-20" data-testid="projects-empty-state">
+            <div className="flex flex-col items-center gap-4 px-8">
+              <div className="flex items-center justify-center w-12 h-12 rounded-(--radius-component-lg) bg-gray-100 dark:bg-gray-800">
                 <Lock className="w-6 h-6 text-gray-400" />
               </div>
-              <H2 className="mb-2">No projects yet</H2>
-              <Paragraph className="text-gray-600 dark:text-gray-400 mb-6">
+              <H2>No projects yet</H2>
+              <Paragraph className="text-gray-600 dark:text-gray-400 text-center max-w-prose">
                 Create your first project to get started with collaboration and
                 resource management.
               </Paragraph>
-              <Button variant="primary" size="lg" className="w-full">
+              <Button variant="primary" size="lg">
                 <Plus className="w-4 h-4 mr-2" />
                 Create First Project
               </Button>

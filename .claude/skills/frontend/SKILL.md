@@ -487,9 +487,79 @@ const handleYamlChange = (parsed: Record<string, unknown>) => {
 
 ---
 
+## Layout Width — Preventing "Super Narrow" Elements (CRITICAL)
+
+A recurring issue: route-level containers or cards appear narrow because `max-w-*` or a
+missing `w-full` collapses them in certain parent contexts (flex/grid ancestors, Radix
+Tabs.Content, etc.).
+
+### Rules
+
+1. **Route page wrapper**: always use `w-full` (or rely on block-level default). Pair a
+   `max-w-*` with `mx-auto` for centering:
+   ```tsx
+   <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 py-8">
+     <div className="max-w-7xl mx-auto">   {/* ← correct */}
+   ```
+
+2. **Top-level route Card/container**: do **not** add a restrictive `max-w-*` unless you
+   truly want the element narrow. If the card should fill the column, use `w-full` with
+   no max-width, or with a generous max (`max-w-3xl` / `max-w-4xl`) paired with `mx-auto`:
+   ```tsx
+   {/* BAD — ProfileTab form looks narrow in a wide layout */}
+   <Card className="max-w-xl">
+
+   {/* GOOD — fills available column width */}
+   <Card className="w-full">
+
+   {/* GOOD — centered with reasonable max, not cramped */}
+   <Card className="w-full max-w-3xl">
+   ```
+
+3. **Empty-state panels**: use `flex flex-col items-center` for centering — do NOT rely
+   on `text-center` alone (heading components apply `text-left` by default, overriding it).
+   Only the description paragraph needs a max-width for readability; use `max-w-prose`:
+   ```tsx
+   {/* BAD — text-center doesn't override H2's default text-left; max-w-sm is tiny */}
+   <Card className="text-center py-16">
+     <div className="max-w-sm mx-auto">
+       <H2>No items</H2>  {/* renders left-aligned! */}
+
+   {/* GOOD */}
+   <Card className="w-full py-20">
+     <div className="flex flex-col items-center gap-4 px-8">
+       <H2>No items</H2>
+       <Paragraph className="text-center max-w-prose">Description...</Paragraph>
+       <Button variant="primary" size="lg">CTA</Button>
+     </div>
+   </Card>
+   ```
+
+4. **Tailwind v4 `max-w-{name}` GOTCHA**: In Tailwind v4, named size utilities like
+   `max-w-sm`, `max-w-md`, `max-w-lg`, `max-w-xl` resolve to `var(--spacing-{name})`
+   from the spacing scale — NOT the old v3 container widths. This produces values like
+   `max-w-lg = 24px` instead of the expected 512px.
+   - ❌ `max-w-lg` → 24px (spacing variable, not a container width)
+   - ✅ `max-w-prose` → 65ch (correct for paragraph text)
+   - ✅ `max-w-[32rem]` → 512px (arbitrary value, always reliable)
+   - ✅ `max-w-96` → 24rem/384px (numeric spacing — predictable)
+   - ✅ `max-w-2xl`, `max-w-6xl`, `max-w-7xl` — these DO map to container vars correctly
+   **Rule**: never use `max-w-sm/md/lg/xl` for wide container constraints. Use numeric
+   (`max-w-96`, `max-w-2xl`+) or `max-w-prose` for text.
+
+5. **Inputs are `w-full` by default** (built into the `Input` component). If they appear
+   narrow, the problem is always the *parent* container, not the input itself. Fix the
+   parent width.
+
+6. **Radix Tabs.Content** wraps children in a div. In rare layout contexts this can
+   collapse width. Defensive fix: add `w-full` to the direct child of `Tabs.Content`.
+
+---
+
 ## Self-Review Before Finishing
 
 - [ ] **Custom components used**: No bare `<button>`, `<input>`, or ad-hoc cards/modals
+- [ ] **No narrow containers**: Route cards/forms use `w-full` (not restrictive `max-w-sm`/`max-w-xl`) — see "Layout Width" section above
 - [ ] **Theme roundness**: All `rounded-*` use `rounded-(--radius-component)` variants, never hardcoded
 - [ ] **Dark mode colors**: All color classes have `dark:` counterparts
 - [ ] **SSR safe**: No `window`/`document`/`localStorage` access during render (use `useEffect` or guards)

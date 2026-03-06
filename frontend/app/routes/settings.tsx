@@ -281,7 +281,7 @@ function ProfileTab({
   };
 
   return (
-    <Card className="max-w-xl">
+    <Card className="w-full">
       <CardContent className="py-6">
         <H2 className="text-base mb-6">Personal information</H2>
 
