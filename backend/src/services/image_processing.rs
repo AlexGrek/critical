@@ -111,21 +111,27 @@ pub enum ProcessingError {
 /// This check happens before any I/O, so callers can reject invalid uploads
 /// without storing anything.
 pub fn detect_format(bytes: &[u8]) -> Option<ImageInputFormat> {
+    log::trace!("[image] detect_format: input {} bytes", bytes.len());
     if bytes.len() < 12 {
+        log::debug!("[image] detect_format: input too short ({} bytes), cannot detect", bytes.len());
         return None;
     }
     // JPEG: FF D8 FF
     if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        log::trace!("[image] detect_format: detected JPEG");
         return Some(ImageInputFormat::Jpeg);
     }
     // PNG: 89 50 4E 47 0D 0A 1A 0A
     if bytes.starts_with(&[0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) {
+        log::trace!("[image] detect_format: detected PNG");
         return Some(ImageInputFormat::Png);
     }
     // WebP: RIFF????WEBP
     if &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WEBP" {
+        log::trace!("[image] detect_format: detected WebP");
         return Some(ImageInputFormat::Webp);
     }
+    log::debug!("[image] detect_format: unrecognized format, first 12 bytes: {:02X?}", &bytes[..12]);
     None
 }
 
@@ -137,23 +143,41 @@ pub fn process_image(
     raw: &[u8],
     upload_type: UploadType,
 ) -> Result<ProcessedImages, ProcessingError> {
-    detect_format(raw).ok_or(ProcessingError::UnsupportedFormat)?;
+    log::debug!("[image] process_image: start, type={:?}, input={} bytes", upload_type, raw.len());
 
+    let fmt = detect_format(raw).ok_or(ProcessingError::UnsupportedFormat)?;
+    log::debug!("[image] process_image: format detected={:?}", fmt);
+
+    log::trace!("[image] process_image: decoding image from memory");
     let img = image::load_from_memory(raw)?;
+    let (orig_w, orig_h) = img.dimensions();
+    log::debug!("[image] process_image: decoded OK, dimensions={}x{}", orig_w, orig_h);
+
     let (ratio_w, ratio_h) = upload_type.aspect();
+    log::trace!("[image] process_image: cropping to aspect {}:{}", ratio_w, ratio_h);
     let cropped = crop_to_aspect(img, ratio_w, ratio_h);
+    let (crop_w, crop_h) = cropped.dimensions();
+    log::debug!("[image] process_image: cropped to {}x{}", crop_w, crop_h);
 
     let (hd_w, hd_h) = upload_type.hd_size();
     let (th_w, th_h) = upload_type.thumb_size();
 
+    log::trace!("[image] process_image: resizing HD to {}x{} (Lanczos3)", hd_w, hd_h);
     let hd_img = cropped.resize_exact(hd_w, hd_h, FilterType::Lanczos3);
+    log::trace!("[image] process_image: resizing thumb to {}x{} (Lanczos3)", th_w, th_h);
     let thumb_img = cropped.resize_exact(th_w, th_h, FilterType::Lanczos3);
 
+    log::trace!("[image] process_image: encoding HD to WebP");
     let hd = encode_webp(&hd_img)?;
+    log::trace!("[image] process_image: encoding thumb to WebP");
     let thumb = encode_webp(&thumb_img)?;
 
     let hd_size_bytes = hd.len() as u64;
     let thumb_size_bytes = thumb.len() as u64;
+    log::debug!(
+        "[image] process_image: done — hd={} bytes, thumb={} bytes",
+        hd_size_bytes, thumb_size_bytes
+    );
 
     Ok(ProcessedImages {
         hd,
@@ -192,15 +216,26 @@ fn crop_to_aspect(img: DynamicImage, ratio_w: u32, ratio_h: u32) -> DynamicImage
 
     let x = (width - crop_w) / 2;
     let y = (height - crop_h) / 2;
+    log::trace!(
+        "[image] crop_to_aspect: {}x{} → crop {}x{} at ({},{}) for ratio {}:{}",
+        width, height, crop_w, crop_h, x, y, ratio_w, ratio_h
+    );
     img.crop_imm(x, y, crop_w, crop_h)
 }
 
 /// Encode a `DynamicImage` to WebP bytes using the `image` crate's built-in encoder.
 fn encode_webp(img: &DynamicImage) -> Result<Bytes, ProcessingError> {
+    let (w, h) = img.dimensions();
+    log::trace!("[image] encode_webp: encoding {}x{} to WebP", w, h);
     let mut buf = Cursor::new(Vec::new());
     img.write_to(&mut buf, image::ImageFormat::WebP)
-        .map_err(|e| ProcessingError::Encode(e.to_string()))?;
-    Ok(Bytes::from(buf.into_inner()))
+        .map_err(|e| {
+            log::error!("[image] encode_webp: failed for {}x{}: {}", w, h, e);
+            ProcessingError::Encode(e.to_string())
+        })?;
+    let bytes = Bytes::from(buf.into_inner());
+    log::trace!("[image] encode_webp: encoded {} bytes", bytes.len());
+    Ok(bytes)
 }
 
 // ---------------------------------------------------------------------------

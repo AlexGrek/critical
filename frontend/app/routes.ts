@@ -9,5 +9,8 @@ export default [
     route("groups", "routes/groups.tsx"),
     route("projects", "routes/projects-list.tsx"),
     route("p/:project_id", "routes/projects.tsx"),
+    route("users", "routes/users.tsx"),
+    route("u/:user_id", "routes/user-detail.tsx"),
+    route("settings", "routes/settings.tsx"),
   ]),
 ] satisfies RouteConfig;

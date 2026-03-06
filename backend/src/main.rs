@@ -185,6 +185,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = config::AppConfig::from_env()?;
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
+    info!(
+        "Log level: {}",
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "info (default)".to_string())
+    );
     info!("Starting application with config:");
     info!("  Host: {}", config.host);
     info!("  Port: {}", config.port);

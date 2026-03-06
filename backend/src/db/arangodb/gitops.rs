@@ -359,16 +359,22 @@ impl ArangoDb {
     }
 
     pub async fn generic_create(&self, collection: &str, doc: Value) -> Result<()> {
+        log::trace!("[db:gitops] generic_create: collection={collection}");
         let query = r#"INSERT @doc INTO @@col"#;
         let vars = std::collections::HashMap::from([
             ("@col", Value::String(collection.to_string())),
             ("doc", doc),
         ]);
-        self.aql::<Value>(query, vars).await?;
+        self.aql::<Value>(query, vars).await.map_err(|e| {
+            log::error!("[db:gitops] generic_create FAIL: collection={collection}: {e}");
+            e
+        })?;
+        log::debug!("[db:gitops] generic_create OK: collection={collection}");
         Ok(())
     }
 
     pub async fn generic_upsert(&self, collection: &str, key: &str, doc: Value) -> Result<()> {
+        log::trace!("[db:gitops] generic_upsert: collection={collection} key={key}");
         let query = r#"
             UPSERT { _key: @key }
             INSERT @doc
@@ -383,21 +389,27 @@ impl ArangoDb {
 
         // Same write-write conflict hazard as grant_permission: concurrent upserts
         // on the same key race at the ArangoDB level. Retry transparently.
-        super::upsert_with_retry(|| {
+        let result = super::upsert_with_retry(|| {
             let vars = vars.clone();
             async move {
                 self.aql::<Value>(query, vars).await
                     .map(|_| ())
             }
         })
-        .await
+        .await;
+        match &result {
+            Ok(_) => log::debug!("[db:gitops] generic_upsert OK: collection={collection} key={key}"),
+            Err(e) => log::error!("[db:gitops] generic_upsert FAIL: collection={collection} key={key}: {e}"),
+        }
+        result
     }
 
     pub async fn generic_update(&self, collection: &str, key: &str, doc: Value) -> Result<()> {
+        log::trace!("[db:gitops] generic_update: collection={collection} key={key}");
         let query = r#"
             LET existing = DOCUMENT(@@col, @key)
             FILTER existing != null
-            REPLACE existing WITH @doc IN @@col
+            UPDATE existing WITH @doc IN @@col
             RETURN NEW
         "#;
         let vars = std::collections::HashMap::from([
@@ -405,14 +417,20 @@ impl ArangoDb {
             ("key", Value::String(key.to_string())),
             ("doc", doc),
         ]);
-        let result: Vec<Value> = self.aql(query, vars).await?;
+        let result: Vec<Value> = self.aql(query, vars).await.map_err(|e| {
+            log::error!("[db:gitops] generic_update AQL FAIL: collection={collection} key={key}: {e}");
+            e
+        })?;
         if result.is_empty() {
+            log::debug!("[db:gitops] generic_update FAIL: document not found: {collection}/{key}");
             return Err(anyhow!("document not found: {}/{}", collection, key));
         }
+        log::debug!("[db:gitops] generic_update OK: collection={collection} key={key}");
         Ok(())
     }
 
     pub async fn generic_delete(&self, collection: &str, key: &str) -> Result<()> {
+        log::trace!("[db:gitops] generic_delete: collection={collection} key={key}");
         let query = r#"
             LET existing = DOCUMENT(@@col, @key)
             FILTER existing != null
@@ -423,10 +441,15 @@ impl ArangoDb {
             ("@col", Value::String(collection.to_string())),
             ("key", Value::String(key.to_string())),
         ]);
-        let result: Vec<Value> = self.aql(query, vars).await?;
+        let result: Vec<Value> = self.aql(query, vars).await.map_err(|e| {
+            log::error!("[db:gitops] generic_delete AQL FAIL: collection={collection} key={key}: {e}");
+            e
+        })?;
         if result.is_empty() {
+            log::debug!("[db:gitops] generic_delete FAIL: document not found: {collection}/{key}");
             return Err(anyhow!("document not found: {}/{}", collection, key));
         }
+        log::debug!("[db:gitops] generic_delete OK: collection={collection} key={key}");
         Ok(())
     }
 }

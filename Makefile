@@ -17,7 +17,7 @@ dev:
 
 dev-api:
 	@echo ">>> Starting backend (cargo watch)..."
-	cd backend && cargo watch -x run
+	cd backend && cargo watch --ignore 'itests/**' -x run
 
 dev-frontend:
 	@echo ">>> Starting frontend dev server..."

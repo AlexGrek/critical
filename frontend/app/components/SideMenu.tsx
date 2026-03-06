@@ -42,6 +42,7 @@ const navSections: Array<{ title: string; items: NavItem[] }> = [
     items: [
       { icon: Folder, label: "Projects", href: "/projects", kind: "link" },
       { icon: Users, label: "Groups", href: "/groups", kind: "link" },
+      { icon: UserCog, label: "Users", href: "/users", kind: "link" },
       { icon: Ticket, label: "Tickets", kind: "button" },
       { icon: GitBranch, label: "Pipelines", kind: "button" },
     ],
@@ -49,7 +50,7 @@ const navSections: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "Administration",
     items: [
-      { icon: Settings, label: "Settings", kind: "button" },
+      { icon: Settings, label: "Settings", href: "/settings", kind: "link" },
       { icon: Key, label: "API Keys", kind: "button" },
       { icon: UserCog, label: "Team", kind: "button" },
       { icon: ClipboardList, label: "Audit Log", kind: "button" },
