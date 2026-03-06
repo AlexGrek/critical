@@ -221,6 +221,13 @@ impl KindController for GroupController {
             return Ok(());
         }
 
+        // If the group doesn't exist yet (new creation), skip member validation —
+        // the creator is added as a member by after_create after the document is stored.
+        let exists = db.generic_get("groups", group_id).await?.is_some();
+        if !exists {
+            return Ok(());
+        }
+
         // Get all transitive members of this group
         let members = db.get_all_group_members_transitive(group_id).await?;
         log::debug!(
