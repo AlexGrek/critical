@@ -40,7 +40,7 @@ const navSections: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "Resources",
     items: [
-      { icon: Folder, label: "Projects", kind: "button" },
+      { icon: Folder, label: "Projects", href: "/projects", kind: "link" },
       { icon: Users, label: "Groups", href: "/groups", kind: "link" },
       { icon: Ticket, label: "Tickets", kind: "button" },
       { icon: GitBranch, label: "Pipelines", kind: "button" },

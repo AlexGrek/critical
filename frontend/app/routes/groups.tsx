@@ -603,14 +603,26 @@ export default function Groups() {
           >
             {(close) => (
               <div className="flex flex-col h-full">
-                <H2 data-testid="create-group-modal-title" className="mb-6">
-                  Create New Group
-                </H2>
+                <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
+                  <h3 className="text-xs font-mono uppercase tracking-wider text-gray-900 dark:text-gray-100" data-testid="create-group-modal-title">
+                    Create New Group
+                  </h3>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={close}
+                    data-testid="cancel-create-group"
+                    className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                  >
+                    ✕
+                  </Button>
+                </div>
                 <form
                   onSubmit={handleCreateSubmit}
                   className="flex-1 flex flex-col"
                 >
-                  <div className="flex-1 space-y-4">
+                  <div className="flex-1 space-y-4 p-4 overflow-y-auto">
                     {createError && (
                       <ErrorBanner
                         data-testid="create-group-error"
@@ -620,7 +632,7 @@ export default function Groups() {
                     <div>
                       <label
                         htmlFor="group-name"
-                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                        className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5"
                       >
                         Group Name
                       </label>
@@ -638,7 +650,7 @@ export default function Groups() {
                     <div>
                       <label
                         htmlFor="group-id"
-                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5"
+                        className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5"
                       >
                         Group ID
                       </label>
@@ -656,21 +668,18 @@ export default function Groups() {
                         placeholder="engineering_team"
                         required
                       />
-                      <Paragraph
-                        variant="subtle"
-                        className="mt-1 text-xs"
-                        data-testid="group-id-hint"
-                      >
+                      <p className="mt-1 text-xs text-gray-600 dark:text-gray-400" data-testid="group-id-hint">
                         2–63 chars, lowercase + underscores. The{" "}
                         <span className="font-mono">g_</span> prefix is added
                         automatically.
-                      </Paragraph>
+                      </p>
                     </div>
                   </div>
-                  <div className="flex gap-3 pt-4 border-t border-gray-200 dark:border-gray-800">
+                  <div className="flex gap-3 p-4 border-t border-gray-200 dark:border-gray-800 shrink-0">
                     <Button
                       type="submit"
                       variant="primary"
+                      size="sm"
                       data-testid="submit-create-group"
                       disabled={isSubmitting}
                     >
@@ -682,14 +691,6 @@ export default function Groups() {
                       ) : (
                         "Create Group"
                       )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={close}
-                      data-testid="cancel-create-group"
-                    >
-                      Cancel
                     </Button>
                   </div>
                 </form>

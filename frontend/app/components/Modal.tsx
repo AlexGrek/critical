@@ -29,10 +29,9 @@ const ModalContent = React.forwardRef<
       ref={ref}
       className={cn(
         "fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-        "w-full max-w-lg min-w-96",
+        "w-full max-w-lg min-w-96 flex flex-col max-h-96",
         "rounded-(--radius-component-xl) border border-gray-200 bg-white shadow-xl",
         "dark:border-gray-800 dark:bg-gray-900",
-        "p-6",
         "focus:outline-none",
         "data-[state=open]:animate-scale-in",
         className
@@ -40,7 +39,7 @@ const ModalContent = React.forwardRef<
       {...props}
     >
       {children}
-      <Dialog.Close className="absolute top-4 right-4 rounded-(--radius-component) opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none dark:ring-offset-gray-950">
+      <Dialog.Close className="absolute top-3 right-3 rounded-(--radius-component) opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none dark:ring-offset-gray-950">
         <X className="h-4 w-4 text-gray-500 dark:text-gray-400" />
         <span className="sr-only">Close</span>
       </Dialog.Close>
@@ -53,7 +52,7 @@ const ModalHeader = ({
   className,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("mb-4", className)} {...props} />
+  <div className={cn("flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0", className)} {...props} />
 );
 ModalHeader.displayName = "ModalHeader";
 
@@ -64,7 +63,7 @@ const ModalTitle = React.forwardRef<
   <Dialog.Title
     ref={ref}
     className={cn(
-      "text-xl font-bold font-sans text-gray-900 dark:text-gray-50",
+      "text-xs font-mono uppercase tracking-wider text-gray-900 dark:text-gray-100",
       className
     )}
     {...props}
@@ -78,7 +77,7 @@ const ModalDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <Dialog.Description
     ref={ref}
-    className={cn("text-sm text-gray-500 dark:text-gray-400", className)}
+    className={cn("text-xs text-gray-600 dark:text-gray-400", className)}
     {...props}
   />
 ));
@@ -89,7 +88,7 @@ const ModalFooter = ({
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn("mt-6 flex justify-end gap-2", className)}
+    className={cn("flex gap-2 p-4 border-t border-gray-200 dark:border-gray-800 shrink-0", className)}
     {...props}
   />
 );

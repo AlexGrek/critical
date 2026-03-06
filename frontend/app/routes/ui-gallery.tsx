@@ -393,12 +393,21 @@ export default function UiGallery() {
                 <Modal.Content>
                   <Modal.Header>
                     <Modal.Title>Disabled Action Example</Modal.Title>
-                    <Modal.Description>
+                    <Modal.Close asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                      >
+                        ✕
+                      </Button>
+                    </Modal.Close>
+                  </Modal.Header>
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <Modal.Description className="mb-3">
                       The confirm button below is disabled until you complete the required
                       action.
                     </Modal.Description>
-                  </Modal.Header>
-                  <div className="py-4">
                     <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                       This might represent a form with missing required fields or other
                       validation errors.
@@ -407,9 +416,9 @@ export default function UiGallery() {
                   </div>
                   <Modal.Footer>
                     <Modal.Close asChild>
-                      <Button variant="outline">Cancel</Button>
+                      <Button variant="outline" size="sm">Cancel</Button>
                     </Modal.Close>
-                    <Button disabled>Confirm (Disabled)</Button>
+                    <Button size="sm" disabled>Confirm (Disabled)</Button>
                   </Modal.Footer>
                 </Modal.Content>
               </Modal.Root>
@@ -652,11 +661,20 @@ console.log(message);`}</CodeBlock>
                 <Modal.Content>
                   <Modal.Header>
                     <Modal.Title>Example Modal</Modal.Title>
-                    <Modal.Description>
+                    <Modal.Close asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                      >
+                        ✕
+                      </Button>
+                    </Modal.Close>
+                  </Modal.Header>
+                  <div className="flex-1 overflow-y-auto p-4">
+                    <Modal.Description className="mb-3">
                       This is a standard modal dialog built with Radix UI.
                     </Modal.Description>
-                  </Modal.Header>
-                  <div className="py-4">
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       This modal includes a header, body content, and a footer
                       with action buttons.
@@ -664,9 +682,9 @@ console.log(message);`}</CodeBlock>
                   </div>
                   <Modal.Footer>
                     <Modal.Close asChild>
-                      <Button variant="outline">Cancel</Button>
+                      <Button variant="outline" size="sm">Cancel</Button>
                     </Modal.Close>
-                    <Button>Confirm</Button>
+                    <Button size="sm">Confirm</Button>
                   </Modal.Footer>
                 </Modal.Content>
               </Modal.Root>
@@ -680,19 +698,34 @@ console.log(message);`}</CodeBlock>
                 modalWidth={500}
                 modalHeight={400}
               >
-                <div className="space-y-4">
-                  <h3 className="text-xl font-bold text-gray-900 dark:text-gray-50">
-                    Morphing Modal
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    This modal morphs from the trigger button with a smooth
-                    animation using Framer Motion.
-                  </p>
-                  <div className="space-y-2">
-                    <Input placeholder="Try typing something..." />
-                    <Button className="w-full">Submit</Button>
+                {(close) => (
+                  <div className="flex flex-col h-full">
+                    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
+                      <h3 className="text-xs font-mono uppercase tracking-wider text-gray-900 dark:text-gray-100">
+                        Morphing Modal
+                      </h3>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={close}
+                        className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                      >
+                        ✕
+                      </Button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                        This modal morphs from the trigger button with a smooth
+                        animation using Framer Motion.
+                      </p>
+                      <div className="space-y-2">
+                        <Input placeholder="Try typing something..." />
+                        <Button size="sm" className="w-full">Submit</Button>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                )}
               </MorphModal>
             </Card>
           </div>

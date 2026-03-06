@@ -7,5 +7,7 @@ export default [
     route("sign-up", "routes/sign-up.tsx"),
     route("ui-gallery", "routes/ui-gallery.tsx"),
     route("groups", "routes/groups.tsx"),
+    route("projects", "routes/projects-list.tsx"),
+    route("p/:project_id", "routes/projects.tsx"),
   ]),
 ] satisfies RouteConfig;
