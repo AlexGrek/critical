@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Button,
   Input,
@@ -22,6 +22,7 @@ import {
   CodeBlock,
   InlineCode,
   ScrollableLogWindow,
+  YamlEditor,
 } from "~/components";
 
 export function meta() {
@@ -33,6 +34,38 @@ export function meta() {
 
 export default function UiGallery() {
   const [inputValue, setInputValue] = useState("");
+  const [yamlResource, setYamlResource] = useState<Record<string, unknown>>({
+    id: "p_example",
+    name: "example-project",
+    description: "A sample project for the UI gallery",
+    labels: { env: "production", team: "platform" },
+    annotations: { "last-deployed": "2026-03-07" },
+    state: { created_at: "2026-01-01T00:00:00Z", updated_at: "2026-03-07T12:00:00Z" },
+    hash_code: "abc123",
+  });
+
+  const editableYamlValue = useMemo(
+    () => yamlResource,
+    [yamlResource]
+  );
+
+  const readOnlyYamlValue = useMemo<Record<string, unknown>>(
+    () => ({
+      id: "g_platform_admins",
+      name: "platform-admins",
+      description: "Platform admin group — managed by infrastructure team",
+      labels: { tier: "admin", managed: "true" },
+      state: { created_at: "2025-12-01T00:00:00Z", updated_at: "2026-02-14T09:30:00Z" },
+      hash_code: "deadbeef",
+    }),
+    []
+  );
+
+  const handleYamlSave = useCallback(async (parsed: Record<string, unknown>) => {
+    // Simulate an API call
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    setYamlResource((prev) => ({ ...prev, ...parsed }));
+  }, []);
   const [logs, setLogs] = useState<string[]>([
     "[INFO] Application started",
     "[INFO] Connecting to database...",
@@ -727,6 +760,49 @@ console.log(message);`}</CodeBlock>
                   </div>
                 )}
               </MorphModal>
+            </Card>
+          </div>
+        </section>
+
+        {/* YAML Editor Section */}
+        <section className="space-y-4">
+          <h2 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">
+            YAML Editor
+          </h2>
+          <Paragraph variant="muted" className="text-sm">
+            A code editor for resource documents. Includes a copy button (semi-transparent,
+            top-right). Read-only mode shows a lock bar instead of greying out the content.
+          </Paragraph>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card className="p-6 space-y-3">
+              <CardTitle>Editable YAML Editor</CardTitle>
+              <CardDescription>
+                Edit the resource document. Click Save to apply changes. The copy button
+                is always available in the top-right corner.
+              </CardDescription>
+              <div className="h-72 flex flex-col">
+                <YamlEditor
+                  value={editableYamlValue}
+                  onSave={handleYamlSave}
+                  readOnlyFields={["state", "hash_code"]}
+                  data-testid="gallery-yaml-editor-editable"
+                />
+              </div>
+            </Card>
+
+            <Card className="p-6 space-y-3">
+              <CardTitle>Read-only YAML Editor</CardTitle>
+              <CardDescription>
+                Locked editors show a thin top bar with a lock icon — no greying out.
+                Copy still works normally.
+              </CardDescription>
+              <div className="h-72 flex flex-col">
+                <YamlEditor
+                  value={readOnlyYamlValue}
+                  disabled
+                  data-testid="gallery-yaml-editor-readonly"
+                />
+              </div>
             </Card>
           </div>
         </section>

@@ -8,11 +8,11 @@ Each theme = one CSS class on `<html>` that overrides CSS variables. Components 
 
 ## Files You Must Touch (All 3, Every Time)
 
-| File | What to do |
-|------|-----------|
-| `frontend/app/app.css` | Add the `html.mytheme { ... }` CSS block |
-| `frontend/app/contexts/ThemeContext.tsx` | Add `"mytheme"` to the `Theme` type, validation array, class removal list, and dark check |
-| `frontend/app/components/ThemeCombobox.tsx` | Add an entry to the `themes` array |
+| File                                        | What to do                                                                                |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `frontend/app/app.css`                      | Add the `html.mytheme { ... }` CSS block                                                  |
+| `frontend/app/contexts/ThemeContext.tsx`    | Add `"mytheme"` to the `Theme` type, validation array, class removal list, and dark check |
+| `frontend/app/components/ThemeCombobox.tsx` | Add an entry to the `themes` array                                                        |
 
 ---
 
@@ -122,15 +122,15 @@ Pick an icon from `lucide-react`. Use `Moon` for dark themes, `Sun` for light, o
 
 Copy-paste one of these as your `--color-primary-*` block:
 
-| Theme | Palette | Tailwind source |
-|-------|---------|-----------------|
-| `dark` | Green | `emerald` |
-| `darkred` | Red | `red` |
-| `orange` | Orange | `orange` |
-| `barbie` | Pink | `pink` |
-| `fusion` | Sky blue | `sky` |
-| `lime` | Lime green | `lime` |
-| `nostalgic95` | Navy | custom |
+| Theme         | Palette    | Tailwind source |
+| ------------- | ---------- | --------------- |
+| `dark`        | Green      | `emerald`       |
+| `darkred`     | Red        | `red`           |
+| `orange`      | Orange     | `orange`        |
+| `barbie`      | Pink       | `pink`          |
+| `fusion`      | Sky blue   | `sky`           |
+| `lime`        | Lime green | `lime`          |
+| `nostalgic95` | Navy       | custom          |
 
 All Tailwind palettes: https://tailwindcss.com/docs/customizing-colors
 

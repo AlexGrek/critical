@@ -8,6 +8,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from "react";
 import { stringify, parse, YAMLParseError } from "yaml";
+import { Copy, Check, Lock } from "lucide-react";
 import { cn } from "~/lib/utils";
 import "./yaml-editor.css";
 
@@ -91,6 +92,7 @@ export function YamlEditor({
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const [EditorComp, setEditorComp] = useState<EditorComponent | null>(null);
   const prismRef = useRef<PrismType | null>(null);
   /** Parsed object from the current editor text (null if parse error). */
@@ -124,8 +126,19 @@ export function YamlEditor({
     lastExternalRef.current = value;
     if (!dirty.current) {
       const display = stripFields(value, readOnlyFields);
-      setText(toYaml(display));
+      const yaml = toYaml(display);
+      setText(yaml);
       setError(null);
+      // Pre-populate parsedRef so Save is enabled without requiring a keystroke first.
+      try {
+        const parsed = parse(yaml);
+        parsedRef.current =
+          parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)
+            : null;
+      } catch {
+        parsedRef.current = null;
+      }
     }
   }, [value, readOnlyFields]);
 
@@ -156,6 +169,16 @@ export function YamlEditor({
     []
   );
 
+  const handleCopy = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 1500);
+    } catch {
+      // clipboard API not available
+    }
+  }, [text]);
+
   const handleSave = useCallback(async () => {
     if (!onSave || !parsedRef.current) return;
     setIsSaving(true);
@@ -181,44 +204,106 @@ export function YamlEditor({
       <div
         data-testid={testId}
         className={cn(
-          "flex-1 min-h-50 w-full overflow-auto font-mono text-xs leading-relaxed",
+          "flex flex-col flex-1 min-h-50 w-full overflow-hidden font-mono text-xs leading-relaxed",
           "rounded-(--radius-component-lg)",
           "border bg-white text-gray-900",
           "dark:bg-gray-950 dark:text-gray-100",
-          disabled && "opacity-50 cursor-not-allowed pointer-events-none",
           error
             ? "border-red-400 dark:border-red-600"
             : "border-gray-200 dark:border-gray-700"
         )}
       >
-        {EditorComp ? (
-          <EditorComp
-            value={text}
-            onValueChange={handleChange}
-            highlight={(code: string) => highlightYaml(code, prismRef.current)}
-            disabled={disabled}
-            padding={12}
-            style={{
-              fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
-              fontSize: "0.75rem",
-              lineHeight: "1.625",
-              minHeight: "100%",
-            }}
-            className="yaml-editor-inner"
-          />
-        ) : (
-          /* SSR fallback: plain textarea */
-          <textarea
-            value={text}
-            onChange={(e) => handleChange(e.target.value)}
-            spellCheck={false}
-            disabled={disabled}
-            className={cn(
-              "w-full h-full resize-none font-mono text-xs leading-relaxed p-3",
-              "bg-transparent focus:outline-none",
-            )}
-          />
+        {/* Read-only top bar (only when disabled) */}
+        {disabled && (
+          <div className={cn(
+            "group flex items-center justify-between px-2 py-0.5 shrink-0",
+            "border-b border-gray-100 dark:border-gray-800",
+            "bg-gray-50/60 dark:bg-gray-900/40"
+          )}>
+            <div className="flex items-center gap-1">
+              <Lock className="w-2.5 h-2.5 text-gray-400 dark:text-gray-500" />
+              <span
+                className="text-gray-400 dark:text-gray-500 tracking-wide"
+                style={{ fontSize: "0.6rem", fontVariant: "small-caps" }}
+              >
+                Read only
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className={cn(
+                "pointer-events-auto p-1 cursor-pointer",
+                "rounded-(--radius-component)",
+                "opacity-30 group-hover:opacity-100 transition-opacity duration-150",
+                "hover:bg-gray-100 dark:hover:bg-gray-800",
+                "text-gray-600 dark:text-gray-400"
+              )}
+              title={isCopied ? "Copied!" : "Copy to clipboard"}
+              data-testid="yaml-copy-button"
+            >
+              {isCopied ? (
+                <Check className="w-3 h-3 text-primary-600 dark:text-primary-400" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
+            </button>
+          </div>
         )}
+
+        {/* Scrollable editor content — relative so the floating copy button can be positioned */}
+        <div className={cn("relative flex-1 overflow-auto", disabled && "pointer-events-none")}>
+          {/* Floating copy button for editable editors */}
+          {!disabled && (
+            <button
+              type="button"
+              onClick={handleCopy}
+              className={cn(
+                "absolute top-2 right-2 z-10 pointer-events-auto p-1.5 cursor-pointer",
+                "rounded-(--radius-component)",
+                "opacity-30 hover:opacity-100 transition-opacity duration-150",
+                "hover:bg-gray-100/80 dark:hover:bg-gray-800/80",
+                "text-gray-600 dark:text-gray-400"
+              )}
+              title={isCopied ? "Copied!" : "Copy to clipboard"}
+              data-testid="yaml-copy-button"
+            >
+              {isCopied ? (
+                <Check className="w-3.5 h-3.5 text-primary-600 dark:text-primary-400" />
+              ) : (
+                <Copy className="w-3.5 h-3.5" />
+              )}
+            </button>
+          )}
+          {EditorComp ? (
+            <EditorComp
+              value={text}
+              onValueChange={handleChange}
+              highlight={(code: string) => highlightYaml(code, prismRef.current)}
+              disabled={disabled}
+              padding={12}
+              style={{
+                fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
+                fontSize: "0.75rem",
+                lineHeight: "1.625",
+                minHeight: "100%",
+              }}
+              className="yaml-editor-inner"
+            />
+          ) : (
+            /* SSR fallback: plain textarea */
+            <textarea
+              value={text}
+              onChange={(e) => handleChange(e.target.value)}
+              spellCheck={false}
+              disabled={disabled}
+              className={cn(
+                "w-full h-full resize-none font-mono text-xs leading-relaxed p-3",
+                "bg-transparent focus:outline-none",
+              )}
+            />
+          )}
+        </div>
       </div>
       {error && (
         <div
