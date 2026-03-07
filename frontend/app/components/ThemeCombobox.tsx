@@ -64,6 +64,12 @@ const themes: ThemeOption[] = [
     icon: Monitor,
   },
   {
+    value: "nostalgic-xp",
+    label: "Nostalgic XP",
+    description: "Windows XP silver chrome, blue, micro roundness",
+    icon: Monitor,
+  },
+  {
     value: "itheme",
     label: "iTheme",
     description: "macOS-inspired light theme with soft neutrals",

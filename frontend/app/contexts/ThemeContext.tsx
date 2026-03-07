@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 
-export type Theme = "light" | "dark" | "darkred" | "grayscale" | "barbie" | "orange" | "fusion" | "nostalgic95" | "itheme" | "lime";
+export type Theme = "light" | "dark" | "darkred" | "grayscale" | "barbie" | "orange" | "fusion" | "nostalgic95" | "nostalgic-xp" | "itheme" | "lime";
 
 interface ThemeContextType {
   theme: Theme;
@@ -38,7 +38,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const root = document.documentElement;
 
     // Remove all theme classes
-    root.classList.remove("light", "dark", "darkred", "grayscale", "barbie", "orange", "fusion", "nostalgic95", "itheme", "lime");
+    root.classList.remove("light", "dark", "darkred", "grayscale", "barbie", "orange", "fusion", "nostalgic95", "itheme", "lime", "nostalgic-xp");
 
     // Add the current theme class. Grayscale and orange are dark variants.
     root.classList.add(theme);
@@ -47,7 +47,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Update color-scheme meta tag for better browser integration
-    const colorScheme = theme === "light" || theme === "barbie" || theme === "fusion" || theme === "nostalgic95" || theme === "itheme" || theme === "lime" ? "light" : "dark";
+    const colorScheme = theme === "light" || theme === "barbie" || theme === "fusion" || theme === "nostalgic95" || theme === "nostalgic-xp" || theme === "itheme" || theme === "lime" ? "light" : "dark";
     root.style.colorScheme = colorScheme;
   }, [theme]);
 
