@@ -12,8 +12,16 @@ use crit_shared::util_models::{Permissions, super_permissions};
 
 use super::gitops_controller::{
     KindController, filter_to_brief, inject_create_defaults, parse_acl, standard_to_external,
-    standard_to_internal,
+    standard_to_internal, strip_unknown_fields,
 };
+
+/// Top-level fields accepted by the group API.
+/// Any field not in this list is stripped in `to_internal` before DB write.
+const GROUP_ALLOWED_FIELDS: &[&str] = &[
+    "id", "_key",
+    "name", "description",
+    "labels", "annotations", "acl", "state", "deletion", "hash_code",
+];
 
 pub struct GroupController {
     pub db: Arc<ArangoDb>,
@@ -153,6 +161,7 @@ impl KindController for GroupController {
     }
 
     fn to_internal(&self, mut body: Value, _auth: &Auth) -> Result<Value, AppError> {
+        strip_unknown_fields(&mut body, GROUP_ALLOWED_FIELDS);
         // Validate and auto-prefix group ID
         if let Some(obj) = body.as_object_mut() {
             if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {

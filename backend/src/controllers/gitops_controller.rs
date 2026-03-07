@@ -199,6 +199,15 @@ pub fn inject_create_defaults(body: &mut Value, user_id: &str) {
     }
 }
 
+/// Strip any top-level fields from a JSON object that are not in the allowlist.
+/// Used by `to_internal` in each controller to reject arbitrary extra fields
+/// before writing to the database.
+pub fn strip_unknown_fields(body: &mut Value, allowed: &[&str]) {
+    if let Some(obj) = body.as_object_mut() {
+        obj.retain(|k, _| allowed.contains(&k.as_str()));
+    }
+}
+
 /// Filter a JSON object to only keep the given field names.
 /// Used by `to_list_external` to produce brief representations.
 pub fn filter_to_brief(mut value: Value, fields: &[&str]) -> Value {

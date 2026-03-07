@@ -10,7 +10,18 @@ use crate::validation::naming::validate_username;
 use crit_shared::data_models::User;
 use crit_shared::util_models::super_permissions;
 
-use super::gitops_controller::{KindController, filter_to_brief, standard_to_external, rename_id_to_key};
+use super::gitops_controller::{
+    KindController, filter_to_brief, standard_to_external, rename_id_to_key, strip_unknown_fields,
+};
+
+/// Top-level fields accepted by the user API.
+/// `password` is the user-facing field (converted to `password_hash` in to_internal).
+/// Any field not in this list is stripped before DB write.
+const USER_ALLOWED_FIELDS: &[&str] = &[
+    "id", "_key",
+    "password", "personal", "avatar_ulid", "wallpaper_ulid",
+    "labels", "annotations", "state", "deletion", "hash_code",
+];
 
 pub struct UserController {
     pub db: Arc<ArangoDb>,
@@ -46,6 +57,7 @@ impl KindController for UserController {
     }
 
     fn to_internal(&self, mut body: Value, auth: &Auth) -> Result<Value, AppError> {
+        strip_unknown_fields(&mut body, USER_ALLOWED_FIELDS);
         if let Some(obj) = body.as_object_mut() {
             // Validate and auto-prefix user ID
             if let Some(id) = obj.get("id").and_then(|v| v.as_str()) {

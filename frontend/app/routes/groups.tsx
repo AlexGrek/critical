@@ -1267,6 +1267,7 @@ function GroupEditor({
                   value={yamlValue}
                   onSave={onYamlSave}
                   readOnlyFields={["state", "hash_code", "deletion"]}
+                  allowedTopLevelKeys={["id", "name", "description", "labels", "annotations", "acl", "state", "hash_code", "deletion"]}
                   data-testid="yaml-editor"
                 />
               ) : (

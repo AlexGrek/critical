@@ -381,6 +381,7 @@ export default function ProjectPage() {
               value={yamlValue}
               onSave={handleYamlSave}
               readOnlyFields={["state", "hash_code", "deletion"]}
+              allowedTopLevelKeys={["id", "name", "description", "repositories", "enabled_services", "labels", "annotations", "acl", "state", "hash_code", "deletion"]}
               data-testid="project-yaml-editor"
             />
           </Tabs.Content>

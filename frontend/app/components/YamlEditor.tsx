@@ -38,6 +38,12 @@ export interface YamlEditorProps {
    * by the parent component merging over the original object.
    */
   readOnlyFields?: string[];
+  /**
+   * If provided, the editor will show a validation error when the parsed
+   * YAML contains top-level keys that are not in this set, and block saving.
+   * Should list all valid schema fields for the resource kind.
+   */
+  allowedTopLevelKeys?: readonly string[];
   className?: string;
   "data-testid"?: string;
   disabled?: boolean;
@@ -84,6 +90,7 @@ export function YamlEditor({
   value,
   onSave,
   readOnlyFields = [],
+  allowedTopLevelKeys,
   className,
   disabled = false,
   "data-testid": testId,
@@ -155,6 +162,16 @@ export function YamlEditor({
           parsedRef.current = null;
           return;
         }
+        // Validate top-level keys against schema if allowedTopLevelKeys provided
+        if (allowedTopLevelKeys) {
+          const allowed = new Set(allowedTopLevelKeys);
+          const unknown = Object.keys(parsed).filter((k) => !allowed.has(k));
+          if (unknown.length > 0) {
+            setError(`Unknown field${unknown.length > 1 ? "s" : ""}: ${unknown.join(", ")}`);
+            parsedRef.current = null;
+            return;
+          }
+        }
         setError(null);
         parsedRef.current = parsed as Record<string, unknown>;
       } catch (err) {
@@ -166,7 +183,7 @@ export function YamlEditor({
         parsedRef.current = null;
       }
     },
-    []
+    [allowedTopLevelKeys]
   );
 
   const handleCopy = useCallback(async () => {

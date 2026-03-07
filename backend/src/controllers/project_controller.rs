@@ -10,8 +10,17 @@ use crit_shared::data_models::Project;
 use crit_shared::util_models::{Permissions, super_permissions};
 
 use super::gitops_controller::{
-    KindController, filter_to_brief, inject_create_defaults, parse_acl, standard_to_external, standard_to_internal,
+    KindController, filter_to_brief, inject_create_defaults, parse_acl, standard_to_external,
+    standard_to_internal, strip_unknown_fields,
 };
+
+/// Top-level fields accepted by the project API.
+/// Any field not in this list is stripped in `to_internal` before DB write.
+const PROJECT_ALLOWED_FIELDS: &[&str] = &[
+    "id", "_key",
+    "name", "description", "repositories", "enabled_services",
+    "labels", "annotations", "acl", "state", "deletion", "hash_code",
+];
 
 pub struct ProjectController {
     pub db: Arc<ArangoDb>,
@@ -102,7 +111,8 @@ impl KindController for ProjectController {
         }
     }
 
-    fn to_internal(&self, body: Value, _auth: &Auth) -> Result<Value, AppError> {
+    fn to_internal(&self, mut body: Value, _auth: &Auth) -> Result<Value, AppError> {
+        strip_unknown_fields(&mut body, PROJECT_ALLOWED_FIELDS);
         Ok(standard_to_internal(body))
     }
 
