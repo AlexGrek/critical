@@ -66,8 +66,8 @@ Root credentials: `root` / `changeme`.
 
 ```python
 BASE       = "http://localhost:3742/api"
-URL_REGISTER = f"{BASE}/register"
-URL_LOGIN    = f"{BASE}/login"
+URL_REGISTER = f"{BASE}/v1/register"   # NOTE: /v1/register, NOT /register
+URL_LOGIN    = f"{BASE}/v1/login"      # NOTE: /v1/login, NOT /login
 URL_GLOBAL   = f"{BASE}/v1/global"      # generic gitops CRUD
 URL_DEBUG    = f"{BASE}/v1/debug"       # godmode-only debug endpoints
 URL_WS       = "ws://localhost:3742/api/v1/ws"
@@ -225,7 +225,7 @@ def auth_headers(token: str) -> dict:
 @pytest.fixture(scope="module")
 def admin_token():
     """Login as root — has ADM_GODMODE + ADM_USER_MANAGER."""
-    resp = requests.post(f"{BASE}/login", json={"user": "root", "password": "changeme"})
+    resp = requests.post(f"{BASE}/v1/login", json={"user": "root", "password": "changeme"})
     assert resp.status_code == 200, f"Root login failed: {resp.text}"
     return resp.json()["token"]
 
@@ -235,7 +235,7 @@ def regular_user():
     """Register a fresh random user. Gets usr_create_groups by default."""
     num = random.randint(100000, 999999)
     user = f"itest_{num}"
-    requests.post(f"{BASE}/register", json={"user": user, "password": user})
+    requests.post(f"{BASE}/v1/register", json={"user": user, "password": user})
     resp = requests.post(f"{BASE}/login", json={"user": user, "password": user})
     assert resp.status_code == 200, f"Login failed: {resp.text}"
     return {"user_id": f"u_{user}", "token": resp.json()["token"]}
