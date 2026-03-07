@@ -8,16 +8,16 @@ import {
   CardHeader,
   CardTitle,
   H1,
-  H2,
   Paragraph,
   PermissionBadge,
-  MorphModal,
   AclEditor,
+  Tabs,
+  YamlEditor,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
-import { AlertCircle, Lock, History } from "lucide-react";
+import { AlertCircle, Lock } from "lucide-react";
 import { formatDate } from "~/lib/utils";
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 
 // ---------------------------------------------------------------------------
 // API types
@@ -101,9 +101,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export default function ProjectPage() {
   const { project } = useLoaderData<typeof loader>();
-  const [historyOpen, setHistoryOpen] = useState(false);
   const [currentAcl, setCurrentAcl] = useState<AccessControlStore>(
-    project.acl || { list: [], last_mod_date: new Date().toISOString() }
+    (project.acl as AccessControlStore) || { list: [], last_mod_date: new Date().toISOString() }
   );
   const [isSavingAcl, setIsSavingAcl] = useState(false);
 
@@ -130,6 +129,25 @@ export default function ProjectPage() {
     }
   };
 
+  /** Stable object for the YAML tab. */
+  const yamlValue = useMemo<Record<string, unknown>>(() => ({
+    id: project.id,
+    name: project.name,
+    ...(project.labels && Object.keys(project.labels).length > 0
+      ? { labels: project.labels }
+      : {}),
+    ...(project.annotations && Object.keys(project.annotations).length > 0
+      ? { annotations: project.annotations }
+      : {}),
+    acl: currentAcl,
+  }), [project, currentAcl]);
+
+  const handleYamlChange = useCallback((parsed: Record<string, unknown>) => {
+    if (parsed.acl) {
+      setCurrentAcl(parsed.acl as AccessControlStore);
+    }
+  }, []);
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Header */}
@@ -148,270 +166,222 @@ export default function ProjectPage() {
               </p>
             </div>
 
-            {/* Action buttons - text on desktop, icons on mobile */}
+            {/* Status badge */}
             <div className="flex items-center gap-2 shrink-0">
-              {/* History button */}
-              <>
-                {/* Desktop: text + icon */}
-                <MorphModal
-                  trigger={
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="history-button"
-                      className="hidden sm:inline-flex gap-2"
-                    >
-                      <History className="w-4 h-4" />
-                      <span>History</span>
-                    </Button>
-                  }
-                  modalWidth={600}
-                  modalHeight={500}
-                  isOpen={historyOpen}
-                  onOpenChange={setHistoryOpen}
-                >
-                  {(close) => (
-                    <div className="flex flex-col h-full">
-                      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
-                        <h3 className="text-xs font-mono uppercase tracking-wider text-gray-900 dark:text-gray-100">
-                          History
-                        </h3>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={close}
-                          data-testid="close-history"
-                          className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                        >
-                          ✕
-                        </Button>
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          History tracking coming soon...
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </MorphModal>
-
-                {/* Mobile: icon only */}
-                <MorphModal
-                  trigger={
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="sm:hidden"
-                      data-testid="history-button-mobile"
-                      title="History"
-                    >
-                      <History className="w-4 h-4" />
-                    </Button>
-                  }
-                  modalWidth={600}
-                  modalHeight={500}
-                  isOpen={historyOpen}
-                  onOpenChange={setHistoryOpen}
-                >
-                  {(close) => (
-                    <div className="flex flex-col h-full">
-                      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
-                        <h3 className="text-xs font-mono uppercase tracking-wider text-gray-900 dark:text-gray-100">
-                          History
-                        </h3>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={close}
-                          data-testid="close-history"
-                          className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                        >
-                          ✕
-                        </Button>
-                      </div>
-                      <div className="flex-1 overflow-y-auto p-4">
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
-                          History tracking coming soon...
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </MorphModal>
-              </>
-
-              {/* Access control editor */}
-              <AclEditor
-                acl={currentAcl}
-                onSave={handleAclSave}
-                trigger={
-                  <div className="flex items-center gap-2">
-                    {/* Desktop: text + icon */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      data-testid="access-button"
-                      className="hidden sm:inline-flex gap-2"
-                    >
-                      <Lock className="w-4 h-4" />
-                      <span>Access</span>
-                    </Button>
-
-                    {/* Mobile: icon only */}
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="sm:hidden"
-                      data-testid="access-button-mobile"
-                      title="Access Control"
-                    >
-                      <Lock className="w-4 h-4" />
-                    </Button>
-                  </div>
-                }
-              />
+              {project.deletion ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-(--radius-component) bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-medium">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  Deleted
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-(--radius-component) bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-medium">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                  Active
+                </span>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Content */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {/* Quick info cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          {/* Created */}
-          <Card data-testid="created-card">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Created</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Paragraph className="text-sm">
-                {project.state?.created_at
-                  ? formatDate(project.state.created_at)
-                  : "Unknown"}
-              </Paragraph>
-              {project.state?.created_by && (
-                <Paragraph className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                  by <code className="font-mono">{project.state.created_by}</code>
-                </Paragraph>
-              )}
-            </CardContent>
-          </Card>
+      {/* Tabbed content */}
+      <div className="max-w-6xl mx-auto px-4 py-6">
+        <Tabs.Root defaultValue="overview">
+          <Tabs.List>
+            <Tabs.Trigger value="overview" data-testid="project-tab-overview">Overview</Tabs.Trigger>
+            <Tabs.Trigger value="access" data-testid="project-tab-access">Access</Tabs.Trigger>
+            <Tabs.Trigger value="yaml" data-testid="project-tab-yaml">YAML</Tabs.Trigger>
+          </Tabs.List>
 
-          {/* Updated */}
-          <Card data-testid="updated-card">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Last Updated</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Paragraph className="text-sm">
-                {project.state?.updated_at
-                  ? formatDate(project.state.updated_at)
-                  : "Unknown"}
-              </Paragraph>
-              {project.state?.updated_by && (
-                <Paragraph className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                  by <code className="font-mono">{project.state.updated_by}</code>
-                </Paragraph>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Status */}
-          <Card data-testid="status-card">
-            <CardHeader>
-              <CardTitle className="text-sm font-semibold">Status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-2">
-                {project.deletion ? (
-                  <>
-                    <AlertCircle className="w-4 h-4 text-red-500" />
-                    <Paragraph className="text-sm text-red-600 dark:text-red-400">
-                      Deleted
+          {/* ── Overview tab ── */}
+          <Tabs.Content value="overview" className="pt-6">
+            {/* Quick info cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <Card data-testid="created-card">
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold">Created</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Paragraph className="text-sm">
+                    {project.state?.created_at
+                      ? formatDate(project.state.created_at)
+                      : "Unknown"}
+                  </Paragraph>
+                  {project.state?.created_by && (
+                    <Paragraph className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                      by <code className="font-mono">{project.state.created_by}</code>
                     </Paragraph>
-                  </>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card data-testid="updated-card">
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold">Last Updated</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <Paragraph className="text-sm">
+                    {project.state?.updated_at
+                      ? formatDate(project.state.updated_at)
+                      : "Unknown"}
+                  </Paragraph>
+                  {project.state?.updated_by && (
+                    <Paragraph className="text-xs text-gray-600 dark:text-gray-400 mt-2">
+                      by <code className="font-mono">{project.state.updated_by}</code>
+                    </Paragraph>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card data-testid="hash-card">
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold">Hash</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <code className="text-xs font-mono text-gray-500 dark:text-gray-400 break-all">
+                    {project.hash_code || "—"}
+                  </code>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Labels & Annotations */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {project.labels && Object.keys(project.labels).length > 0 && (
+                <Card data-testid="labels-card">
+                  <CardHeader>
+                    <CardTitle>Labels</CardTitle>
+                    <CardDescription>User-managed metadata</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {Object.entries(project.labels).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-800 rounded-(--radius-component)"
+                        >
+                          <code className="text-xs font-mono text-gray-600 dark:text-gray-400">
+                            {key}
+                          </code>
+                          <code className="text-xs font-mono text-gray-900 dark:text-gray-100">
+                            {value}
+                          </code>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {project.annotations && Object.keys(project.annotations).length > 0 && (
+                <Card data-testid="annotations-card">
+                  <CardHeader>
+                    <CardTitle>Annotations</CardTitle>
+                    <CardDescription>Free-form metadata</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {Object.entries(project.annotations).map(([key, value]) => (
+                        <div
+                          key={key}
+                          className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-800 rounded-(--radius-component)"
+                        >
+                          <code className="text-xs font-mono text-gray-600 dark:text-gray-400">
+                            {key}
+                          </code>
+                          <code className="text-xs font-mono text-gray-900 dark:text-gray-100 line-clamp-1">
+                            {value}
+                          </code>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {(!project.labels || Object.keys(project.labels).length === 0) &&
+              (!project.annotations || Object.keys(project.annotations).length === 0) && (
+                <Card className="w-full py-12" data-testid="empty-state">
+                  <div className="flex flex-col items-center gap-2">
+                    <Paragraph className="text-gray-500 dark:text-gray-400">
+                      No labels or annotations
+                    </Paragraph>
+                  </div>
+                </Card>
+              )}
+          </Tabs.Content>
+
+          {/* ── Access tab ── */}
+          <Tabs.Content value="access" className="pt-6">
+            <Card className="w-full">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <Lock className="w-4 h-4" />
+                      Access Control List
+                    </CardTitle>
+                    <CardDescription className="mt-1">
+                      Manage who can read or modify this project
+                    </CardDescription>
+                  </div>
+                  <AclEditor
+                    acl={currentAcl}
+                    onSave={handleAclSave}
+                    trigger={
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="edit-acl-button"
+                      >
+                        Edit ACL
+                      </Button>
+                    }
+                  />
+                </div>
+              </CardHeader>
+              <CardContent>
+                {currentAcl.list.length === 0 ? (
+                  <Paragraph variant="muted" className="text-sm">
+                    No ACL entries — all authenticated users have access.
+                  </Paragraph>
                 ) : (
-                  <>
-                    <div className="w-2 h-2 rounded-full bg-green-500" />
-                    <Paragraph className="text-sm text-green-600 dark:text-green-400">
-                      Active
-                    </Paragraph>
-                  </>
+                  <div className="space-y-2">
+                    {currentAcl.list.map((entry, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-(--radius-component) border border-gray-100 dark:border-gray-800"
+                        data-testid={`acl-display-entry-${idx}`}
+                      >
+                        <div className="flex flex-wrap gap-1.5">
+                          {entry.principals.map((p) => (
+                            <code
+                              key={p}
+                              className="text-xs font-mono px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-(--radius-component) text-gray-700 dark:text-gray-300"
+                            >
+                              {p}
+                            </code>
+                          ))}
+                        </div>
+                        <PermissionBadge permissions={entry.permissions} />
+                      </div>
+                    ))}
+                  </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Labels & Annotations */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Labels */}
-          {project.labels && Object.keys(project.labels).length > 0 && (
-            <Card data-testid="labels-card">
-              <CardHeader>
-                <CardTitle>Labels</CardTitle>
-                <CardDescription>User-managed metadata</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {Object.entries(project.labels).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-800 rounded-(--radius-component)"
-                    >
-                      <code className="text-xs font-mono text-gray-600 dark:text-gray-400">
-                        {key}
-                      </code>
-                      <code className="text-xs font-mono text-gray-900 dark:text-gray-100">
-                        {value}
-                      </code>
-                    </div>
-                  ))}
-                </div>
               </CardContent>
             </Card>
-          )}
+          </Tabs.Content>
 
-          {/* Annotations */}
-          {project.annotations && Object.keys(project.annotations).length > 0 && (
-            <Card data-testid="annotations-card">
-              <CardHeader>
-                <CardTitle>Annotations</CardTitle>
-                <CardDescription>Free-form metadata</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {Object.entries(project.annotations).map(([key, value]) => (
-                    <div
-                      key={key}
-                      className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-800 rounded-(--radius-component)"
-                    >
-                      <code className="text-xs font-mono text-gray-600 dark:text-gray-400">
-                        {key}
-                      </code>
-                      <code className="text-xs font-mono text-gray-900 dark:text-gray-100 line-clamp-1">
-                        {value}
-                      </code>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {/* Empty state for no metadata */}
-        {(!project.labels || Object.keys(project.labels).length === 0) &&
-          (!project.annotations ||
-            Object.keys(project.annotations).length === 0) && (
-            <Card className="text-center py-12" data-testid="empty-state">
-              <Paragraph className="text-gray-500 dark:text-gray-400">
-                No labels or annotations
-              </Paragraph>
-            </Card>
-          )}
+          {/* ── YAML tab ── */}
+          <Tabs.Content value="yaml" className="pt-6 flex flex-col min-h-100">
+            <YamlEditor
+              value={yamlValue}
+              onChange={handleYamlChange}
+              data-testid="project-yaml-editor"
+            />
+          </Tabs.Content>
+        </Tabs.Root>
       </div>
     </div>
   );

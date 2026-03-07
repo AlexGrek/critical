@@ -11,7 +11,7 @@
  * then groups back by permission level on save.
  */
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo, useCallback } from "react";
 import { Shield, X } from "lucide-react";
 import { cn } from "~/lib/utils";
 
@@ -20,6 +20,8 @@ import { Button } from "./Button";
 import { Paragraph } from "./Paragraph";
 import { ResourcePicker } from "./ResourcePicker";
 import { Table } from "./Table";
+import { Tabs } from "./Tabs";
+import { YamlEditor } from "./YamlEditor";
 
 // ---------------------------------------------------------------------------
 // Exported ACL types
@@ -265,6 +267,23 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
     });
   };
 
+  /** Stable object for YamlEditor — recomputes when entries change. */
+  const yamlValue = useMemo<Record<string, unknown>>(() => {
+    const currentAcl = buildAcl(entries);
+    return { list: currentAcl.list };
+  }, [entries]);
+
+  /** Sync YAML edits back to the flat entries state. */
+  const handleYamlChange = useCallback((parsed: Record<string, unknown>) => {
+    const list = parsed.list as AccessControlList[] | undefined;
+    if (!Array.isArray(list)) return;
+    const newAcl: AccessControlStore = {
+      list,
+      last_mod_date: new Date().toISOString(),
+    };
+    setEntries(flattenAcl(newAcl));
+  }, []);
+
   return (
     <Modal.Root open={open} onOpenChange={handleOpenChange}>
       <Modal.Trigger asChild>{trigger}</Modal.Trigger>
@@ -287,103 +306,120 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
           </Modal.Description>
         </Modal.Header>
 
-        <div className="flex-1 min-h-0 overflow-y-auto mt-4 px-4">
-          {/* ── Current entries ──────────────────────────────────────────── */}
-          <div>
-            {entries.length === 0 ? (
-              <div className="flex items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
-                <Shield className="w-4 h-4 shrink-0" />
-                <span>No entries — all authenticated users have access.</span>
-              </div>
-            ) : (
-              <div className="max-h-56 overflow-y-auto rounded-(--radius-component) border border-gray-200 dark:border-gray-700">
-                <Table.Root>
-                  <Table.Header>
-                    <Table.Row>
-                      <Table.Head>Principal</Table.Head>
-                      <Table.Head>Access</Table.Head>
-                      <Table.Head className="w-10" />
-                    </Table.Row>
-                  </Table.Header>
-                  <Table.Body>
-                    {entries.map((entry) => (
-                      <Table.Row
-                        key={entry._id}
-                        data-testid={`acl-entry-${entry.principal}`}
-                      >
-                        <Table.Cell className="font-mono text-xs">
-                          {entry.principal}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <PermissionBadge permissions={entry.permissions} />
-                        </Table.Cell>
-                        <Table.Cell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            type="button"
-                            onClick={() => handleRemove(entry._id)}
-                            data-testid={`remove-acl-${entry.principal}`}
-                            className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </Button>
-                        </Table.Cell>
+        <Tabs.Root defaultValue="editor" className="flex flex-col flex-1 min-h-0">
+          <Tabs.List className="shrink-0 px-4 mt-2">
+            <Tabs.Trigger value="editor" data-testid="acl-tab-editor">Editor</Tabs.Trigger>
+            <Tabs.Trigger value="yaml" data-testid="acl-tab-yaml">YAML</Tabs.Trigger>
+          </Tabs.List>
+
+          {/* ── Editor tab ── */}
+          <Tabs.Content value="editor" className="flex-1 min-h-0 overflow-y-auto mt-2 px-4">
+            {/* ── Current entries ──────────────────────────────────────────── */}
+            <div>
+              {entries.length === 0 ? (
+                <div className="flex items-center gap-2 py-4 text-sm text-gray-500 dark:text-gray-400">
+                  <Shield className="w-4 h-4 shrink-0" />
+                  <span>No entries — all authenticated users have access.</span>
+                </div>
+              ) : (
+                <div className="max-h-56 overflow-y-auto rounded-(--radius-component) border border-gray-200 dark:border-gray-700">
+                  <Table.Root>
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.Head>Principal</Table.Head>
+                        <Table.Head>Access</Table.Head>
+                        <Table.Head className="w-10" />
                       </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Root>
+                    </Table.Header>
+                    <Table.Body>
+                      {entries.map((entry) => (
+                        <Table.Row
+                          key={entry._id}
+                          data-testid={`acl-entry-${entry.principal}`}
+                        >
+                          <Table.Cell className="font-mono text-xs">
+                            {entry.principal}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <PermissionBadge permissions={entry.permissions} />
+                          </Table.Cell>
+                          <Table.Cell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              type="button"
+                              onClick={() => handleRemove(entry._id)}
+                              data-testid={`remove-acl-${entry.principal}`}
+                              className="text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </Button>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Root>
+                </div>
+              )}
+            </div>
+
+            {/* ── Add entry ─────────────────────────────────────────────────── */}
+            <div className="mt-5 space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                Add Entry
+              </p>
+
+              {/* Permission selector */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-14">
+                  Access:
+                </span>
+                <PermissionToggle
+                  value={addPermissions}
+                  onChange={setAddPermissions}
+                />
               </div>
-            )}
-          </div>
 
-          {/* ── Add entry ─────────────────────────────────────────────────── */}
-          <div className="mt-5 space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-              Add Entry
-            </p>
+              {/* Kind toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-14">
+                  Search:
+                </span>
+                <KindToggle value={addKind} onChange={setAddKind} />
+              </div>
 
-            {/* Permission selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-14">
-                Access:
-              </span>
-              <PermissionToggle
-                value={addPermissions}
-                onChange={setAddPermissions}
-              />
+              {/* Picker on its own line (dropdown portalled here so it is not inert inside the modal) */}
+              <div ref={pickerPortalRef} className="overflow-visible">
+                <ResourcePicker
+                  kind={addKind}
+                  placeholder={`Search ${PRINCIPAL_KINDS.find((k) => k.value === addKind)?.label ?? addKind}…`}
+                  onSelect={handleSelect}
+                  portalRootRef={pickerPortalRef}
+                  className="w-full"
+                  data-testid="acl-principal-picker"
+                />
+              </div>
+
+              <Paragraph variant="subtle" className="text-xs">
+                Select a user or group — they'll be added immediately with{" "}
+                <strong>
+                  {PERMISSION_PRESETS.find((p) => p.value === addPermissions)
+                    ?.label ?? addPermissions}
+                </strong>{" "}
+                access.
+              </Paragraph>
             </div>
+          </Tabs.Content>
 
-            {/* Kind toggle */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0 w-14">
-                Search:
-              </span>
-              <KindToggle value={addKind} onChange={setAddKind} />
-            </div>
-
-            {/* Picker on its own line (dropdown portalled here so it is not inert inside the modal) */}
-            <div ref={pickerPortalRef} className="overflow-visible">
-              <ResourcePicker
-                kind={addKind}
-                placeholder={`Search ${PRINCIPAL_KINDS.find((k) => k.value === addKind)?.label ?? addKind}…`}
-                onSelect={handleSelect}
-                portalRootRef={pickerPortalRef}
-                className="w-full"
-                data-testid="acl-principal-picker"
-              />
-            </div>
-
-            <Paragraph variant="subtle" className="text-xs">
-              Select a user or group — they'll be added immediately with{" "}
-              <strong>
-                {PERMISSION_PRESETS.find((p) => p.value === addPermissions)
-                  ?.label ?? addPermissions}
-              </strong>{" "}
-              access.
-            </Paragraph>
-          </div>
-        </div>
+          {/* ── YAML tab ── */}
+          <Tabs.Content value="yaml" className="p-4 flex flex-col flex-1 min-h-0">
+            <YamlEditor
+              value={yamlValue}
+              onChange={handleYamlChange}
+              data-testid="acl-yaml-editor"
+            />
+          </Tabs.Content>
+        </Tabs.Root>
 
         <Modal.Footer className="shrink-0">
           <Button

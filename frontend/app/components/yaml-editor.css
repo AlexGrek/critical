@@ -1,0 +1,70 @@
+/* ---------------------------------------------------------------------------
+ * Prism YAML syntax highlighting — theme-aware
+ * Applied inside YamlEditor's react-simple-code-editor overlay.
+ * --------------------------------------------------------------------------- */
+
+/* Light theme tokens */
+.yaml-editor-inner .token.key,
+.yaml-editor-inner .token.atrule {
+  color: #d97706; /* amber-600 */
+}
+.yaml-editor-inner .token.string {
+  color: #059669; /* emerald-600 */
+}
+.yaml-editor-inner .token.number,
+.yaml-editor-inner .token.boolean {
+  color: #7c3aed; /* violet-600 */
+}
+.yaml-editor-inner .token.null {
+  color: #dc2626; /* red-600 */
+}
+.yaml-editor-inner .token.comment {
+  color: #9ca3af; /* gray-400 */
+  font-style: italic;
+}
+.yaml-editor-inner .token.punctuation {
+  color: #6b7280; /* gray-500 */
+}
+.yaml-editor-inner .token.important {
+  color: #dc2626;
+}
+.yaml-editor-inner .token.tag {
+  color: #2563eb; /* blue-600 */
+}
+
+/* Dark theme tokens */
+:where(.dark) .yaml-editor-inner .token.key,
+:where(.dark) .yaml-editor-inner .token.atrule {
+  color: #fbbf24; /* amber-400 */
+}
+:where(.dark) .yaml-editor-inner .token.string {
+  color: #34d399; /* emerald-400 */
+}
+:where(.dark) .yaml-editor-inner .token.number,
+:where(.dark) .yaml-editor-inner .token.boolean {
+  color: #a78bfa; /* violet-400 */
+}
+:where(.dark) .yaml-editor-inner .token.null {
+  color: #f87171; /* red-400 */
+}
+:where(.dark) .yaml-editor-inner .token.comment {
+  color: #6b7280; /* gray-500 */
+  font-style: italic;
+}
+:where(.dark) .yaml-editor-inner .token.punctuation {
+  color: #9ca3af; /* gray-400 */
+}
+:where(.dark) .yaml-editor-inner .token.important {
+  color: #f87171;
+}
+:where(.dark) .yaml-editor-inner .token.tag {
+  color: #60a5fa; /* blue-400 */
+}
+
+/* Editor textarea focus ring */
+.yaml-editor-inner textarea:focus {
+  outline: none;
+}
+.yaml-editor-inner textarea {
+  outline: none !important;
+}

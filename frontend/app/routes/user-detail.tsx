@@ -1,9 +1,9 @@
 import type { Route } from "./+types/user-detail";
 import { useLoaderData } from "react-router";
 import { Link } from "react-router";
-import { H1, Paragraph, Card, CardContent } from "~/components";
+import { H1, Paragraph, Card, CardContent, Tabs, YamlEditor } from "~/components";
 import { AlertCircle, ArrowLeft, Briefcase, User2, Users2 } from "lucide-react";
-import React from "react";
+import React, { useMemo } from "react";
 import { cn, formatDate } from "~/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -189,86 +189,127 @@ export default function UserDetailPage() {
             </div>
           </Card>
 
-          {/* Right column — details */}
+          {/* Right column — details with tabs */}
           <Card className="flex-1 min-w-0">
-            <CardContent className="py-6 space-y-5">
-              <SectionTitle>Identity</SectionTitle>
+            <Tabs.Root defaultValue="profile" className="flex flex-col">
+              <Tabs.List className="px-4 pt-2">
+                <Tabs.Trigger value="profile" data-testid="user-tab-profile">Profile</Tabs.Trigger>
+                <Tabs.Trigger value="yaml" data-testid="user-tab-yaml">YAML</Tabs.Trigger>
+              </Tabs.List>
 
-              <DetailRow
-                icon={<User2 className="w-4 h-4" />}
-                label="User ID"
-                value={<code className="font-mono text-sm">{user.id}</code>}
-                testId="user-detail-id"
-              />
+              {/* ── Profile tab ── */}
+              <Tabs.Content value="profile">
+                <CardContent className="py-6 space-y-5">
+                  <SectionTitle>Identity</SectionTitle>
 
-              {user.personal?.gender && (
-                <DetailRow
-                  icon={<User2 className="w-4 h-4" />}
-                  label="Gender"
-                  value={user.personal.gender}
-                  testId="user-detail-gender"
-                />
-              )}
+                  <DetailRow
+                    icon={<User2 className="w-4 h-4" />}
+                    label="User ID"
+                    value={<code className="font-mono text-sm">{user.id}</code>}
+                    testId="user-detail-id"
+                  />
 
-              {user.personal?.manager && (
-                <DetailRow
-                  icon={<Users2 className="w-4 h-4" />}
-                  label="Manager"
-                  value={
-                    <Link
-                      to={`/u/${user.personal.manager}`}
-                      className="font-mono text-sm text-primary-600 dark:text-primary-400 hover:underline"
-                      data-testid="user-detail-manager-link"
-                    >
-                      {user.personal.manager}
-                    </Link>
-                  }
-                  testId="user-detail-manager"
-                />
-              )}
+                  {user.personal?.gender && (
+                    <DetailRow
+                      icon={<User2 className="w-4 h-4" />}
+                      label="Gender"
+                      value={user.personal.gender}
+                      testId="user-detail-gender"
+                    />
+                  )}
 
-              {/* Labels */}
-              {user.labels && Object.keys(user.labels).length > 0 && (
-                <div className="pt-2">
-                  <SectionTitle>Labels</SectionTitle>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {Object.entries(user.labels).map(([k, v]) => (
-                      <span
-                        key={k}
-                        className="inline-flex items-center px-2.5 py-0.5 rounded-(--radius-component) bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium"
-                      >
-                        <span className="font-semibold mr-1">{k}:</span>
-                        {v}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
+                  {user.personal?.manager && (
+                    <DetailRow
+                      icon={<Users2 className="w-4 h-4" />}
+                      label="Manager"
+                      value={
+                        <Link
+                          to={`/u/${user.personal.manager}`}
+                          className="font-mono text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                          data-testid="user-detail-manager-link"
+                        >
+                          {user.personal.manager}
+                        </Link>
+                      }
+                      testId="user-detail-manager"
+                    />
+                  )}
 
-              {/* Timestamps */}
-              {user.state && (
-                <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
-                  <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 dark:text-gray-400">
-                    <div>
-                      <span className="block font-medium mb-0.5">Created</span>
-                      <span data-testid="user-detail-created-at">
-                        {formatDate(user.state.created_at)}
-                      </span>
+                  {/* Labels */}
+                  {user.labels && Object.keys(user.labels).length > 0 && (
+                    <div className="pt-2">
+                      <SectionTitle>Labels</SectionTitle>
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {Object.entries(user.labels).map(([k, v]) => (
+                          <span
+                            key={k}
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-(--radius-component) bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-xs font-medium"
+                          >
+                            <span className="font-semibold mr-1">{k}:</span>
+                            {v}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <div>
-                      <span className="block font-medium mb-0.5">Updated</span>
-                      <span data-testid="user-detail-updated-at">
-                        {formatDate(user.state.updated_at)}
-                      </span>
+                  )}
+
+                  {/* Timestamps */}
+                  {user.state && (
+                    <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+                      <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 dark:text-gray-400">
+                        <div>
+                          <span className="block font-medium mb-0.5">Created</span>
+                          <span data-testid="user-detail-created-at">
+                            {formatDate(user.state.created_at)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block font-medium mb-0.5">Updated</span>
+                          <span data-testid="user-detail-updated-at">
+                            {formatDate(user.state.updated_at)}
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
+                  )}
+                </CardContent>
+              </Tabs.Content>
+
+              {/* ── YAML tab ── */}
+              <Tabs.Content value="yaml" className="p-4 flex flex-col min-h-80">
+                <UserYamlTab user={user} />
+              </Tabs.Content>
+            </Tabs.Root>
           </Card>
         </div>
       </div>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// UserYamlTab — read-only YAML view of user resource
+// ---------------------------------------------------------------------------
+
+function UserYamlTab({ user }: { user: UserFull }) {
+  const yamlValue = useMemo<Record<string, unknown>>(() => ({
+    id: user.id,
+    personal: user.personal,
+    ...(user.labels && Object.keys(user.labels).length > 0
+      ? { labels: user.labels }
+      : {}),
+    ...(user.annotations && Object.keys(user.annotations).length > 0
+      ? { annotations: user.annotations }
+      : {}),
+  }), [user]);
+
+  return (
+    <YamlEditor
+      value={yamlValue}
+      onChange={() => {}}
+      disabled
+      data-testid="user-yaml-editor"
+    />
   );
 }
 

@@ -1,6 +1,7 @@
 /**
- * YamlEditor — a reusable textarea-based YAML editor for resource documents.
+ * YamlEditor — a code editor with YAML syntax highlighting.
  *
+ * Uses react-simple-code-editor + Prism for lightweight highlighting.
  * Takes a JS object, serializes it to YAML for editing, parses it back on
  * change, and reports parse errors inline. Server-managed fields (state,
  * hash_code, deletion) can be hidden via `readOnlyFields`.
@@ -8,6 +9,23 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { stringify, parse, YAMLParseError } from "yaml";
 import { cn } from "~/lib/utils";
+import "./yaml-editor.css";
+
+// ---------------------------------------------------------------------------
+// Prism + Editor (SSR-safe lazy import)
+// ---------------------------------------------------------------------------
+
+let Editor: typeof import("react-simple-code-editor").default | null = null;
+let Prism: typeof import("prismjs") | null = null;
+
+if (typeof window !== "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Editor = require("react-simple-code-editor").default;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  Prism = require("prismjs");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  require("prismjs/components/prism-yaml");
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -48,6 +66,20 @@ function toYaml(obj: Record<string, unknown>): string {
   return stringify(obj, { lineWidth: 0, defaultKeyType: "PLAIN" });
 }
 
+/** Highlight YAML using Prism (client-side only). */
+function highlightYaml(code: string): string {
+  if (!Prism || !Prism.languages.yaml) return escapeHtml(code);
+  return Prism.highlight(code, Prism.languages.yaml, "yaml");
+}
+
+/** Simple HTML escape for SSR fallback. */
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
@@ -67,7 +99,7 @@ export function YamlEditor({
   /** Track the external value identity to detect parent-driven updates. */
   const lastExternalRef = useRef<Record<string, unknown> | null>(null);
 
-  // Sync external value → textarea (only when the value actually changes
+  // Sync external value → editor (only when the value actually changes
   // from the parent and the user hasn't made local edits).
   useEffect(() => {
     if (value === lastExternalRef.current) return;
@@ -80,13 +112,12 @@ export function YamlEditor({
   }, [value, readOnlyFields]);
 
   const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const raw = e.target.value;
-      setText(raw);
+    (code: string) => {
+      setText(code);
       dirty.current = true;
 
       try {
-        const parsed = parse(raw);
+        const parsed = parse(code);
         if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
           setError("YAML must be an object (key: value pairs)");
           return;
@@ -112,25 +143,48 @@ export function YamlEditor({
 
   return (
     <div className={cn("flex flex-col gap-2 flex-1 min-h-0", className)}>
-      <textarea
-        value={text}
-        onChange={handleChange}
-        spellCheck={false}
-        disabled={disabled}
+      <div
         data-testid={testId}
         className={cn(
-          "flex-1 min-h-50 w-full resize-none font-mono text-xs leading-relaxed",
-          "p-3 rounded-(--radius-component-lg)",
+          "flex-1 min-h-50 w-full overflow-auto font-mono text-xs leading-relaxed",
+          "rounded-(--radius-component-lg)",
           "border bg-white text-gray-900",
           "dark:bg-gray-950 dark:text-gray-100",
-          "focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500",
-          "placeholder:text-gray-400 dark:placeholder:text-gray-500",
-          "disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none",
+          disabled && "opacity-50 cursor-not-allowed pointer-events-none",
           error
             ? "border-red-400 dark:border-red-600"
             : "border-gray-200 dark:border-gray-700"
         )}
-      />
+      >
+        {Editor ? (
+          <Editor
+            value={text}
+            onValueChange={handleChange}
+            highlight={highlightYaml}
+            disabled={disabled}
+            padding={12}
+            style={{
+              fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace",
+              fontSize: "0.75rem",
+              lineHeight: "1.625",
+              minHeight: "100%",
+            }}
+            className="yaml-editor-inner"
+          />
+        ) : (
+          /* SSR fallback: plain textarea */
+          <textarea
+            value={text}
+            onChange={(e) => handleChange(e.target.value)}
+            spellCheck={false}
+            disabled={disabled}
+            className={cn(
+              "w-full h-full resize-none font-mono text-xs leading-relaxed p-3",
+              "bg-transparent focus:outline-none",
+            )}
+          />
+        )}
+      </div>
       {error && (
         <div
           className={cn(
