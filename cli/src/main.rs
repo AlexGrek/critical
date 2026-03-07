@@ -47,11 +47,20 @@ enum Commands {
 
     /// Get resources by kind (list all or describe one)
     Get {
-        /// Resource kind (e.g. users, groups, projects, memberships, permissions)
+        /// Resource kind — singular or plural (e.g. user, users, group, groups)
         kind: String,
 
         /// Resource ID (omit to list all)
         id: Option<String>,
+    },
+
+    /// Describe a single resource in YAML (with kind field)
+    Describe {
+        /// Resource kind — singular or plural (e.g. user, users, group, groups)
+        kind: String,
+
+        /// Resource ID
+        id: String,
     },
 
     /// Apply a resource from a file or stdin (create or update)
@@ -117,6 +126,7 @@ async fn main() {
             Some(id) => commands::gitops::get_resource(&kind, &id).await,
             None => commands::gitops::list_resources(&kind).await,
         },
+        Commands::Describe { kind, id } => commands::gitops::describe_resource(&kind, &id).await,
         Commands::Apply { filename } => {
             commands::apply::run(filename.as_deref()).await
         }

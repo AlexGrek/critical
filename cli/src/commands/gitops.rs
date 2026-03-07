@@ -1,6 +1,7 @@
 use anyhow::Result;
 
 use crate::{api, context};
+use crate::api::{to_api_kind, to_singular_kind};
 
 pub async fn list_groups() -> Result<()> {
     let ctx = context::require_current()?;
@@ -102,8 +103,9 @@ pub async fn describe_user(id: &str) -> Result<()> {
 
 /// Generic list: `cr1t get <kind>`
 pub async fn list_resources(kind: &str) -> Result<()> {
+    let api_kind = to_api_kind(kind);
     let ctx = context::require_current()?;
-    let response = api::list_kind(&ctx.url, &ctx.token, kind).await?;
+    let response = api::list_kind(&ctx.url, &ctx.token, &api_kind).await?;
 
     let items = response
         .get("items")
@@ -112,7 +114,7 @@ pub async fn list_resources(kind: &str) -> Result<()> {
         .unwrap_or_default();
 
     if items.is_empty() {
-        println!("No {} found.", kind);
+        println!("No {} found.", api_kind);
         return Ok(());
     }
 
@@ -124,10 +126,28 @@ pub async fn list_resources(kind: &str) -> Result<()> {
     Ok(())
 }
 
-/// Generic describe: `cr1t get <kind> <id>`
+/// Generic get: `cr1t get <kind> <id>`
 pub async fn get_resource(kind: &str, id: &str) -> Result<()> {
+    let api_kind = to_api_kind(kind);
     let ctx = context::require_current()?;
-    let response = api::get_kind(&ctx.url, &ctx.token, kind, id).await?;
+    let response = api::get_kind(&ctx.url, &ctx.token, &api_kind, id).await?;
+
+    let yaml = serde_yaml::to_string(&response)?;
+    print!("{}", yaml);
+
+    Ok(())
+}
+
+/// Generic describe: `cr1t describe <kind> <id>` — YAML output with kind field injected
+pub async fn describe_resource(kind: &str, id: &str) -> Result<()> {
+    let api_kind = to_api_kind(kind);
+    let singular = to_singular_kind(&api_kind).to_string();
+    let ctx = context::require_current()?;
+    let mut response = api::get_kind(&ctx.url, &ctx.token, &api_kind, id).await?;
+
+    if let Some(obj) = response.as_object_mut() {
+        obj.insert("kind".to_string(), serde_json::json!(singular));
+    }
 
     let yaml = serde_yaml::to_string(&response)?;
     print!("{}", yaml);

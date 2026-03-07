@@ -2,6 +2,23 @@ use anyhow::{Result, bail};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+/// Normalize a kind name to its plural API collection name.
+/// Already-plural kinds are returned unchanged.
+/// e.g. "group" → "groups", "groups" → "groups"
+pub fn to_api_kind(kind: &str) -> String {
+    if kind.ends_with('s') {
+        kind.to_string()
+    } else {
+        format!("{}s", kind)
+    }
+}
+
+/// Return the singular form of a kind name.
+/// e.g. "groups" → "group", "group" → "group"
+pub fn to_singular_kind(kind: &str) -> &str {
+    kind.strip_suffix('s').unwrap_or(kind)
+}
+
 #[derive(Debug, Serialize)]
 pub struct LoginRequest {
     pub user: String,
@@ -125,6 +142,31 @@ async fn post_authenticated(url: &str, token: &str, body: Value) -> Result<Value
             Ok(err_body) => bail!("{} ({})", err_body.error.message, status),
             Err(_) => bail!("request failed with status {}", status),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn kind_pluralization() {
+        assert_eq!(to_api_kind("group"), "groups");
+        assert_eq!(to_api_kind("user"), "users");
+        assert_eq!(to_api_kind("project"), "projects");
+        assert_eq!(to_api_kind("membership"), "memberships");
+        // already plural — unchanged
+        assert_eq!(to_api_kind("groups"), "groups");
+        assert_eq!(to_api_kind("users"), "users");
+    }
+
+    #[test]
+    fn kind_singular() {
+        assert_eq!(to_singular_kind("groups"), "group");
+        assert_eq!(to_singular_kind("users"), "user");
+        assert_eq!(to_singular_kind("memberships"), "membership");
+        // already singular — unchanged
+        assert_eq!(to_singular_kind("group"), "group");
     }
 }
 

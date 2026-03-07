@@ -6,12 +6,7 @@ use serde::de::Deserialize;
 use serde_json::Value;
 
 use crate::{api, context};
-
-/// Pluralize a singular kind name to get the API collection name.
-/// e.g. "group" → "groups", "user" → "users", "project" → "projects"
-fn to_api_kind(kind: &str) -> String {
-    format!("{}s", kind)
-}
+use crate::api::to_api_kind;
 
 /// Parse a YAML string (potentially multi-document) into a list of `(kind, id, body)` tuples.
 /// `kind` is stripped from `body` since it's only used for routing, not stored in the DB.
@@ -103,17 +98,6 @@ pub async fn run(filename: Option<&Path>) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // --- to_api_kind ---
-
-    #[test]
-    fn kind_is_pluralized() {
-        assert_eq!(to_api_kind("group"), "groups");
-        assert_eq!(to_api_kind("user"), "users");
-        assert_eq!(to_api_kind("project"), "projects");
-        assert_eq!(to_api_kind("membership"), "memberships");
-        assert_eq!(to_api_kind("ticket"), "tickets");
-    }
 
     // --- parse_documents: happy paths ---
 
