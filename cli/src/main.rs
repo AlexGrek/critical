@@ -85,6 +85,22 @@ enum Commands {
         #[arg(short = 'f', long = "filename", value_name = "FILE")]
         filename: Option<PathBuf>,
     },
+
+    /// Debug and introspection commands (requires godmode)
+    Debug {
+        #[command(subcommand)]
+        action: DebugAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum DebugAction {
+    /// Show recent events from the event log
+    Events {
+        /// Output format
+        #[arg(short = 'o', long = "output", value_name = "FORMAT", default_value = "table")]
+        output: OutputFormat,
+    },
 }
 
 #[derive(Subcommand)]
@@ -152,6 +168,9 @@ async fn main() {
         },
         Commands::Describe { kind, id } => commands::gitops::describe_resource(&kind, &id).await,
         Commands::Apply { filename } => commands::apply::run(filename.as_deref()).await,
+        Commands::Debug { action } => match action {
+            DebugAction::Events { output } => commands::debug::events(output).await,
+        },
     };
 
     if let Err(e) = result {

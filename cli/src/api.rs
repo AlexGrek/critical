@@ -105,6 +105,12 @@ pub async fn apply_object(base_url: &str, token: &str, kind: &str, id: &str, bod
     post_authenticated(&url, token, body).await
 }
 
+/// Fetch event log from the debug endpoint (requires godmode).
+pub async fn debug_events(base_url: &str, token: &str) -> Result<Value> {
+    let url = format!("{}/api/v1/debug/events", base_url.trim_end_matches('/'));
+    fetch_authenticated(&url, token).await
+}
+
 async fn post_authenticated(url: &str, token: &str, body: Value) -> Result<Value> {
     let client = reqwest::Client::new();
     let resp = client

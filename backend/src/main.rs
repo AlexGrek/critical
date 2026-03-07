@@ -22,6 +22,7 @@ use axum::http::header::{AUTHORIZATION, CONTENT_TYPE};
 use axum::http::{HeaderValue, Method};
 use axum::{Json, Router, middleware::from_fn_with_state, routing::*};
 use log::info;
+use names::{Generator, Name};
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tower_http::{
@@ -165,6 +166,13 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
     router.into_make_service()
 }
 
+fn generate_node_name() -> String {
+    std::env::var("HOSTNAME").unwrap_or_else(|_| {
+        let mut name_gen = Generator::with_naming(Name::Numbered);
+        name_gen.next().unwrap()
+    })
+}
+
 pub async fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::Error>> {
     let config = config::AppConfig::from_env()?;
     let auth = Auth::new(config.jwt_secret.as_bytes(), config.jwt_expiry_days);
@@ -177,7 +185,8 @@ pub async fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::
     .await?;
     let db = Arc::new(db);
     let cache = cache::create_default_cache().await;
-    let event_logger = Arc::new(events::EventLogger::new(db.clone(), std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown".to_string())));
+    let node_id = generate_node_name();
+    let event_logger = Arc::new(events::EventLogger::new(db.clone(), node_id));
     Ok(AppState::new(config, auth, db, cache, None, None, event_logger))
 }
 
@@ -193,7 +202,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Log level: {}",
         std::env::var("RUST_LOG").unwrap_or_else(|_| "info (default)".to_string())
     );
+
+    let node_id = generate_node_name();
+
     info!("Starting application with config:");
+    info!("  Node ID: {}", node_id);
     info!("  Host: {}", config.host);
     info!("  Port: {}", config.port);
     info!(
@@ -238,8 +251,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create app state
     let cache = cache::create_default_cache().await;
     let objectstore = services::objectstore::ObjectStoreService::try_from_config(&config);
-    let node_id = std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown".to_string());
-    let event_logger = Arc::new(events::EventLogger::new(db.clone(), node_id));
+    let event_logger = Arc::new(events::EventLogger::new(db.clone(), node_id.clone()));
     let app_state = AppState::new(config.clone(), auth, db.clone(), cache, None, objectstore, event_logger.clone());
     let shared_state = Arc::new(app_state);
 

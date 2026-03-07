@@ -10,7 +10,7 @@ cargo build --bin cr1t
 alias cr1t=./target/debug/cr1t
 
 # Login
-cr1t login --url http://localhost:3742 -u root   # prompts for password
+cr1t login --url http://localhost:3742 -u root   # prompts for password [default: changeme]
 
 # List resources
 cr1t groups list
@@ -228,17 +228,69 @@ contexts:
 
 Context names are derived from the server URL by stripping the scheme and replacing `/` and `:` with `-`.
 
+### Get (Generic Resource Fetching)
+
+List or get any resource kind:
+
+```bash
+cr1t get groups                       # List all groups
+cr1t get groups g_engineering         # Get specific group
+cr1t get users                        # List all users
+cr1t get projects                     # List all projects
+```
+
+### Describe (Full YAML with Kind)
+
+Show a resource with the `kind` field, useful for feeding into `cr1t apply`:
+
+```bash
+cr1t describe groups g_engineering
+# Output:
+# kind: group
+# id: g_engineering
+# name: Engineering
+# ...
+```
+
+### Debug Commands (Godmode Only)
+
+#### `cr1t debug events`
+
+Show recent events from the event log:
+
+```bash
+cr1t debug events                     # Table format (default)
+cr1t debug events -o json             # JSON output
+cr1t debug events -o yaml             # YAML format
+```
+
+Table output displays events with structured columns:
+
+```
+ID                                   MOMENT               PRIORITY        KIND                 PRINCIPAL
+------------------------------------------------------------------------------------------------------
+d79ec986-a4b6-4a9a-bcdb-f31f664a... 2026-03-07 23:47:41 Lifecycle       Server               -
+  Details: {"host":"0.0.0.0","port":3742}
+006306ef-55e6-40c0-909e-02b72d... 2026-03-07 23:45:12 Expected        Background           -
+  Affects: database, collection_backup
+
+Total: 2 event(s)
+```
+
+**Note**: Requires `ADM_GODMODE` super-permission.
+
 ## Key Implementation Files
 
-| File                      | Purpose                                                         |
-| ------------------------- | --------------------------------------------------------------- |
-| `src/main.rs`             | Clap-based entrypoint and command routing                       |
-| `src/context.rs`          | Context file load/save (`~/.cr1tical/context.yaml`)             |
-| `src/api.rs`              | HTTP client calls to backend API (login, groups, users)         |
-| `src/commands/login.rs`   | Login command implementation                                    |
-| `src/commands/gitops.rs`  | Groups and Users list/describe commands                        |
-| `src/commands/apply.rs`   | Apply command (create or update resources from YAML)           |
-| `src/commands/`           | Other command implementations (one file per command group)      |
+| File                     | Purpose                                                    |
+| ------------------------ | ---------------------------------------------------------- |
+| `src/main.rs`            | Clap-based entrypoint and command routing                  |
+| `src/context.rs`         | Context file load/save (`~/.cr1tical/context.yaml`)        |
+| `src/api.rs`             | HTTP client calls to backend API (login, groups, users)    |
+| `src/commands/login.rs`  | Login command implementation                               |
+| `src/commands/gitops.rs` | Groups, users, and generic get/describe commands           |
+| `src/commands/apply.rs`  | Apply command (create or update resources from YAML)       |
+| `src/commands/debug.rs`  | Debug commands (events, etc.)                              |
+| `src/commands/`          | Other command implementations (one file per command group) |
 
 ## Testing
 
@@ -263,6 +315,9 @@ Current tests include:
 - **Context management**: List, switch, error cases
 - **Groups**: List (empty/with data), describe, 404 handling
 - **Users**: List (with users), describe, 404 handling
+- **Get/Describe**: Generic resource fetching and full YAML output
+- **Apply**: Create/update from file/stdin, multi-document files, error cases
+- **Debug**: Authorization checks (godmode requirement)
 
 To run tests manually:
 

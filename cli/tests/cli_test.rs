@@ -794,3 +794,24 @@ fn test_apply_nonexistent_file_fails() {
         .failure()
         .stderr(predicate::str::contains("failed to read"));
 }
+
+// --- Debug commands (godmode required) ---
+
+#[test]
+#[ignore]
+fn test_debug_events_requires_godmode() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpass_nonroot";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    write_context(&home, &token);
+
+    // Non-godmode user should get 403 or 401
+    cr1t_cmd(&home)
+        .args(["debug", "events"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Forbidden").or(predicate::str::contains("Unauthorized")));
+}
