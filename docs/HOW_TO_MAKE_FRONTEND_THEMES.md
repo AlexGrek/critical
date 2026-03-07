@@ -1,24 +1,32 @@
 # How to Create Frontend Themes
 
-This document explains how to create new themes for the Critical frontend application, using the newly added `darkred` theme as a reference.
+## The System in One Sentence
 
-## Theme Architecture
+Each theme = one CSS class on `<html>` that overrides CSS variables. Components read variables — they never use hardcoded colors.
 
-The Critical frontend uses a CSS-based theming system where each theme is defined as a CSS class on the `<html>` element. The themes are defined in `/frontend/app/app.css` and managed through React context in `/frontend/app/contexts/ThemeContext.tsx`.
+---
 
-## Creating a New Theme
+## Files You Must Touch (All 3, Every Time)
 
-### 1. Add CSS Definitions
+| File | What to do |
+|------|-----------|
+| `frontend/app/app.css` | Add the `html.mytheme { ... }` CSS block |
+| `frontend/app/contexts/ThemeContext.tsx` | Add `"mytheme"` to the `Theme` type, validation array, class removal list, and dark check |
+| `frontend/app/components/ThemeCombobox.tsx` | Add an entry to the `themes` array |
 
-In `/frontend/app/app.css`, add a new CSS class for your theme following the existing pattern:
+---
+
+## Step 1 — Add CSS in `app.css`
+
+Paste this template and fill in every value. **Do not skip `--color-primary-*`.** That's the accent palette (buttons, badges, links). The global default is green — if you don't override it, your theme will have green everywhere.
 
 ```css
-html.mynewtheme {
-  background-color: #0f0f0f;
-  color: #e5e5e5;
-  color-scheme: dark;
-  
-  /* Define all color variables */
+html.mytheme {
+  background-color: #0f0f0f;   /* page background */
+  color: #e5e5e5;               /* default text color */
+  color-scheme: dark;           /* use "light" for light themes */
+
+  /* ── Gray scale (surfaces, borders, muted text) ─────────────────── */
   --color-gray-950: #080808;
   --color-gray-900: #111111;
   --color-gray-800: #1c1c1c;
@@ -29,82 +37,110 @@ html.mynewtheme {
   --color-gray-300: #a3a3a3;
   --color-gray-200: #d4d4d4;
   --color-gray-100: #e5e5e5;
-  --color-gray-50: #f5f5f5;
+  --color-gray-50:  #f5f5f5;
 
-  /* Roundness variables */
-  --radius-component: var(--radius-md);
+  /* ── Primary accent palette (buttons, badges, links, highlights) ── */
+  /* THIS IS MANDATORY. Without it you inherit the global green palette. */
+  /* Replace with your accent hue. Example below uses red (Tailwind red). */
+  --color-primary-50:  #fef2f2;
+  --color-primary-100: #fee2e2;
+  --color-primary-200: #fecaca;
+  --color-primary-300: #fca5a5;
+  --color-primary-400: #f87171;
+  --color-primary-500: #ef4444;  /* ← main accent, used most */
+  --color-primary-600: #dc2626;
+  --color-primary-700: #b91c1c;
+  --color-primary-800: #991b1b;
+  --color-primary-900: #7f1d1d;
+  --color-primary-950: #450a0a;
+
+  /* ── Border radius (controls roundness everywhere) ───────────────── */
+  /* Standard:      md / lg / xl                                        */
+  /* Very round:    2xl / full / 2xl   (barbie / lime style)            */
+  /* Very sharp:    sm / sm / sm       (orange style)                   */
+  /* No roundness:  0.125rem for all   (grayscale style)                */
+  --radius-component:    var(--radius-md);
   --radius-component-lg: var(--radius-lg);
   --radius-component-xl: var(--radius-xl);
 
-  /* Theme-specific colors */
-  --color-topbar-bg: #141414;
-  --color-topbar-text: #d4d4d4;
+  /* ── Top bar ─────────────────────────────────────────────────────── */
+  --color-topbar-bg:         #141414;
+  --color-topbar-text:       #d4d4d4;
   --color-topbar-item-hover: #1f1f1f;
-  --color-nav-bg: #0f0f0f;
-  --color-nav-border: #242424;
-  --color-nav-text: #d4d4d4;
-  --color-nav-text-muted: #737373;
-  --color-nav-item-hover: #1a1a1a;
-  --color-nav-item-hover-text: #e5e5e5;
-  --color-nav-item-active: #064e3b; /* Green for default dark theme */
-  --color-nav-item-active-text: #6ee7b7; /* Green text for default dark theme */
+
+  /* ── Side navigation ─────────────────────────────────────────────── */
+  --color-nav-bg:               #0f0f0f;
+  --color-nav-border:           #242424;
+  --color-nav-text:             #d4d4d4;
+  --color-nav-text-muted:       #737373;
+  --color-nav-item-hover:       #1a1a1a;
+  --color-nav-item-hover-text:  #e5e5e5;
+  --color-nav-item-active:      #7f1d1d;   /* ← your accent, dark bg */
+  --color-nav-item-active-text: #fca5a5;   /* ← your accent, light text */
 }
 ```
 
-### 2. Update ThemeContext.tsx
+### Cascade warning for dark variants
 
-Update `/frontend/app/contexts/ThemeContext.tsx` to include your new theme:
+If your theme also adds the `dark` class (see Step 2), the `html.dark { }` block in `app.css` fires too — because both classes are on `<html>`. Your `html.mytheme { }` block wins only for variables it explicitly sets. The `html.dark` block comes first in the file, so any variable defined in `html.dark` but NOT in `html.mytheme` will use the dark value. That's usually fine, but be aware.
+
+---
+
+## Step 2 — Update `ThemeContext.tsx`
+
+Four places, all in the same file:
 
 ```typescript
-// Add to the Theme type definition
-export type Theme = "light" | "dark" | "darkred" | "mynewtheme" | "grayscale" | "barbie" | "orange" | "fusion" | "nostalgic95" | "itheme" | "lime";
+// 1. Type union
+export type Theme = "light" | "dark" | "darkred" | "mytheme" | ...;
 
-// Add to the valid themes array
-if (stored && ["light", "dark", "darkred", "mynewtheme", "grayscale", "barbie", "orange", "fusion", "nostalgic95", "itheme", "lime"].includes(stored)) {
-  return stored;
-}
+// 2. Valid themes array (for localStorage restore)
+if (stored && ["light", "dark", "darkred", "mytheme", ...].includes(stored)) {
 
-// Add to the class removal list
-root.classList.remove("light", "dark", "darkred", "mynewtheme", "grayscale", "barbie", "orange", "fusion", "nostalgic95", "itheme", "lime");
+// 3. Class removal list (runs on every theme switch)
+root.classList.remove("light", "dark", "darkred", "mytheme", ...);
 
-// Add to dark variant check
-if (theme === "grayscale" || theme === "orange" || theme === "darkred" || theme === "mynewtheme") {
-  root.classList.add("dark");
+// 4. Dark variant check — add here ONLY if your theme is dark
+if (theme === "grayscale" || theme === "orange" || theme === "darkred" || theme === "mytheme") {
+  root.classList.add("dark");  // adds Tailwind dark: utilities
 }
 ```
 
-### 3. Update Theme Selector
+---
 
-Update `/frontend/app/components/ThemeCombobox.tsx` to include your new theme in the UI:
+## Step 3 — Update `ThemeCombobox.tsx`
 
 ```typescript
-const themes: ThemeOption[] = [
-  // ... existing themes ...
-  {
-    value: "mynewtheme",
-    label: "My New Theme",
-    description: "Description of your theme",
-    icon: Moon, // or appropriate icon
-  },
-  // ... rest of themes ...
-];
+{ value: "mytheme", label: "My Theme", description: "One-line description", icon: Moon },
 ```
 
-## Theme Guidelines
+Pick an icon from `lucide-react`. Use `Moon` for dark themes, `Sun` for light, or any thematic icon.
 
-1. **Consistency**: Follow the same color variable naming and structure as existing themes
-2. **Dark Variants**: If your theme is dark, make sure to add it to the dark variant check so it gets the `dark` class applied
-3. **Color Scheme**: Set `color-scheme` property appropriately (light or dark)
-4. **Roundness**: Use the standard roundness CSS variables for consistent UI elements
-5. **Testing**: Ensure your theme works across all components and doesn't break existing functionality
+---
 
-## Example: Creating a Red Theme
+## Quick Reference: Existing Accent Palettes
 
-The `darkred` theme implementation shows exactly how to create a variant of an existing theme with different accent colors:
+Copy-paste one of these as your `--color-primary-*` block:
 
-1. Copy the CSS structure from the base theme (like `html.dark`)
-2. Change only the accent colors that differ (like `--color-nav-item-active` and `--color-nav-item-active-text`)
-3. Keep all other color variables the same to maintain consistency
-4. Update all TypeScript files to include the new theme name
+| Theme | Palette | Tailwind source |
+|-------|---------|-----------------|
+| `dark` | Green | `emerald` |
+| `darkred` | Red | `red` |
+| `orange` | Orange | `orange` |
+| `barbie` | Pink | `pink` |
+| `fusion` | Sky blue | `sky` |
+| `lime` | Lime green | `lime` |
+| `nostalgic95` | Navy | custom |
 
-This approach allows for quick theme creation while maintaining the overall design system.
+All Tailwind palettes: https://tailwindcss.com/docs/customizing-colors
+
+---
+
+## Checklist Before You're Done
+
+- [ ] `html.mytheme { }` block in `app.css` with ALL variables filled in
+- [ ] `--color-primary-*` overridden (11 values, 50–950)
+- [ ] `color-scheme: dark` or `color-scheme: light` set correctly
+- [ ] `ThemeContext.tsx`: type, array, removal list, dark check (if dark)
+- [ ] `ThemeCombobox.tsx`: entry added
+- [ ] Open `/ui-gallery` in browser, switch to your theme, verify no green/wrong-color bleed

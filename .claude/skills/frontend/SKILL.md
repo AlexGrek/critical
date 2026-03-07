@@ -311,6 +311,15 @@ existing CVA + `cn()` + `forwardRef` pattern, add to the barrel export, then use
 6 themes are currently defined. **More themes will be added in the future**, so all code
 must be theme-aware and never assume a fixed set of themes.
 
+### Creating a New Theme
+
+**Read the guide first**: `docs/HOW_TO_MAKE_FRONTEND_THEMES.md` — it contains the full
+copy-paste CSS template and step-by-step instructions for all 3 files you must touch.
+
+The single most common mistake: **forgetting to override `--color-primary-*`**. The
+global default is green. If your theme block doesn't include all 11 `--color-primary-*`
+variables (50–950), your theme will have green buttons, badges, and links everywhere.
+
 ### Current Themes
 
 | Theme | Base | Colors | Roundness |
@@ -652,3 +661,4 @@ identifier column and the actions column visible:
 - [ ] **Imports**: Using `~/` path alias, components from `~/components` barrel
 - [ ] **`npm run typecheck`** passes
 - [ ] **Mobile responsive**: Table action buttons use `size="icon"` on small screens; non-essential columns hidden on mobile; touch targets ≥44px
+- [ ] **New theme** (if adding one): `--color-primary-*` (all 11 values) overridden; `ThemeContext.tsx` updated (type + array + removal + dark check); `ThemeCombobox.tsx` entry added; verified in `/ui-gallery`
