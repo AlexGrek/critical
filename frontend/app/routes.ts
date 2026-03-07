@@ -12,5 +12,6 @@ export default [
     route("users", "routes/users.tsx"),
     route("u/:user_id", "routes/user-detail.tsx"),
     route("settings", "routes/settings.tsx"),
+    route("admin", "routes/admin.tsx"),
   ]),
 ] satisfies RouteConfig;

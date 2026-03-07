@@ -705,9 +705,117 @@ identifier column and the actions column visible:
 
 ---
 
+## Component Styling Encapsulation (CRITICAL PRINCIPLE)
+
+**NEVER leak styling into component usage sites. Always encapsulate styling within components themselves.**
+
+### The Anti-Pattern (NEVER Do This)
+
+```tsx
+// Bad — styling scattered across every usage
+<Card className="bg-white dark:bg-gray-900">
+  <CardContent className="pt-6">
+    <CardTitle className="mb-2">Users</CardTitle>
+    <Paragraph className="text-sm text-gray-600 dark:text-gray-400">
+      Description here
+    </Paragraph>
+  </CardContent>
+</Card>
+```
+
+Problems:
+- `bg-white dark:bg-gray-900` is repeated on every `<Card>` usage
+- `pt-6` override breaks the component's intended padding logic
+- `mb-2` on `CardTitle` should be built-in, not repeated everywhere
+- `text-sm text-gray-600 dark:text-gray-400` is verbose and easy to get wrong
+
+### The Correct Pattern
+
+```tsx
+// Good — styling fully encapsulated in components
+<Card>
+  <CardContent>
+    <CardTitle>Users</CardTitle>
+    <Paragraph size="sm" variant="muted">
+      Description here
+    </Paragraph>
+  </CardContent>
+</Card>
+```
+
+Benefits:
+- No repetition — styling is in the component definition once
+- Props-based customization via CVA variants (size, variant, etc.)
+- Consistent theming across all usages
+- Easy to change styling globally (update component, not every usage)
+
+### Refactoring Guidelines
+
+**Card components** (all in `app/components/Card.tsx`):
+- `Card` — already has `bg-white dark:bg-gray-900`, `border`, `shadow-sm`, `rounded-(--radius-component-lg)` built-in. **Do NOT add these to className.**
+- `CardTitle` — includes `mb-2` for spacing. **Do NOT override in className.**
+- `CardContent` — includes `p-6 pt-6 first:pt-0`. **Do NOT add padding overrides to className.**
+- `CardHeader`, `CardFooter` — include full padding. **Use as-is, avoid className overrides.**
+
+**Paragraph component** (use props, not className):
+- **DO**: `<Paragraph size="sm" variant="muted">` — uses built-in colors (gray-600/400)
+- **DON'T**: `<Paragraph className="text-sm text-gray-600 dark:text-gray-400">` — verbose, wrong
+- Variants: `default` (gray-700/300), `muted` (gray-600/400), `subtle` (gray-500/500), `primary`, `success`, `warning`, `danger`
+- Sizes: `xs`, `sm`, `base`, `lg`, `xl`
+
+**Header/Paragraph/Button/Input components**:
+- All use **CVA** for variant-based styling
+- **Props win over className** — use `size="sm" variant="primary"` instead of manual classes
+- Only use `className` override for truly unique, one-off styling (document it)
+
+### Implementation Pattern for New Components
+
+When building a new component, always ask: **"What styling is always the same?"**
+
+1. **Identify default styling** — colors, padding, borders, roundness, gaps
+2. **Put it in the component** — in the `cn()` call inside the component file
+3. **Use CVA for variants** — capture size, color, state variations
+4. **Set sensible defaults** — the most common case should require no props
+5. **Expose className** only for overrides, not for standard styling
+
+**Example**: If a badge always has 4px padding and gray background, don't make users pass `className="px-1.5 py-1 bg-gray-100"` every time. Build it into the Badge component:
+
+```tsx
+// Inside Badge.tsx
+const Badge = React.forwardRef<HTMLSpanElement, BadgeProps>(
+  ({ className, variant, ...props }, ref) => (
+    <span
+      ref={ref}
+      className={cn(
+        "inline-block px-1.5 py-1 rounded-(--radius-component)",  // ← default styling
+        badgeVariants({ variant, className })  // ← CVA variants override these only
+      )}
+      {...props}
+    />
+  )
+);
+
+// Usage — no padding/bg in className needed
+<Badge variant="success">Active</Badge>  // ✅ Clean
+<Badge className="px-4">Wide Badge</Badge>  // ✅ Override only if needed
+```
+
+### Audit & Migrate Existing Pages
+
+Proactively refactor pages to remove redundant className props:
+- `<Card className="bg-white dark:bg-gray-900">` → remove (already in Card)
+- `<CardTitle className="mb-2">` → remove (now built-in)
+- `<CardContent className="pt-6">` → remove (overrides default logic)
+- `<Paragraph className="text-sm text-gray-600 dark:text-gray-400">` → use `<Paragraph size="sm" variant="muted">`
+- Repeated color classes → convert to component variant prop
+- Fixed padding/margin → move to component default
+
+---
+
 ## Self-Review Before Finishing
 
 - [ ] **Custom components used**: No bare `<button>`, `<input>`, or ad-hoc cards/modals
+- [ ] **Component styling encapsulated**: No redundant className on Card/CardContent/CardTitle; using `variant` prop on Paragraph instead of manual color classes — see "Component Styling Encapsulation" section
 - [ ] **No narrow containers**: Route cards/forms use `w-full` (not restrictive `max-w-sm`/`max-w-xl`) — see "Layout Width" section above
 - [ ] **Theme roundness**: All `rounded-*` use `rounded-(--radius-component)` variants, never hardcoded
 - [ ] **Dark mode colors**: All color classes have `dark:` counterparts

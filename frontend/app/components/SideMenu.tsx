@@ -13,6 +13,7 @@ import {
   ClipboardList,
   BookOpen,
   MessageSquare,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
@@ -50,6 +51,7 @@ const navSections: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "Administration",
     items: [
+      { icon: ShieldAlert, label: "Admin Area", href: "/admin", kind: "link" },
       { icon: Settings, label: "Settings", href: "/settings", kind: "link" },
       { icon: Key, label: "API Keys", kind: "button" },
       { icon: UserCog, label: "Team", kind: "button" },
