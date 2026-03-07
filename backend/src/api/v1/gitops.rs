@@ -9,6 +9,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crit_shared::compute_value_hash;
+use crit_shared::event_models::EventPriority;
 
 use crate::{error::AppError, middleware::auth::AuthenticatedUser, state::AppState};
 
@@ -182,6 +183,8 @@ pub async fn create_object(
         }
     }
 
+    state.events.entity_lifecycle(EventPriority::Lifecycle, &user_id, &format!("{}/{}", kind, final_id), "created", None).await;
+
     Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": final_id }))))
 }
 
@@ -301,6 +304,10 @@ pub async fn upsert_object(
         }
     }
 
+    let action = if is_update { "updated" } else { "created" };
+    let priority = if is_update { EventPriority::Note } else { EventPriority::Lifecycle };
+    state.events.entity_lifecycle(priority, &user_id, &format!("{}/{}", kind, id), action, None).await;
+
     Ok(Json(json!({ "id": id })))
 }
 
@@ -382,6 +389,8 @@ pub async fn update_object(
         }
     }
 
+    state.events.entity_lifecycle(EventPriority::Note, &user_id, &format!("{}/{}", kind, id), "updated", None).await;
+
     Ok(Json(json!({ "id": id })))
 }
 
@@ -419,6 +428,8 @@ pub async fn delete_object(
         log::error!("[HANDLER] delete_object: after_delete hook failed: kind={}, id={}, error={}", kind, id, e);
         return Err(e);
     }
+
+    state.events.entity_lifecycle(EventPriority::Lifecycle, &user_id, &format!("{}/{}", kind, id), "deleted", None).await;
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }

@@ -252,6 +252,50 @@ ACL checks must include a `log::debug!` with controller name and decision.
 
 *Always use event logging when changing anything important!*
 
+### EventLogger service (`backend/src/events/mod.rs`)
+
+`EventLogger` is available on `AppState` as `state.events: Arc<EventLogger>`. All methods are **async** and **swallow errors** internally (logged at `warn` level) — no error handling needed at call sites.
+
+```rust
+use crit_shared::event_models::{EventKind, EventPriority};
+
+// General-purpose
+state.events.log(priority, kind, principal: Option<&str>, affects: Vec<String>, details: Option<Value>).await;
+
+// Entity lifecycle (creates/updates/deletes) — uses EventKind::EntityManagement
+state.events.entity_lifecycle(priority, principal: &str, resource_id: &str, action: &str, details: Option<Value>).await;
+
+// Server events (startup, shutdown)
+state.events.server_event(priority, details: Option<Value>).await;
+
+// Database events (collection created, schema changes)
+state.events.database_event(priority, details: Option<Value>).await;
+
+// Background job events
+state.events.background_event(priority, affects: Vec<String>, details: Option<Value>).await;
+
+// Object storage events (uploads, deletes)
+state.events.objectstore_event(priority, principal: Option<&str>, affects: Vec<String>, details: Option<Value>).await;
+```
+
+**Priority guide:**
+- `Lifecycle` — entity created/deleted, server startup, user registered
+- `Note` — entity updated, config/permission changes
+- `Important` — errors, authorization failures worth admin review
+- `Minor` — login, routine read-only operations
+- `Expected` — scheduled maintenance, background tasks, backups
+
+**Rules:**
+- Only log AFTER successful operations — never on error paths
+- Always `.await` EventLogger calls
+- `entity_lifecycle` uses `resource_id` format `"kind/id"` (e.g. `"users/u_alice"`)
+
+**Debug API** (godmode only): `GET /v1/debug/events?kind=EntityManagement&priority=Lifecycle&limit=50&cursor=...`
+Returns `{ "events": [...], "has_more": bool, "next_cursor": string|null, "count": N }`.
+Events stored in `system_events` collection (append-only, indexed on `kind`, `priority`, `moment`).
+
+### Standard log macros
+
 Use the following event logging models from `shared/src/event_models.rs`:
 
 ```rust

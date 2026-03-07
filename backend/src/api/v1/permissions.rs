@@ -7,6 +7,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crit_shared::event_models::{EventKind, EventPriority};
 use crit_shared::util_models::super_permissions;
 
 use crate::{error::AppError, middleware::auth::AuthenticatedUser, state::AppState};
@@ -103,6 +104,8 @@ pub async fn grant_permission(
         principals
     );
 
+    state.events.log(EventPriority::Note, EventKind::EntityManagement, Some(&user_id), vec![key.clone()], Some(json!({ "action": "grant_permission", "principals": principals }))).await;
+
     Ok(Json(json!({
         "permission": key,
         "granted_to": principals,
@@ -145,6 +148,8 @@ pub async fn revoke_permission(
         key,
         principals
     );
+
+    state.events.log(EventPriority::Note, EventKind::EntityManagement, Some(&user_id), vec![key.clone()], Some(json!({ "action": "revoke_permission", "principals": principals }))).await;
 
     Ok(Json(json!({
         "permission": key,

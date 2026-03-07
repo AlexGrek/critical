@@ -25,6 +25,7 @@ const VERTEX_COLLECTIONS: &[&str] = &[
     "resource_events",
     "unprocessed_images",
     "persistent_files",
+    "system_events",
 ];
 
 /// Edge collections created at startup.
@@ -56,6 +57,7 @@ pub struct CollectionHandles {
     pub resource_events: Collection<ReqwestClient>,
     pub unprocessed_images: Collection<ReqwestClient>,
     pub persistent_files: Collection<ReqwestClient>,
+    pub system_events: Collection<ReqwestClient>,
 }
 
 /// Obtain the database, creating it if it does not exist.
@@ -115,6 +117,10 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         .collection("persistent_files")
         .await
         .map_err(|e| anyhow!(e.to_string()))?;
+    let system_events = db
+        .collection("system_events")
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
 
     Ok(CollectionHandles {
         users,
@@ -128,6 +134,7 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         resource_events,
         unprocessed_images,
         persistent_files,
+        system_events,
     })
 }
 
@@ -205,6 +212,11 @@ pub async fn ensure_indexes(
     // Add new scoped collections here as they are introduced.
     // Example (uncomment when tasks collection is added):
     // create_persistent_index(base_url, db_name, user, password, "tasks", &["project", "deletion"]).await?;
+
+    // Indexes for system_events: filter/sort by kind, priority, and moment.
+    create_persistent_index(base_url, db_name, user, password, "system_events", &["kind"]).await?;
+    create_persistent_index(base_url, db_name, user, password, "system_events", &["priority"]).await?;
+    create_persistent_index(base_url, db_name, user, password, "system_events", &["moment"]).await?;
 
     Ok(())
 }

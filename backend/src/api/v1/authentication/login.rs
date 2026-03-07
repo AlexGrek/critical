@@ -7,6 +7,8 @@ use axum::{
 };
 use serde_json::json;
 
+use crit_shared::event_models::EventPriority;
+
 use crate::{
     error::AppError,
     schema::{Created, LoginRequest, LoginResponse, RegisterRequest},
@@ -72,6 +74,8 @@ pub async fn register(
         &req.user
     );
 
+    app_state.events.entity_lifecycle(EventPriority::Lifecycle, &user_id, &format!("users/{}", user_id), "registered", None).await;
+
     Ok(Created {})
 }
 
@@ -97,6 +101,8 @@ pub async fn login(
     let (token_str, exp) = app_state.auth.create_token(&true_user.id)?;
 
     log::info!("Auth event -> User logged in: {}", &true_user.id);
+
+    app_state.events.log(EventPriority::Minor, crit_shared::event_models::EventKind::Server, Some(&true_user.id), vec![], Some(json!({ "action": "login" }))).await;
 
     // Record sign-in event (non-fatal — login still succeeds if event writing fails)
     let _ = app_state

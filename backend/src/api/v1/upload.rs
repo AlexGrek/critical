@@ -39,6 +39,7 @@ use crate::{
     },
     state::AppState,
 };
+use crit_shared::event_models::EventPriority;
 use crit_shared::util_models::{PersistentFile, PersistentFileUri, UnprocessedImage, super_permissions};
 
 use super::super::super::services::image_processing::MAX_UPLOAD_BYTES;
@@ -170,6 +171,8 @@ pub async fn upload_media(
     log::info!(
         "[upload] raw upload accepted: {filename} for {target_id} by {caller_id} (bg processing queued)"
     );
+
+    state.events.objectstore_event(EventPriority::Minor, Some(&caller_id), vec![format!("{}/{}", kind, target_id)], Some(serde_json::json!({ "action": "upload", "upload_type": upload_type_str }))).await;
 
     // Spawn background image processing — response returns immediately.
     // The semaphore ensures only one conversion runs at a time; others queue up.

@@ -4,6 +4,7 @@ pub mod config;
 pub mod controllers;
 pub mod db;
 pub mod error;
+pub mod events;
 pub mod middleware;
 pub use crit_shared::{data_models, util_models};
 pub mod godmode;
@@ -129,6 +130,7 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                             get(api::v1::debug::get_collection_data),
                         )
                         .route("/access", get(api::v1::debug::get_access_debug))
+                        .route("/events", get(api::v1::debug::list_events))
                         .layer(from_fn_with_state(
                             shared_state.clone(),
                             middleware::godmode_middleware,
@@ -173,8 +175,10 @@ pub async fn create_mock_shared_state() -> Result<AppState, Box<dyn std::error::
         &config.database_name,
     )
     .await?;
+    let db = Arc::new(db);
     let cache = cache::create_default_cache().await;
-    Ok(AppState::new(config, auth, Arc::new(db), cache, None, None))
+    let event_logger = Arc::new(events::EventLogger::new(db.clone(), std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown".to_string())));
+    Ok(AppState::new(config, auth, db, cache, None, None, event_logger))
 }
 
 #[tokio::main]
@@ -234,8 +238,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Create app state
     let cache = cache::create_default_cache().await;
     let objectstore = services::objectstore::ObjectStoreService::try_from_config(&config);
-    let app_state = AppState::new(config.clone(), auth, db.clone(), cache, None, objectstore);
+    let node_id = std::env::var("HOSTNAME").unwrap_or_else(|_| "unknown".to_string());
+    let event_logger = Arc::new(events::EventLogger::new(db.clone(), node_id));
+    let app_state = AppState::new(config.clone(), auth, db.clone(), cache, None, objectstore, event_logger.clone());
     let shared_state = Arc::new(app_state);
+
+    // Log server startup event
+    event_logger.server_event(
+        crit_shared::event_models::EventPriority::Lifecycle,
+        Some(serde_json::json!({ "host": config.host, "port": config.port })),
+    ).await;
 
     // Build the application router
     let app = create_app(shared_state);

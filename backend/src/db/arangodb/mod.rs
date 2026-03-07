@@ -15,6 +15,7 @@ mod entities;
 mod permissions;
 mod gitops;
 mod audit;
+mod events;
 
 //
 // ------------------- PAGINATION --------------------
@@ -75,6 +76,7 @@ pub struct ArangoDb {
     pub resource_events: Collection<ReqwestClient>,
     pub unprocessed_images: Collection<ReqwestClient>,
     pub persistent_files: Collection<ReqwestClient>,
+    pub system_events: Collection<ReqwestClient>,
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +143,7 @@ impl ArangoDb {
             resource_events: handles.resource_events,
             unprocessed_images: handles.unprocessed_images,
             persistent_files: handles.persistent_files,
+            system_events: handles.system_events,
         };
 
         instance.seed_permissions().await?;
@@ -176,6 +179,7 @@ impl ArangoDb {
             resource_events: handles.resource_events,
             unprocessed_images: handles.unprocessed_images,
             persistent_files: handles.persistent_files,
+            system_events: handles.system_events,
         })
     }
 
@@ -208,6 +212,7 @@ impl ArangoDb {
             resource_events: handles.resource_events,
             unprocessed_images: handles.unprocessed_images,
             persistent_files: handles.persistent_files,
+            system_events: handles.system_events,
         })
     }
 

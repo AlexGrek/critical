@@ -177,3 +177,42 @@ pub async fn get_access_debug(
 
     Ok(Json(report))
 }
+
+/// List system events with optional kind/priority filters and pagination.
+///
+/// `GET /v1/debug/events`
+/// Query params:
+///   - `kind` — filter by EventKind variant name (e.g. "EntityManagement", "Server", "Error")
+///   - `priority` — filter by EventPriority variant name (e.g. "Lifecycle", "Important", "Note")
+///   - `limit` — max docs per page (default 50, max 200)
+///   - `cursor` — keyset pagination cursor (value of `_key` from previous response's `next_cursor`)
+///
+/// Requires ADM_GODMODE (enforced by godmode_middleware on the route group).
+/// Returns `{ "events": [...], "has_more": bool, "next_cursor": string|null, "count": N }`
+pub async fn list_events(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, AppError> {
+    let kind = params.get("kind").cloned();
+    let priority = params.get("priority").cloned();
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(50)
+        .min(200);
+    let cursor = params.get("cursor").cloned();
+
+    let result = state
+        .db
+        .list_system_events(kind.as_deref(), priority.as_deref(), limit, cursor)
+        .await
+        .map_err(AppError::Internal)?;
+
+    let count = result.docs.len();
+    Ok(Json(json!({
+        "events": result.docs,
+        "has_more": result.has_more,
+        "next_cursor": result.next_cursor,
+        "count": count,
+    })))
+}

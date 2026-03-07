@@ -8,6 +8,7 @@ use crate::{
     config::{AppConfig, RuntimeConfig},
     controllers::Controller,
     db::ArangoDb,
+    events::EventLogger,
     godmode,
     middleware::auth::Auth,
     services::objectstore::ObjectStoreService,
@@ -25,13 +26,14 @@ pub struct AppState {
     pub runtime_config: Arc<RuntimeConfig>,
     pub offloadmq: Arc<Option<OffloadClient>>,
     pub objectstore: Arc<Option<ObjectStoreService>>,
+    pub events: Arc<EventLogger>,
     /// Limits background image conversion to one task at a time.
     /// All other upload tasks queue up and wait their turn.
     pub image_processing_semaphore: Arc<Semaphore>,
 }
 
 impl AppState {
-    pub fn new(config: AppConfig, auth: Auth, database: Arc<ArangoDb>, cache: Arc<CacheStore>, offloadmq: Option<OffloadClient>, objectstore: Option<ObjectStoreService>) -> Self {
+    pub fn new(config: AppConfig, auth: Auth, database: Arc<ArangoDb>, cache: Arc<CacheStore>, offloadmq: Option<OffloadClient>, objectstore: Option<ObjectStoreService>, events: Arc<EventLogger>) -> Self {
         Self {
             config: Arc::new(config),
             auth: Arc::new(auth),
@@ -41,6 +43,7 @@ impl AppState {
             controller: Arc::new(Controller::new(database.clone())),
             offloadmq: Arc::new(offloadmq),
             objectstore: Arc::new(objectstore),
+            events,
             image_processing_semaphore: Arc::new(Semaphore::new(1)),
         }
     }

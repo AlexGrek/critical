@@ -13,6 +13,7 @@ use crate::{
     middleware::auth::AuthenticatedUser,
     state::AppState,
 };
+use crit_shared::event_models::EventPriority;
 use crit_shared::util_models::Permissions;
 
 use super::gitops::{ListQuery, validate_kind};
@@ -201,6 +202,8 @@ pub async fn create_scoped_object(
 
     ctrl.after_create(&id, &user_id, &state.db).await?;
 
+    state.events.entity_lifecycle(EventPriority::Lifecycle, &user_id, &format!("{}/{}", kind, id), "created", None).await;
+
     Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": id }))))
 }
 
@@ -268,6 +271,8 @@ pub async fn update_scoped_object(
 
     ctrl.after_update(&id, &state.db).await?;
 
+    state.events.entity_lifecycle(EventPriority::Note, &user_id, &format!("{}/{}", kind, id), "updated", None).await;
+
     Ok(Json(json!({ "id": id })))
 }
 
@@ -323,6 +328,8 @@ pub async fn delete_scoped_object(
         })?;
 
     ctrl.after_delete(&id, &state.db).await?;
+
+    state.events.entity_lifecycle(EventPriority::Lifecycle, &user_id, &format!("{}/{}", kind, id), "deleted", None).await;
 
     Ok(axum::http::StatusCode::NO_CONTENT)
 }
