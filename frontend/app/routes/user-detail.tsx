@@ -306,7 +306,6 @@ function UserYamlTab({ user }: { user: UserFull }) {
   return (
     <YamlEditor
       value={yamlValue}
-      onChange={() => {}}
       disabled
       data-testid="user-yaml-editor"
     />

@@ -424,35 +424,22 @@ export default function Groups() {
     fetcher.submit(form, { method: "POST" });
   };
 
-  /** Sync parsed YAML back into editForm + editAcl so all tabs stay in sync. */
-  const handleYamlChange = (parsed: Record<string, unknown>) => {
-    // Update form fields
-    setEditForm({
-      name: typeof parsed.name === "string" ? parsed.name : "",
-      description: typeof parsed.description === "string" ? parsed.description : "",
-      labels: Object.entries(
-        (parsed.labels && typeof parsed.labels === "object" && !Array.isArray(parsed.labels))
-          ? (parsed.labels as Record<string, string>)
-          : {}
-      ).map(([key, value]) => ({
-        key,
-        value: String(value),
-        _id: `${key}-${Math.random()}`,
-      })),
+  const handleYamlSave = useCallback(async (parsed: Record<string, unknown>) => {
+    if (!editingGroup) throw new Error("No group selected");
+    const res = await fetch(`/api/v1/global/groups/${editingGroup.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ...editingGroup, ...parsed }),
     });
-
-    // Update ACL if present
-    if (parsed.acl && typeof parsed.acl === "object") {
-      setEditAcl(parsed.acl as AccessControlStore);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { message?: string; error?: string }).message || (body as { message?: string; error?: string }).error || `HTTP ${res.status}`);
     }
-
-    // Update annotations on the editingGroup directly
-    if (editingGroup && parsed.annotations && typeof parsed.annotations === "object") {
-      setEditingGroup((prev) =>
-        prev ? { ...prev, annotations: parsed.annotations as Record<string, string> } : prev
-      );
-    }
-  };
+    // Reload editor from server (updates value prop → resets yaml editor to server state)
+    await loadGroup(editingGroup.id);
+    revalidator.revalidate();
+  }, [editingGroup, loadGroup, revalidator]);
 
   const submitAddMember = (principalId: string) => {
     if (!selectedGroupId) return;
@@ -870,7 +857,7 @@ export default function Groups() {
               onDismissLoadError={() => setLoadError("")}
               onDismissSaveError={() => setSaveError("")}
               onDismissMemberError={() => setMemberError("")}
-              onYamlChange={handleYamlChange}
+              onYamlSave={handleYamlSave}
             />
           )}
         </div>
@@ -904,7 +891,7 @@ interface GroupEditorProps {
   onDismissLoadError: () => void;
   onDismissSaveError: () => void;
   onDismissMemberError: () => void;
-  onYamlChange: (parsed: Record<string, unknown>) => void;
+  onYamlSave: (parsed: Record<string, unknown>) => Promise<void>;
 }
 
 function GroupEditor({
@@ -928,27 +915,14 @@ function GroupEditor({
   onDismissLoadError,
   onDismissSaveError,
   onDismissMemberError,
-  onYamlChange,
+  onYamlSave,
 }: GroupEditorProps) {
   const currentAcl = editAcl ?? group?.acl;
 
-  /** Stable object passed to YamlEditor — only recomputes when edit state changes. */
-  const yamlValue = useMemo<Record<string, unknown>>(() => {
-    if (!group) return {};
-    const labels = Object.fromEntries(
-      editForm.labels
-        .filter((l) => l.key.trim())
-        .map((l) => [l.key.trim(), l.value])
-    );
-    return {
-      id: group.id,
-      name: editForm.name,
-      ...(editForm.description ? { description: editForm.description } : {}),
-      labels,
-      annotations: group.annotations,
-      acl: currentAcl,
-    };
-  }, [group, editForm, currentAcl]);
+  const yamlValue = useMemo<Record<string, unknown>>(
+    () => (group ? (group as unknown as Record<string, unknown>) : {}),
+    [group]
+  );
 
   return (
     <Card
@@ -1291,7 +1265,8 @@ function GroupEditor({
               {group ? (
                 <YamlEditor
                   value={yamlValue}
-                  onChange={onYamlChange}
+                  onSave={onYamlSave}
+                  readOnlyFields={["state", "hash_code", "deletion"]}
                   data-testid="yaml-editor"
                 />
               ) : (

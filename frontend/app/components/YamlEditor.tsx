@@ -12,20 +12,11 @@ import { cn } from "~/lib/utils";
 import "./yaml-editor.css";
 
 // ---------------------------------------------------------------------------
-// Prism + Editor (SSR-safe lazy import)
+// Prism + Editor (SSR-safe lazy import via dynamic import)
 // ---------------------------------------------------------------------------
 
-let Editor: typeof import("react-simple-code-editor").default | null = null;
-let Prism: typeof import("prismjs") | null = null;
-
-if (typeof window !== "undefined") {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Editor = require("react-simple-code-editor").default;
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  Prism = require("prismjs");
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  require("prismjs/components/prism-yaml");
-}
+type EditorComponent = typeof import("react-simple-code-editor").default;
+type PrismType = typeof import("prismjs");
 
 // ---------------------------------------------------------------------------
 // Types
@@ -34,8 +25,12 @@ if (typeof window !== "undefined") {
 export interface YamlEditorProps {
   /** The resource object to display/edit as YAML. */
   value: Record<string, unknown>;
-  /** Called with the parsed object whenever the user edits valid YAML. */
-  onChange: (parsed: Record<string, unknown>) => void;
+  /**
+   * Called with the parsed object when the user clicks Save.
+   * Should throw on error; the editor will display the thrown message.
+   * Omit for read-only mode (no Save button rendered).
+   */
+  onSave?: (parsed: Record<string, unknown>) => Promise<void>;
   /**
    * Top-level field names to strip from the displayed YAML.
    * These fields are server-managed and will be preserved on save
@@ -67,9 +62,9 @@ function toYaml(obj: Record<string, unknown>): string {
 }
 
 /** Highlight YAML using Prism (client-side only). */
-function highlightYaml(code: string): string {
-  if (!Prism || !Prism.languages.yaml) return escapeHtml(code);
-  return Prism.highlight(code, Prism.languages.yaml, "yaml");
+function highlightYaml(code: string, prism: PrismType | null): string {
+  if (!prism || !prism.languages.yaml) return escapeHtml(code);
+  return prism.highlight(code, prism.languages.yaml, "yaml");
 }
 
 /** Simple HTML escape for SSR fallback. */
@@ -86,7 +81,7 @@ function escapeHtml(str: string): string {
 
 export function YamlEditor({
   value,
-  onChange,
+  onSave,
   readOnlyFields = [],
   className,
   disabled = false,
@@ -94,10 +89,33 @@ export function YamlEditor({
 }: YamlEditorProps) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [EditorComp, setEditorComp] = useState<EditorComponent | null>(null);
+  const prismRef = useRef<PrismType | null>(null);
+  /** Parsed object from the current editor text (null if parse error). */
+  const parsedRef = useRef<Record<string, unknown> | null>(null);
   /** Whether the user has made local edits that haven't been synced back. */
   const dirty = useRef(false);
   /** Track the external value identity to detect parent-driven updates. */
   const lastExternalRef = useRef<Record<string, unknown> | null>(null);
+
+  // Lazy-load editor + prism on client only
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      import("react-simple-code-editor"),
+      import("prismjs"),
+    ]).then(async ([editorMod, prismMod]) => {
+      // @ts-expect-error prism-yaml has no type declarations
+      await import("prismjs/components/prism-yaml");
+      if (!cancelled) {
+        prismRef.current = prismMod.default ?? prismMod;
+        setEditorComp(() => editorMod.default);
+      }
+    });
+    return () => { cancelled = true; };
+  }, []);
 
   // Sync external value → editor (only when the value actually changes
   // from the parent and the user hasn't made local edits).
@@ -115,25 +133,42 @@ export function YamlEditor({
     (code: string) => {
       setText(code);
       dirty.current = true;
+      setSaveError(null);
 
       try {
         const parsed = parse(code);
         if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
           setError("YAML must be an object (key: value pairs)");
+          parsedRef.current = null;
           return;
         }
         setError(null);
-        onChange(parsed as Record<string, unknown>);
+        parsedRef.current = parsed as Record<string, unknown>;
       } catch (err) {
         if (err instanceof YAMLParseError) {
           setError(err.message.split("\n")[0]);
         } else {
           setError("Invalid YAML");
         }
+        parsedRef.current = null;
       }
     },
-    [onChange]
+    []
   );
+
+  const handleSave = useCallback(async () => {
+    if (!onSave || !parsedRef.current) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await onSave(parsedRef.current);
+      dirty.current = false;
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [onSave]);
 
   /** Reset dirty flag when the user explicitly syncs (e.g. parent re-renders
    *  after a save). We detect this via value identity change. */
@@ -156,11 +191,11 @@ export function YamlEditor({
             : "border-gray-200 dark:border-gray-700"
         )}
       >
-        {Editor ? (
-          <Editor
+        {EditorComp ? (
+          <EditorComp
             value={text}
             onValueChange={handleChange}
-            highlight={highlightYaml}
+            highlight={(code: string) => highlightYaml(code, prismRef.current)}
             disabled={disabled}
             padding={12}
             style={{
@@ -195,6 +230,36 @@ export function YamlEditor({
           data-testid="yaml-parse-error"
         >
           {error}
+        </div>
+      )}
+      {saveError && (
+        <div
+          className={cn(
+            "px-3 py-2 text-xs font-mono rounded-(--radius-component)",
+            "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400",
+            "border border-red-200 dark:border-red-800"
+          )}
+          data-testid="yaml-save-error"
+        >
+          {saveError}
+        </div>
+      )}
+      {onSave && (
+        <div className="flex justify-end shrink-0">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={disabled || isSaving || !!error || !parsedRef.current}
+            data-testid="yaml-save-button"
+            className={cn(
+              "px-3 py-1.5 text-xs font-medium rounded-(--radius-component)",
+              "bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600",
+              "disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none",
+              "transition-colors"
+            )}
+          >
+            {isSaving ? "Saving…" : "Save"}
+          </button>
         </div>
       )}
     </div>

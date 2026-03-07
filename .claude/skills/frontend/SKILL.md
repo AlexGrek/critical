@@ -457,41 +457,99 @@ frontend/
 
 Every resource editor panel/modal that has tabs **must include a "YAML" tab as the last tab**. This gives power users a `kubectl edit`-style raw document view.
 
-### Pattern
+### YamlEditor Component Contract
 
 ```tsx
-// 1. Import YamlEditor
+export interface YamlEditorProps {
+  /** The resource object to display as YAML. Must be useMemo-stabilized. */
+  value: Record<string, unknown>;
+  /**
+   * Called only when user explicitly clicks "Save". Must be async.
+   * Throw an Error to show an inline error message and keep the editor dirty.
+   * After resolving, the parent MUST refresh `value` from the server so the
+   * editor resets to actual server state.
+   * Omit (or don't pass) when disabled=true (read-only mode).
+   */
+  onSave?: (parsed: Record<string, unknown>) => Promise<void>;
+  /**
+   * Top-level field names to strip from the displayed YAML (server-managed).
+   * These fields are preserved on save by merging over the original document.
+   * Typical: ["state", "hash_code", "deletion"]
+   */
+  readOnlyFields?: string[];
+  className?: string;
+  "data-testid"?: string;
+  /** Read-only mode — hides Save button, disables editing. */
+  disabled?: boolean;
+}
+```
+
+**Key behaviours:**
+- **No `onChange` prop.** Changes stay local inside the editor until the user clicks Save.
+- **Save button** is shown only when not disabled. It becomes active only when there are unsaved changes AND no parse/structure errors.
+- **Error blocking**: syntax errors and non-object YAML prevent saving. Errors shown inline below the editor.
+- **After onSave resolves**: parent refreshes `value` from the server. YamlEditor detects the new `value` identity and resets to server state (dirty → clean).
+- **onSave throws**: error message shown inline, editor stays dirty for the user to fix.
+
+### Pattern for callers — editable resource
+
+```tsx
+// 1. Import
 import { YamlEditor } from "~/components";
 
-// 2. Memoize the editable view of the resource (stable reference = no spurious re-serialization)
-const yamlValue = useMemo<Record<string, unknown>>(() => ({
-  id: group.id,
-  name: editForm.name,
-  labels: ...,
-  acl: currentAcl,
-  // Include all user-editable fields; omit server-managed ones (state, hash_code, deletion)
-}), [group, editForm, currentAcl]);
+// 2. Memoize the server document (NOT form state — YAML is independent)
+const yamlValue = useMemo<Record<string, unknown>>(
+  () => resource as unknown as Record<string, unknown>,
+  [resource]
+);
 
-// 3. Handle sync-back from YAML → form state
-const handleYamlChange = (parsed: Record<string, unknown>) => {
-  setEditForm({ name: parsed.name as string, ... });
-  if (parsed.acl) setEditAcl(parsed.acl as AccessControlStore);
-};
+// 3. Save handler — PUT to API then re-fetch from server
+const handleYamlSave = useCallback(async (parsed: Record<string, unknown>) => {
+  const res = await fetch(`/api/v1/global/{kind}/${resource.id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    // Merge: parsed fields override, but server-managed fields (hidden from YAML) are preserved
+    body: JSON.stringify({ ...resource, ...parsed }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message || body.error || `HTTP ${res.status}`);
+  }
+  // Refresh from server — updates value prop which resets the editor to server state
+  await refreshData();           // e.g. loadGroup(id) for client-fetched data
+  revalidator.revalidate();      // if React Router loader also needs refresh
+}, [resource, refreshData, revalidator]);
 
-// 4. Add tab trigger (always last)
-<Tabs.Trigger value="yaml" data-testid="tab-yaml">YAML</Tabs.Trigger>
-
-// 5. Add tab content
+// 4. Render
 <Tabs.Content value="yaml" className="p-4 flex flex-col flex-1 min-h-0">
-  <YamlEditor value={yamlValue} onChange={handleYamlChange} data-testid="yaml-editor" />
+  <YamlEditor
+    value={yamlValue}
+    onSave={handleYamlSave}
+    readOnlyFields={["state", "hash_code", "deletion"]}
+    data-testid="yaml-editor"
+  />
 </Tabs.Content>
+```
+
+### Pattern for callers — read-only
+
+```tsx
+<YamlEditor
+  value={yamlValue}
+  disabled
+  data-testid="yaml-editor"
+/>
 ```
 
 ### Rules
 - `YamlEditor` always goes on the **last tab**, after all structured form tabs
-- Pass `useMemo`-stabilized `value` — never an inline object literal (causes re-serialization on every render)
-- The `handleYamlChange` must sync parsed fields back to the same state as the form tabs (so edits are reflected across tabs and saved via the same submit path)
-- `readOnlyFields` (e.g. `["state", "hash_code", "deletion"]`) strips server-managed fields from the YAML view; the parent preserves them on save by merging over the original document
+- `value` must be `useMemo`-stabilized — never an inline object literal (causes re-serialization on every render)
+- `value` must come from **server state** (the loaded resource), NOT from form state. The YAML tab is independent from form tabs — it shows and saves the raw document directly.
+- `readOnlyFields={["state", "hash_code", "deletion"]}` strips server-managed fields from display. Always pass this for editable editors.
+- On save: merge `{ ...originalDoc, ...parsed }` so hidden server-managed fields are preserved in the PUT body.
+- After `onSave` resolves: call both `loadGroup(id)` (or equivalent client re-fetch) AND `revalidator.revalidate()` to refresh all UI from server.
+- **NEVER** have `onChange` on YamlEditor — the prop does not exist. YAML changes stay local.
 - `yaml` package (`import { stringify, parse } from "yaml"`) is already installed
 
 ---

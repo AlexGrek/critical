@@ -415,7 +415,7 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
           <Tabs.Content value="yaml" className="p-4 flex flex-col flex-1 min-h-0">
             <YamlEditor
               value={yamlValue}
-              onChange={handleYamlChange}
+              onSave={async (parsed) => handleYamlChange(parsed)}
               data-testid="acl-yaml-editor"
             />
           </Tabs.Content>

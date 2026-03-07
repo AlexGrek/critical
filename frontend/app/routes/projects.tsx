@@ -1,5 +1,5 @@
 import type { Route } from "./+types/projects";
-import { useLoaderData } from "react-router";
+import { useLoaderData, useRevalidator } from "react-router";
 import {
   Button,
   Card,
@@ -105,6 +105,7 @@ export default function ProjectPage() {
     (project.acl as AccessControlStore) || { list: [], last_mod_date: new Date().toISOString() }
   );
   const [isSavingAcl, setIsSavingAcl] = useState(false);
+  const revalidator = useRevalidator();
 
   const handleAclSave = async (newAcl: AccessControlStore) => {
     setIsSavingAcl(true);
@@ -130,23 +131,24 @@ export default function ProjectPage() {
   };
 
   /** Stable object for the YAML tab. */
-  const yamlValue = useMemo<Record<string, unknown>>(() => ({
-    id: project.id,
-    name: project.name,
-    ...(project.labels && Object.keys(project.labels).length > 0
-      ? { labels: project.labels }
-      : {}),
-    ...(project.annotations && Object.keys(project.annotations).length > 0
-      ? { annotations: project.annotations }
-      : {}),
-    acl: currentAcl,
-  }), [project, currentAcl]);
+  const yamlValue = useMemo<Record<string, unknown>>(
+    () => project as unknown as Record<string, unknown>,
+    [project]
+  );
 
-  const handleYamlChange = useCallback((parsed: Record<string, unknown>) => {
-    if (parsed.acl) {
-      setCurrentAcl(parsed.acl as AccessControlStore);
+  const handleYamlSave = useCallback(async (parsed: Record<string, unknown>) => {
+    const res = await fetch(`/api/v1/global/projects/${project.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ...project, ...parsed }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error((body as { message?: string; error?: string }).message || (body as { message?: string; error?: string }).error || `HTTP ${res.status}`);
     }
-  }, []);
+    revalidator.revalidate();
+  }, [project, revalidator]);
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
@@ -377,7 +379,8 @@ export default function ProjectPage() {
           <Tabs.Content value="yaml" className="pt-6 flex flex-col min-h-100">
             <YamlEditor
               value={yamlValue}
-              onChange={handleYamlChange}
+              onSave={handleYamlSave}
+              readOnlyFields={["state", "hash_code", "deletion"]}
               data-testid="project-yaml-editor"
             />
           </Tabs.Content>
