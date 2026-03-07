@@ -4,7 +4,19 @@ mod context;
 
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+/// Output format for get/list commands.
+#[derive(Clone, Copy, PartialEq, Default, ValueEnum)]
+pub enum OutputFormat {
+    /// ASCII table (default, like kubectl)
+    #[default]
+    Table,
+    /// YAML output
+    Yaml,
+    /// JSON output
+    Json,
+}
 
 /// cr1t — CLI for Critical project management
 #[derive(Parser)]
@@ -45,16 +57,20 @@ enum Commands {
         action: UsersAction,
     },
 
-    /// Get resources by kind (list all or describe one)
+    /// List resources of a kind, or get a single resource by ID
     Get {
         /// Resource kind — singular or plural (e.g. user, users, group, groups)
         kind: String,
 
         /// Resource ID (omit to list all)
         id: Option<String>,
+
+        /// Output format
+        #[arg(short = 'o', long = "output", value_name = "FORMAT", default_value = "table")]
+        output: OutputFormat,
     },
 
-    /// Describe a single resource in YAML (with kind field)
+    /// Describe a single resource in full YAML (with kind field)
     Describe {
         /// Resource kind — singular or plural (e.g. user, users, group, groups)
         kind: String,
@@ -85,8 +101,12 @@ enum ContextAction {
 #[derive(Subcommand)]
 enum GroupsAction {
     /// List all groups
-    List,
-    /// Describe a group (show as YAML)
+    List {
+        /// Output format
+        #[arg(short = 'o', long = "output", value_name = "FORMAT", default_value = "table")]
+        output: OutputFormat,
+    },
+    /// Describe a group in full YAML
     Describe {
         /// Group ID
         id: String,
@@ -96,8 +116,12 @@ enum GroupsAction {
 #[derive(Subcommand)]
 enum UsersAction {
     /// List all users
-    List,
-    /// Describe a user (show as YAML)
+    List {
+        /// Output format
+        #[arg(short = 'o', long = "output", value_name = "FORMAT", default_value = "table")]
+        output: OutputFormat,
+    },
+    /// Describe a user in full YAML
     Describe {
         /// User ID
         id: String,
@@ -115,21 +139,19 @@ async fn main() {
             Some(ContextAction::Use { name }) => commands::login::use_context(&name),
         },
         Commands::Groups { action } => match action {
-            GroupsAction::List => commands::gitops::list_groups().await,
+            GroupsAction::List { output } => commands::gitops::list_groups(output).await,
             GroupsAction::Describe { id } => commands::gitops::describe_group(&id).await,
         },
         Commands::Users { action } => match action {
-            UsersAction::List => commands::gitops::list_users().await,
+            UsersAction::List { output } => commands::gitops::list_users(output).await,
             UsersAction::Describe { id } => commands::gitops::describe_user(&id).await,
         },
-        Commands::Get { kind, id } => match id {
-            Some(id) => commands::gitops::get_resource(&kind, &id).await,
-            None => commands::gitops::list_resources(&kind).await,
+        Commands::Get { kind, id, output } => match id {
+            Some(id) => commands::gitops::get_resource(&kind, &id, output).await,
+            None => commands::gitops::list_resources(&kind, output).await,
         },
         Commands::Describe { kind, id } => commands::gitops::describe_resource(&kind, &id).await,
-        Commands::Apply { filename } => {
-            commands::apply::run(filename.as_deref()).await
-        }
+        Commands::Apply { filename } => commands::apply::run(filename.as_deref()).await,
     };
 
     if let Err(e) = result {

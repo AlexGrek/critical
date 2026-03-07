@@ -66,26 +66,6 @@ pub async fn login(base_url: &str, user: &str, password: &str) -> Result<LoginRe
     }
 }
 
-pub async fn list_groups(base_url: &str, token: &str) -> Result<Value> {
-    let url = format!("{}/api/v1/global/groups", base_url.trim_end_matches('/'));
-    fetch_authenticated(&url, token).await
-}
-
-pub async fn get_group(base_url: &str, token: &str, id: &str) -> Result<Value> {
-    let url = format!("{}/api/v1/global/groups/{}", base_url.trim_end_matches('/'), id);
-    fetch_authenticated(&url, token).await
-}
-
-pub async fn list_users(base_url: &str, token: &str) -> Result<Value> {
-    let url = format!("{}/api/v1/global/users", base_url.trim_end_matches('/'));
-    fetch_authenticated(&url, token).await
-}
-
-pub async fn get_user(base_url: &str, token: &str, id: &str) -> Result<Value> {
-    let url = format!("{}/api/v1/global/users/{}", base_url.trim_end_matches('/'), id);
-    fetch_authenticated(&url, token).await
-}
-
 pub async fn list_kind(base_url: &str, token: &str, kind: &str) -> Result<Value> {
     let url = format!("{}/api/v1/global/{}", base_url.trim_end_matches('/'), kind);
     fetch_authenticated(&url, token).await

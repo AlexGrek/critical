@@ -237,12 +237,12 @@ fn test_groups_list_with_data() {
     );
     std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
 
-    // List groups
+    // List groups — default table output shows NAME column header and group name
     cr1t_cmd(&home)
         .args(["groups", "list"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Groups:").or(predicate::str::contains(group_name)));
+        .stdout(predicate::str::contains("NAME").and(predicate::str::contains(group_name)));
 
     delete_group(&token, &group_id);
 }
@@ -327,12 +327,12 @@ fn test_users_list() {
     );
     std::fs::write(ctx_dir.join("context.yaml"), ctx_content).unwrap();
 
-    // List users (should at least contain the logged-in user)
+    // List users — default table output shows NAME/ID column headers
     cr1t_cmd(&home)
         .args(["users", "list"])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Users:").or(predicate::str::contains(&user)));
+        .stdout(predicate::str::contains("NAME").and(predicate::str::contains("ID")));
 }
 
 #[test]
@@ -387,6 +387,127 @@ fn test_users_describe_not_found() {
         .args(["users", "describe", "u_nonexistent"])
         .assert()
         .failure();
+}
+
+// --- Output format tests ---
+
+#[test]
+#[ignore]
+fn test_groups_list_yaml_output() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassyaml1";
+    let group_id = format!("g_yaml{}", &user[8..]);
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, "YAML Test Group");
+    write_context(&home, &token);
+
+    cr1t_cmd(&home)
+        .args(["groups", "list", "-o", "yaml"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("id:").and(predicate::str::contains("name:")));
+
+    delete_group(&token, &group_id);
+}
+
+#[test]
+#[ignore]
+fn test_groups_list_json_output() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassjson1";
+    let group_id = format!("g_json{}", &user[8..]);
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, "JSON Test Group");
+    write_context(&home, &token);
+
+    cr1t_cmd(&home)
+        .args(["groups", "list", "-o", "json"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"items\"").and(predicate::str::contains("\"id\"")));
+
+    delete_group(&token, &group_id);
+}
+
+#[test]
+#[ignore]
+fn test_get_groups_table() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassget1";
+    let group_id = format!("g_get{}", &user[8..]);
+    let group_name = "Get Table Group";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, group_name);
+    write_context(&home, &token);
+
+    // `cr1t get groups` should show a table with NAME/ID headers
+    cr1t_cmd(&home)
+        .args(["get", "groups"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("NAME").and(predicate::str::contains(group_name)));
+
+    delete_group(&token, &group_id);
+}
+
+#[test]
+#[ignore]
+fn test_get_single_resource_table() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassget2";
+    let group_id = format!("g_single{}", &user[8..]);
+    let group_name = "Single Row Group";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, group_name);
+    write_context(&home, &token);
+
+    // `cr1t get groups <id>` should show a single-row table
+    cr1t_cmd(&home)
+        .args(["get", "groups", &group_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("NAME").and(predicate::str::contains(group_name)));
+
+    delete_group(&token, &group_id);
+}
+
+#[test]
+#[ignore]
+fn test_describe_outputs_yaml_with_kind() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpassdesc1";
+    let group_id = format!("g_desc2{}", &user[8..]);
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, "Describe YAML Group");
+    write_context(&home, &token);
+
+    // `cr1t describe groups <id>` outputs full YAML including kind field
+    cr1t_cmd(&home)
+        .args(["describe", "groups", &group_id])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("kind: group")
+                .and(predicate::str::contains(&group_id))
+                .and(predicate::str::contains("acl:")),
+        );
+
+    delete_group(&token, &group_id);
 }
 
 // --- Apply command tests ---
