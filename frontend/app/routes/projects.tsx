@@ -8,14 +8,16 @@ import {
   CardHeader,
   CardTitle,
   H1,
+  H2,
   Paragraph,
   PermissionBadge,
   AclEditor,
   Tabs,
   YamlEditor,
+  Modal,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
-import { AlertCircle, Lock } from "lucide-react";
+import { AlertCircle, Lock, Settings, Plus } from "lucide-react";
 import { formatDate } from "~/lib/utils";
 import { useState, useMemo, useCallback } from "react";
 
@@ -40,6 +42,7 @@ interface Project {
   name: string;
   labels?: Record<string, string>;
   annotations?: Record<string, string>;
+  enabled_services?: string[];
   acl?: {
     list?: Array<{
       permissions: number;
@@ -105,6 +108,12 @@ export default function ProjectPage() {
     (project.acl as AccessControlStore) || { list: [], last_mod_date: new Date().toISOString() }
   );
   const [isSavingAcl, setIsSavingAcl] = useState(false);
+  const [isAccessModalOpen, setIsAccessModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isAddFeatureModalOpen, setIsAddFeatureModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>(
+    (project.enabled_services?.[0]) || "overview"
+  );
   const revalidator = useRevalidator();
 
   const handleAclSave = async (newAcl: AccessControlStore) => {
@@ -150,6 +159,8 @@ export default function ProjectPage() {
     revalidator.revalidate();
   }, [project, revalidator]);
 
+  const enabledServices = project.enabled_services || [];
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
       {/* Header */}
@@ -168,7 +179,7 @@ export default function ProjectPage() {
               </p>
             </div>
 
-            {/* Status badge */}
+            {/* Status badge + action buttons */}
             <div className="flex items-center gap-2 shrink-0">
               {project.deletion ? (
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-(--radius-component) bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-xs font-medium">
@@ -181,6 +192,25 @@ export default function ProjectPage() {
                   Active
                 </span>
               )}
+
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsAccessModalOpen(true)}
+                data-testid="project-access-button"
+                title="Manage access"
+              >
+                <Lock className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setIsSettingsModalOpen(true)}
+                data-testid="project-settings-button"
+                title="Settings"
+              >
+                <Settings className="w-4 h-4" />
+              </Button>
             </div>
           </div>
         </div>
@@ -188,12 +218,31 @@ export default function ProjectPage() {
 
       {/* Tabbed content */}
       <div className="max-w-6xl mx-auto px-4 py-6">
-        <Tabs.Root defaultValue="overview">
-          <Tabs.List>
-            <Tabs.Trigger value="overview" data-testid="project-tab-overview">Overview</Tabs.Trigger>
-            <Tabs.Trigger value="access" data-testid="project-tab-access">Access</Tabs.Trigger>
-            <Tabs.Trigger value="yaml" data-testid="project-tab-yaml">YAML</Tabs.Trigger>
-          </Tabs.List>
+        <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
+          <div className="flex items-center gap-2">
+            <Tabs.List className="flex-1">
+              <Tabs.Trigger value="overview" data-testid="project-tab-overview">Overview</Tabs.Trigger>
+              {enabledServices.map((service) => (
+                <Tabs.Trigger
+                  key={service}
+                  value={service}
+                  data-testid={`project-tab-${service}`}
+                >
+                  {service}
+                </Tabs.Trigger>
+              ))}
+              <Tabs.Trigger value="yaml" data-testid="project-tab-yaml">YAML</Tabs.Trigger>
+            </Tabs.List>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsAddFeatureModalOpen(true)}
+              data-testid="project-add-feature-button"
+              title="Add feature"
+            >
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
 
           {/* ── Overview tab ── */}
           <Tabs.Content value="overview" className="pt-6">
@@ -314,66 +363,19 @@ export default function ProjectPage() {
               )}
           </Tabs.Content>
 
-          {/* ── Access tab ── */}
-          <Tabs.Content value="access" className="pt-6">
-            <Card className="w-full">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="flex items-center gap-2">
-                      <Lock className="w-4 h-4" />
-                      Access Control List
-                    </CardTitle>
-                    <CardDescription className="mt-1">
-                      Manage who can read or modify this project
-                    </CardDescription>
-                  </div>
-                  <AclEditor
-                    acl={currentAcl}
-                    onSave={handleAclSave}
-                    trigger={
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-testid="edit-acl-button"
-                      >
-                        Edit ACL
-                      </Button>
-                    }
-                  />
-                </div>
-              </CardHeader>
-              <CardContent>
-                {currentAcl.list.length === 0 ? (
-                  <Paragraph variant="muted" className="text-sm">
-                    No ACL entries — all authenticated users have access.
+          {/* ── Enabled Services tabs ── */}
+          {enabledServices.map((service) => (
+            <Tabs.Content key={service} value={service} className="pt-6">
+              <Card className="w-full py-12">
+                <div className="flex flex-col items-center gap-4 px-8">
+                  <H1>{service}</H1>
+                  <Paragraph className="text-center max-w-prose text-gray-600 dark:text-gray-400">
+                    Content for {service} feature will appear here
                   </Paragraph>
-                ) : (
-                  <div className="space-y-2">
-                    {currentAcl.list.map((entry, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-(--radius-component) border border-gray-100 dark:border-gray-800"
-                        data-testid={`acl-display-entry-${idx}`}
-                      >
-                        <div className="flex flex-wrap gap-1.5">
-                          {entry.principals.map((p) => (
-                            <code
-                              key={p}
-                              className="text-xs font-mono px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-(--radius-component) text-gray-700 dark:text-gray-300"
-                            >
-                              {p}
-                            </code>
-                          ))}
-                        </div>
-                        <PermissionBadge permissions={entry.permissions} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </Tabs.Content>
+                </div>
+              </Card>
+            </Tabs.Content>
+          ))}
 
           {/* ── YAML tab ── */}
           <Tabs.Content value="yaml" className="pt-6 flex flex-col min-h-100">
@@ -387,6 +389,142 @@ export default function ProjectPage() {
           </Tabs.Content>
         </Tabs.Root>
       </div>
+
+      {/* Access Modal */}
+      <Modal.Root open={isAccessModalOpen} onOpenChange={setIsAccessModalOpen}>
+        <Modal.Content className="max-w-2xl">
+          <Modal.Header>
+            <Modal.Title className="flex items-center gap-2">
+              <Lock className="w-5 h-5" />
+              Access Control
+            </Modal.Title>
+            <Modal.Description>
+              Manage who can read or modify this project
+            </Modal.Description>
+          </Modal.Header>
+
+          <div className="px-6 py-4">
+            <AclEditor
+              acl={currentAcl}
+              onSave={handleAclSave}
+              trigger={
+                <Button
+                  variant="primary"
+                  size="sm"
+                  data-testid="edit-acl-modal-button"
+                >
+                  Edit ACL
+                </Button>
+              }
+            />
+
+            <div className="mt-6 space-y-3">
+              {currentAcl.list.length === 0 ? (
+                <Paragraph variant="muted" className="text-sm">
+                  No ACL entries — all authenticated users have access.
+                </Paragraph>
+              ) : (
+                currentAcl.list.map((entry, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-(--radius-component) border border-gray-100 dark:border-gray-800"
+                    data-testid={`acl-display-entry-${idx}`}
+                  >
+                    <div className="flex flex-wrap gap-1.5">
+                      {entry.principals.map((p) => (
+                        <code
+                          key={p}
+                          className="text-xs font-mono px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-(--radius-component) text-gray-700 dark:text-gray-300"
+                        >
+                          {p}
+                        </code>
+                      ))}
+                    </div>
+                    <PermissionBadge permissions={entry.permissions} />
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <Modal.Footer>
+            <Modal.Close asChild>
+              <Button variant="secondary">Close</Button>
+            </Modal.Close>
+          </Modal.Footer>
+        </Modal.Content>
+      </Modal.Root>
+
+      {/* Settings Modal */}
+      <Modal.Root open={isSettingsModalOpen} onOpenChange={setIsSettingsModalOpen}>
+        <Modal.Content className="max-w-2xl">
+          <Modal.Header>
+            <Modal.Title className="flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Project Settings
+            </Modal.Title>
+            <Modal.Description>
+              Configure project settings and preferences
+            </Modal.Description>
+          </Modal.Header>
+
+          <div className="px-6 py-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Coming Soon</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Paragraph variant="muted" className="text-sm">
+                  Project settings will be available soon
+                </Paragraph>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Modal.Footer>
+            <Modal.Close asChild>
+              <Button variant="secondary">Close</Button>
+            </Modal.Close>
+          </Modal.Footer>
+        </Modal.Content>
+      </Modal.Root>
+
+      {/* Add Feature Modal */}
+      <Modal.Root
+        open={isAddFeatureModalOpen}
+        onOpenChange={setIsAddFeatureModalOpen}
+      >
+        <Modal.Content className="max-w-2xl">
+          <Modal.Header>
+            <Modal.Title className="flex items-center gap-2">
+              <Plus className="w-5 h-5" />
+              Enable Feature
+            </Modal.Title>
+            <Modal.Description>
+              Add a new feature to this project
+            </Modal.Description>
+          </Modal.Header>
+
+          <div className="px-6 py-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Available Features</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Paragraph variant="muted" className="text-sm">
+                  Feature selection will be available soon
+                </Paragraph>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Modal.Footer>
+            <Modal.Close asChild>
+              <Button variant="secondary">Cancel</Button>
+            </Modal.Close>
+          </Modal.Footer>
+        </Modal.Content>
+      </Modal.Root>
     </div>
   );
 }

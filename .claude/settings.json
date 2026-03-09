@@ -63,7 +63,9 @@
       "Bash(cr1t groups list)",
       "Bash(cr1t login --url http://localhost:3742 --user admin)",
       "Bash(cr1t login --url http://localhost:3742 --user root)",
-      "Bash(cr1t get projects huioject)"
+      "Bash(cr1t get projects huioject)",
+      "Bash(npm --prefix frontend run typecheck)",
+      "Bash(ls -la /Users/vedmedik/dev/critical/backend/itests/tests/*.py)"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"
