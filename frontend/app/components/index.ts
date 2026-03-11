@@ -20,3 +20,5 @@ export { AclEditor, PermissionBadge } from "./AclEditor";
 export type { AclEditorProps, AccessControlList, AccessControlStore } from "./AclEditor";
 export { YamlEditor } from "./YamlEditor";
 export type { YamlEditorProps } from "./YamlEditor";
+export { AppMenu } from "./AppMenu";
+export type { AppItem, AppMenuProps } from "./AppMenu";

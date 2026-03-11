@@ -168,6 +168,43 @@ async fn describe_impl(api_kind: &str, id: &str) -> Result<()> {
     Ok(())
 }
 
+async fn list_interactive(api_kind: &str) -> Result<()> {
+    use dialoguer::{FuzzySelect, theme::ColorfulTheme};
+
+    let ctx = context::require_current()?;
+    let data = api::list_kind(&ctx.url, &ctx.token, api_kind).await?;
+
+    let items = data["items"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    if items.is_empty() {
+        println!("No {} found.", api_kind);
+        return Ok(());
+    }
+
+    // Build display labels: "id   NAME" format
+    let labels: Vec<String> = items.iter().map(|item| {
+        let id = field(item, "id");
+        let name = field(item, "name");
+        if name.is_empty() { id } else { format!("{:<30} {}", id, name) }
+    }).collect();
+
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(format!("Select {}", api_kind))
+        .items(&labels)
+        .interact_opt()?;
+
+    match selection {
+        Some(idx) => {
+            let selected_id = field(&items[idx], "id");
+            describe_impl(api_kind, &selected_id).await
+        }
+        None => Ok(()), // user pressed Escape/Ctrl-C
+    }
+}
+
 // ─── public API ──────────────────────────────────────────────────────────────
 
 pub async fn list_groups(fmt: OutputFormat) -> Result<()> {
@@ -186,9 +223,12 @@ pub async fn describe_user(id: &str) -> Result<()> {
     describe_impl("users", id).await
 }
 
-/// `cr1t get <kind>` — list all resources of a kind
-pub async fn list_resources(kind: &str, fmt: OutputFormat) -> Result<()> {
+/// `cr1t get <kind>` — list all resources of a kind (or interactively if `-i` flag set)
+pub async fn list_resources(kind: &str, fmt: OutputFormat, interactive: bool) -> Result<()> {
     let api_kind = to_api_kind(kind);
+    if interactive {
+        return list_interactive(&api_kind).await;
+    }
     list_impl(&api_kind, fmt).await
 }
 

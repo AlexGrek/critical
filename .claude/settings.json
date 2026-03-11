@@ -65,7 +65,10 @@
       "Bash(cr1t login --url http://localhost:3742 --user root)",
       "Bash(cr1t get projects huioject)",
       "Bash(npm --prefix frontend run typecheck)",
-      "Bash(ls -la /Users/vedmedik/dev/critical/backend/itests/tests/*.py)"
+      "Bash(ls -la /Users/vedmedik/dev/critical/backend/itests/tests/*.py)",
+      "WebSearch",
+      "Bash(cargo run --bin cr1t -- edit --help)",
+      "Bash(cargo run --bin cr1t)"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"

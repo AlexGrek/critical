@@ -68,11 +68,24 @@ enum Commands {
         /// Output format
         #[arg(short = 'o', long = "output", value_name = "FORMAT", default_value = "table")]
         output: OutputFormat,
+
+        /// Open interactive fuzzy-select (arrow keys + Enter to choose, type to filter)
+        #[arg(short = 'i', long = "interactive")]
+        interactive: bool,
     },
 
     /// Describe a single resource in full YAML (with kind field)
     Describe {
         /// Resource kind — singular or plural (e.g. user, users, group, groups)
+        kind: String,
+
+        /// Resource ID
+        id: String,
+    },
+
+    /// Fetch a resource, open in $EDITOR, and save changes back
+    Edit {
+        /// Resource kind — singular or plural (e.g. group, user)
         kind: String,
 
         /// Resource ID
@@ -162,11 +175,12 @@ async fn main() {
             UsersAction::List { output } => commands::gitops::list_users(output).await,
             UsersAction::Describe { id } => commands::gitops::describe_user(&id).await,
         },
-        Commands::Get { kind, id, output } => match id {
+        Commands::Get { kind, id, output, interactive } => match id {
             Some(id) => commands::gitops::get_resource(&kind, &id, output).await,
-            None => commands::gitops::list_resources(&kind, output).await,
+            None => commands::gitops::list_resources(&kind, output, interactive).await,
         },
         Commands::Describe { kind, id } => commands::gitops::describe_resource(&kind, &id).await,
+        Commands::Edit { kind, id } => commands::edit::run(&kind, &id).await,
         Commands::Apply { filename } => commands::apply::run(filename.as_deref()).await,
         Commands::Debug { action } => match action {
             DebugAction::Events { output } => commands::debug::events(output).await,

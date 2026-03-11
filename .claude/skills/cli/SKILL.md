@@ -35,8 +35,10 @@ cli/
 │   └── commands/
 │       ├── mod.rs       — re-exports command modules
 │       ├── login.rs     — `cr1t login`, `cr1t context list/use`
-│       ├── gitops.rs    — `cr1t groups/users list/describe`
-│       └── apply.rs     — `cr1t apply -f FILE` / stdin; YAML parsing + API dispatch
+│       ├── gitops.rs    — `cr1t groups/users list/describe/get`; interactive list selection
+│       ├── apply.rs     — `cr1t apply -f FILE` / stdin; YAML parsing + API dispatch
+│       ├── edit.rs      — `cr1t edit <kind> <id>`; OS editor launch, hash-conflict handling
+│       └── debug.rs     — `cr1t debug events`; event log display
 └── tests/
     └── cli_test.rs      — integration tests (assert_cmd)
 ```
@@ -95,6 +97,112 @@ The `apply` command (`commands/apply.rs`) is the generic resource creation/updat
 
 **To support a new kind via `apply`**, no code changes are needed in `apply.rs` —
 just ensure the backend has a `KindController` registered for it.
+
+---
+
+## UX Modes: Interactive, View, and Edit
+
+The CLI supports three complementary UX modes for interacting with resources. When adding new list/get commands or supporting new resource kinds, use this guide to decide which modes to enable.
+
+### Interactive Mode (`-i` / `--interactive`)
+
+Enables fuzzy-searchable selection from a list of resources.
+
+**When to add:**
+- Any list command that returns multiple items (e.g., `cr1t get groups`, `cr1t get users`)
+- Resources where users frequently need to drill down into a specific item
+- Mutable or read-heavy resources (not write-only operations)
+
+**Pattern:**
+```rust
+// In main.rs Commands::Get variant:
+#[arg(short = 'i', long = "interactive")]
+interactive: bool,
+
+// In commands/gitops.rs list_resources():
+if interactive {
+    return list_interactive(&api_kind).await;
+}
+```
+
+**Already implemented for:**
+- `cr1t get [kind] -i` — works with any resource kind via generic `list_interactive()`
+- Reuses `dialoguer::FuzzySelect` for type-to-filter + arrow key navigation
+
+**When NOT to add:**
+- Single-item operations (e.g., `cr1t describe [kind] [id]`)
+- Write-only operations with no natural list view
+- Audit-log-only resources where browsing adds no value
+
+### View Modes (`-o table|yaml|json`)
+
+Enables output format selection for structured data.
+
+**When to add:**
+- Any command that outputs structured data (lists, single resources, events, etc.)
+- Supports YAML for easy piping to `cr1t apply`, JSON for scripting
+
+**Pattern:**
+```rust
+// In main.rs Commands variant:
+#[arg(short = 'o', long = "output", value_name = "FORMAT", default_value = "table")]
+output: OutputFormat,
+
+// In command implementation:
+match output {
+    OutputFormat::Table => { /* print table */ }
+    OutputFormat::Yaml => { /* print YAML */ }
+    OutputFormat::Json => { /* print JSON */ }
+}
+```
+
+**Already implemented for:**
+- `cr1t get [kind]` / `cr1t get [kind] [id]`
+- `cr1t groups list` / `cr1t users list`
+- `cr1t describe [kind] [id]`
+- `cr1t debug events`
+
+**When NOT to add:**
+- Login/auth commands (fixed output)
+- Context switching (no structured data)
+- Write operations with fixed success/error messages
+
+### Edit Mode (`cr1t edit [kind] [id]`)
+
+Opens resources in `$CR1T_EDITOR` / `$VISUAL` / `$EDITOR` / `vi` for interactive editing.
+
+**Implementation:**
+- Generic in `commands/edit.rs` — **no code changes needed for new resource kinds**
+- Editor resolution order: `CR1T_EDITOR` (highest priority) → `$VISUAL` → `$EDITOR` → `vi`
+- Workflow: fetch → strip server fields → open editor → save changes via upsert POST
+- Conflict detection: re-fetches `hash_code` before saving; 409 Conflict handled gracefully
+- Server-managed fields stripped from editor view: `hash_code`, `state`, `deletion`
+
+**Works automatically for:**
+- Any resource kind where the backend `KindController` supports upsert
+- Just ensure the resource is in the database schema — no CLI changes needed
+
+**When to add for new kinds:**
+- Mutable resources with complex YAML structure (groups, users, projects, tickets, service_accounts, pipeline_accounts)
+- Test via: `cr1t edit [kind] [id]`
+
+**When NOT to add:**
+- Membership edges (create/delete only; no YAML body to edit)
+- Read-only audit logs (events)
+
+### Decision Matrix: Which Modes to Support
+
+| Resource Kind | `-i` Interactive | `-o` View Modes | `cr1t edit` | Notes |
+|---|---|---|---|---|
+| groups | ✅ | ✅ | ✅ | Fully supported |
+| users | ✅ | ✅ | ✅ | Fully supported |
+| projects | ✅ | ✅ | ✅ | Fully supported |
+| tickets | ✅ | ✅ | ✅ | Fully supported |
+| permissions | ✅ | ✅ | ✅ | Editable ACLs (YAML or form mode) |
+| service_accounts | ✅ | ✅ | ✅ | Fully supported |
+| pipeline_accounts | ✅ | ✅ | ✅ | Fully supported |
+| memberships | ✅ | ✅ | ❌ | Edges; create/delete only, no YAML body |
+| events | ✅ | ✅ | ❌ | Read-only audit log; no editing |
 
 ---
 
@@ -271,3 +379,10 @@ without infrastructure as part of `cargo test -p crit-cli`.
 - [ ] New API calls in `api.rs` follow `fetch_authenticated` / `post_authenticated` pattern
 - [ ] Commands read context via `context::require_current()`, never hardcode URLs
 - [ ] Output: results → stdout, status/errors → stderr
+
+### UX Modes Checklist (for new commands/kinds)
+
+- [ ] **Interactive mode**: If adding a new list command for a mutable, multi-item resource, consider `-i` flag using `list_interactive(&api_kind)` from `gitops.rs`
+- [ ] **View modes**: All list/get commands should support `-o table|yaml|json` (already standard for existing commands)
+- [ ] **Edit mode**: New mutable resource kinds work automatically with `cr1t edit [kind] [id]` if backend `KindController` supports upsert — no CLI code changes needed; test with `cr1t edit [kind] [id]`
+- [ ] **Editor override**: If modifying editor logic, respect `CR1T_EDITOR` > `$VISUAL` > `$EDITOR` > `vi` resolution order; for `cr1t edit`, this is already implemented

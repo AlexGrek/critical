@@ -23,7 +23,18 @@ import {
   InlineCode,
   ScrollableLogWindow,
   YamlEditor,
+  AppMenu,
 } from "~/components";
+import {
+  Settings,
+  Users,
+  Bell,
+  Shield,
+  Palette,
+  Terminal,
+  Database,
+  Key,
+} from "lucide-react";
 
 export function meta() {
   return [
@@ -805,6 +816,134 @@ console.log(message);`}</CodeBlock>
               </div>
             </Card>
           </div>
+        </section>
+
+        {/* AppMenu */}
+        <section className="space-y-4">
+          <H2>AppMenu</H2>
+          <Paragraph variant="muted">
+            Phone-style app launcher grid. Tap an icon — the content panel
+            morphs out from the icon (iOS/Android behaviour). Use this instead
+            of tabs for multi-section UIs.
+          </Paragraph>
+          <Card>
+            <CardHeader>
+              <CardTitle>App Launcher (4 columns)</CardTitle>
+              <CardDescription>Tap any icon to open the app panel.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AppMenu
+                data-testid="gallery-app-menu"
+                apps={[
+                  {
+                    id: "users",
+                    icon: <Users className="w-8 h-8" />,
+                    label: "Users",
+                    color: "bg-blue-500 text-white",
+                    content: (close) => (
+                      <div className="p-6 space-y-4">
+                        <Paragraph>Manage users and their permissions.</Paragraph>
+                        <Button variant="secondary" onClick={close}>Close</Button>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "notifications",
+                    icon: <Bell className="w-8 h-8" />,
+                    label: "Notifications",
+                    color: "bg-orange-500 text-white",
+                    badge: 3,
+                    content: (
+                      <div className="p-6 space-y-3">
+                        <Paragraph>You have 3 unread notifications.</Paragraph>
+                        <Paragraph variant="muted" size="sm">• Deploy completed for infra project</Paragraph>
+                        <Paragraph variant="muted" size="sm">• alice commented on ticket T-42</Paragraph>
+                        <Paragraph variant="muted" size="sm">• New group membership request</Paragraph>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "security",
+                    icon: <Shield className="w-8 h-8" />,
+                    label: "Security",
+                    color: "bg-red-500 text-white",
+                    content: (
+                      <div className="p-6">
+                        <Paragraph>Security settings and audit logs.</Paragraph>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "settings",
+                    icon: <Settings className="w-8 h-8" />,
+                    label: "Settings",
+                    color: "bg-gray-600 text-white",
+                    content: (
+                      <div className="p-6">
+                        <Paragraph>Application settings.</Paragraph>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "theme",
+                    icon: <Palette className="w-8 h-8" />,
+                    label: "Appearance",
+                    color: "bg-purple-500 text-white",
+                    content: (
+                      <div className="p-6 space-y-4">
+                        <Paragraph>Customize the look and feel.</Paragraph>
+                        <ThemeCombobox />
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "terminal",
+                    icon: <Terminal className="w-8 h-8" />,
+                    label: "Terminal",
+                    color: "bg-gray-900 dark:bg-gray-700 text-green-400",
+                    content: (
+                      <div className="p-4 h-full flex flex-col">
+                        <ScrollableLogWindow
+                          className="flex-1 min-h-50"
+                          logs={[
+                            "$ cr1t context list",
+                            "  * default  https://api.critical.dev",
+                            "$ cr1t login",
+                            "Logged in as admin",
+                          ]}
+                        />
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "database",
+                    icon: <Database className="w-8 h-8" />,
+                    label: "Database",
+                    color: "bg-teal-500 text-white",
+                    content: (
+                      <div className="p-6">
+                        <Paragraph>ArangoDB collections and schema info.</Paragraph>
+                      </div>
+                    ),
+                  },
+                  {
+                    id: "apikeys",
+                    icon: <Key className="w-8 h-8" />,
+                    label: "API Keys",
+                    color: "bg-yellow-500 text-white",
+                    badge: "new",
+                    content: (close) => (
+                      <div className="p-6 space-y-4">
+                        <Paragraph>Create and revoke API keys for programmatic access.</Paragraph>
+                        <Button variant="primary">Generate key</Button>
+                        <Button variant="ghost" onClick={close} className="ml-2">Cancel</Button>
+                      </div>
+                    ),
+                  },
+                ]}
+              />
+            </CardContent>
+          </Card>
         </section>
 
         {/* Footer */}
