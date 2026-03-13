@@ -1,3 +1,4 @@
+pub mod crd_models;
 pub mod data_models;
 pub mod util_models;
 pub mod event_models;
