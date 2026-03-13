@@ -77,6 +77,7 @@ pub struct ArangoDb {
     pub unprocessed_images: Collection<ReqwestClient>,
     pub persistent_files: Collection<ReqwestClient>,
     pub system_events: Collection<ReqwestClient>,
+    pub crds: Collection<ReqwestClient>,
 }
 
 // ---------------------------------------------------------------------------
@@ -144,6 +145,7 @@ impl ArangoDb {
             unprocessed_images: handles.unprocessed_images,
             persistent_files: handles.persistent_files,
             system_events: handles.system_events,
+            crds: handles.crds,
         };
 
         instance.seed_permissions().await?;
@@ -180,6 +182,7 @@ impl ArangoDb {
             unprocessed_images: handles.unprocessed_images,
             persistent_files: handles.persistent_files,
             system_events: handles.system_events,
+            crds: handles.crds,
         })
     }
 
@@ -213,6 +216,7 @@ impl ArangoDb {
             unprocessed_images: handles.unprocessed_images,
             persistent_files: handles.persistent_files,
             system_events: handles.system_events,
+            crds: handles.crds,
         })
     }
 

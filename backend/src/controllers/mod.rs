@@ -7,7 +7,9 @@ pub mod group_controller;
 pub mod gitops_controller;
 pub mod membership_controller;
 pub mod project_controller;
+pub mod crd_controller;
 
+use crd_controller::CrdController;
 use gitops_controller::{DefaultKindController, GitopsController, KindController};
 use group_controller::GroupController;
 use membership_controller::MembershipController;
@@ -20,6 +22,7 @@ pub struct Controller {
     pub gitops: GitopsController,
     pub membership: MembershipController,
     pub project: ProjectController,
+    pub crd: CrdController,
     default: DefaultKindController,
 }
 
@@ -31,6 +34,7 @@ impl Controller {
             gitops: GitopsController::new(db.clone()),
             membership: MembershipController::new(db.clone()),
             project: ProjectController::new(db.clone()),
+            crd: CrdController::new(db.clone()),
             default: DefaultKindController,
         }
     }
@@ -42,6 +46,7 @@ impl Controller {
             "groups" => &self.group,
             "memberships" => &self.membership,
             "projects" => &self.project,
+            "crds" => &self.crd,
             _ => &self.default,
         }
     }

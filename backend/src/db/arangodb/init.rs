@@ -26,6 +26,7 @@ const VERTEX_COLLECTIONS: &[&str] = &[
     "unprocessed_images",
     "persistent_files",
     "system_events",
+    "crds",
 ];
 
 /// Edge collections created at startup.
@@ -42,6 +43,7 @@ pub const WRITE_COLLECTIONS: &[&str] = &[
     "permissions",
     "resource_history",
     "resource_events",
+    "crds",
 ];
 
 /// Cached collection handles opened from a database.
@@ -58,6 +60,7 @@ pub struct CollectionHandles {
     pub unprocessed_images: Collection<ReqwestClient>,
     pub persistent_files: Collection<ReqwestClient>,
     pub system_events: Collection<ReqwestClient>,
+    pub crds: Collection<ReqwestClient>,
 }
 
 /// Obtain the database, creating it if it does not exist.
@@ -121,6 +124,10 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         .collection("system_events")
         .await
         .map_err(|e| anyhow!(e.to_string()))?;
+    let crds = db
+        .collection("crds")
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
 
     Ok(CollectionHandles {
         users,
@@ -135,6 +142,7 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         unprocessed_images,
         persistent_files,
         system_events,
+        crds,
     })
 }
 
@@ -197,6 +205,14 @@ async fn create_persistent_index(
 /// lets ArangoDB satisfy `FILTER doc.project == @id AND doc.deletion == null`
 /// without a full collection scan.  Add an entry here whenever a new scoped
 /// collection (e.g. `tasks`) is introduced.
+///
+/// **`memberships`** — edge collection filtered by `group`, `principal`, and
+/// `deletion` in various queries; composite `["group", "deletion"]` covers the
+/// most common pattern; a separate `["principal"]` index covers principal-first
+/// lookups (e.g. "remove principal from all groups").
+///
+/// **`resource_history` / `resource_events`** — always queried by the
+/// `(resource_kind, resource_key)` pair; composite index avoids full scans.
 pub async fn ensure_indexes(
     base_url: &str,
     db_name: &str,
@@ -204,7 +220,7 @@ pub async fn ensure_indexes(
     password: &str,
 ) -> Result<()> {
     // Indexes for global (non-scoped) collections: filter on deletion only.
-    for col in &["users", "groups", "projects", "service_accounts", "pipeline_accounts"] {
+    for col in &["users", "groups", "projects", "service_accounts", "pipeline_accounts", "crds"] {
         create_persistent_index(base_url, db_name, user, password, col, &["deletion"]).await?;
     }
 
@@ -212,6 +228,14 @@ pub async fn ensure_indexes(
     // Add new scoped collections here as they are introduced.
     // Example (uncomment when tasks collection is added):
     // create_persistent_index(base_url, db_name, user, password, "tasks", &["project", "deletion"]).await?;
+
+    // memberships: most queries filter by group (+ deletion); principal-first lookups also common.
+    create_persistent_index(base_url, db_name, user, password, "memberships", &["group", "deletion"]).await?;
+    create_persistent_index(base_url, db_name, user, password, "memberships", &["principal"]).await?;
+
+    // resource_history / resource_events: always queried by (resource_kind, resource_key) pair.
+    create_persistent_index(base_url, db_name, user, password, "resource_history", &["resource_kind", "resource_key"]).await?;
+    create_persistent_index(base_url, db_name, user, password, "resource_events", &["resource_kind", "resource_key"]).await?;
 
     // Indexes for system_events: filter/sort by kind, priority, and moment.
     create_persistent_index(base_url, db_name, user, password, "system_events", &["kind"]).await?;

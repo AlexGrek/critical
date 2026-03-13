@@ -7,21 +7,23 @@ use serde::{Deserialize, Serialize};
 // ---------------------------------------------------------------------------
 
 /// Scope determines where instances of this resource live.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CrdScope {
     /// Cluster-wide resource, accessed at `/v1/global/{kind}`.
+    #[default]
     Global,
     /// Namespaced under a project, accessed at `/v1/projects/{project}/{kind}`.
     Project,
 }
 
 /// Controls how ACLs are applied to instances of this resource kind.
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum CrdAclMode {
     /// No ACL field on instances; access controlled exclusively by super-permissions.
     /// Equivalent to `#[crit_resource(no_acl)]`.
+    #[default]
     Special,
     /// Instances do not carry their own ACL; permission checks fall back to
     /// the parent project's ACL (project-scoped only).
@@ -31,7 +33,7 @@ pub enum CrdAclMode {
 }
 
 /// Human-readable noun forms used in CLI output, API error messages, and UI.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct CrdNouns {
     /// Singular form, e.g. `"deployment"`.
     pub singular: String,
@@ -99,10 +101,12 @@ pub enum FieldType {
         variants: Vec<String>,
     },
     /// Bitflags stored as a `u64`. Each named flag maps to a single bit.
-    /// Serialized as an integer; the `flags` map provides human-readable names.
+    /// Serialized as an integer; the `bit_positions` map provides human-readable names.
+    /// The map value is the *bit position* (0-63), not the bit *value* (1 << position).
+    /// For example, `{"can_deploy": 0, "can_rollback": 1}` means the first two bits.
     Bitflags {
-        /// Flag name to bit position (0-63).
-        flags: HashMap<String, u8>,
+        /// Map of flag name → bit position (0-63). Bit value = 1 << bit_position.
+        bit_positions: HashMap<String, u8>,
     },
     /// Inline object with its own named fields (recursive).
     Object {
@@ -146,21 +150,13 @@ pub struct FieldDef {
 
 /// A Custom Resource Definition describes a new resource kind that the system
 /// manages dynamically. CRDs are themselves stored as documents in the `crds`
-/// collection, and their instances live in the collection named by `name`.
+/// collection, and their instances live in the collection named by `id`.
 ///
 /// CRDs are fully describable as YAML or JSON — no Rust code generation
 /// required. The generic gitops handlers use the CRD schema at runtime for
 /// validation, serialization, and ACL enforcement.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[crit_derive::crit_resource(collection = "crds", prefix = "", no_acl)]
 pub struct CustomResourceDefinition {
-    /// Internal machine name. Used as the ArangoDB collection name and the
-    /// API path segment (`/v1/global/{name}` or `/v1/projects/{project}/{name}`).
-    ///
-    /// Constraints: alphanumeric + `_` + `-`, must not start with a digit or `-`,
-    /// must not be only digits, 2-63 characters, lowercase.
-    #[serde(rename = "_key")]
-    pub name: String,
-
     /// Where instances of this resource live.
     pub scope: CrdScope,
 
@@ -340,7 +336,7 @@ mod tests {
         );
 
         let crd = CustomResourceDefinition {
-            name: "deployments".into(),
+            id: "deployments".into(),
             scope: CrdScope::Project,
             acl_mode: CrdAclMode::Inherit,
             nouns: CrdNouns {
@@ -357,11 +353,12 @@ mod tests {
             id_prefix: "dep_".into(),
             super_permission: None,
             description: Some("Container deployment managed by the platform".into()),
+            ..Default::default()
         };
 
         let yaml = serde_json::to_string_pretty(&crd).unwrap();
         let parsed: CustomResourceDefinition = serde_json::from_str(&yaml).unwrap();
-        assert_eq!(parsed.name, "deployments");
+        assert_eq!(parsed.id, "deployments");
         assert_eq!(parsed.scope, CrdScope::Project);
         assert_eq!(parsed.acl_mode, CrdAclMode::Inherit);
         assert_eq!(parsed.relations.len(), 1);
@@ -414,13 +411,13 @@ mod tests {
 
     #[test]
     fn bitflags_field() {
-        let mut flags = HashMap::new();
-        flags.insert("can_deploy".into(), 0);
-        flags.insert("can_rollback".into(), 1);
-        flags.insert("can_scale".into(), 2);
+        let mut bit_positions = HashMap::new();
+        bit_positions.insert("can_deploy".into(), 0u8);
+        bit_positions.insert("can_rollback".into(), 1u8);
+        bit_positions.insert("can_scale".into(), 2u8);
 
         let fd = FieldDef {
-            field_type: FieldType::Bitflags { flags },
+            field_type: FieldType::Bitflags { bit_positions },
             required: false,
             default: Some(serde_json::json!(0)),
             description: None,
@@ -430,9 +427,10 @@ mod tests {
 
         let json = serde_json::to_string(&fd).unwrap();
         let parsed: FieldDef = serde_json::from_str(&json).unwrap();
-        if let FieldType::Bitflags { flags } = &parsed.field_type {
-            assert_eq!(flags.len(), 3);
-            assert_eq!(flags["can_deploy"], 0);
+        if let FieldType::Bitflags { bit_positions } = &parsed.field_type {
+            assert_eq!(bit_positions.len(), 3);
+            assert_eq!(bit_positions["can_deploy"], 0);
+            assert_eq!(1u64 << bit_positions["can_rollback"], 2u64); // bit value = 1 << position
         } else {
             panic!("Expected Bitflags variant");
         }
