@@ -4,15 +4,14 @@ import {
   Header,
   Paragraph,
   Button,
-  Card,
-  CardTitle,
-  CardContent,
   Table,
-  Tabs,
+  AppMenu,
   PrincipalChip,
 } from "~/components";
+import type { AppItem } from "~/components";
 import { formatRelativeTime } from "~/lib/utils";
 import { usePrincipals } from "~/lib/usePrincipals";
+import { Activity, History, Users, Settings } from "lucide-react";
 
 export function meta({}: Route.MetaArgs) {
   return [
@@ -528,6 +527,53 @@ function ChangeHistoryTab() {
 // Page
 // ---------------------------------------------------------------------------
 
+const ADMIN_APPS: AppItem[] = [
+  {
+    id: "events",
+    icon: <Activity className="w-8 h-8" />,
+    label: "System Events",
+    color: "bg-indigo-500 text-white",
+    content: (
+      <div className="p-4">
+        <SystemEventsTab />
+      </div>
+    ),
+  },
+  {
+    id: "history",
+    icon: <History className="w-8 h-8" />,
+    label: "Change History",
+    color: "bg-purple-500 text-white",
+    content: (
+      <div className="p-4">
+        <ChangeHistoryTab />
+      </div>
+    ),
+  },
+  {
+    id: "users",
+    icon: <Users className="w-8 h-8" />,
+    label: "Users",
+    color: "bg-blue-500 text-white",
+    content: (
+      <div className="p-6">
+        <Paragraph variant="muted">User management coming soon.</Paragraph>
+      </div>
+    ),
+  },
+  {
+    id: "settings",
+    icon: <Settings className="w-8 h-8" />,
+    label: "System Settings",
+    color: "bg-gray-600 text-white",
+    content: (
+      <div className="p-6">
+        <Paragraph variant="muted">System settings coming soon.</Paragraph>
+      </div>
+    ),
+  },
+];
+
 export default function AdminPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 py-8">
@@ -539,59 +585,11 @@ export default function AdminPage() {
           </Paragraph>
         </div>
 
-        {/* Overview cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card>
-            <CardContent>
-              <CardTitle>Users</CardTitle>
-              <Paragraph size="sm" variant="muted">
-                Manage user accounts and permissions
-              </Paragraph>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent>
-              <CardTitle>System Settings</CardTitle>
-              <Paragraph size="sm" variant="muted">
-                Configure system-wide settings and preferences
-              </Paragraph>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent>
-              <CardTitle>Audit Log</CardTitle>
-              <Paragraph size="sm" variant="muted">
-                System events and resource change history — see below
-              </Paragraph>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Audit log section */}
-        <Card>
-          <CardContent>
-            <Tabs.Root defaultValue="events">
-              <Tabs.List>
-                <Tabs.Trigger value="events" data-testid="tab-events">
-                  System Events
-                </Tabs.Trigger>
-                <Tabs.Trigger value="history" data-testid="tab-history">
-                  Change History
-                </Tabs.Trigger>
-              </Tabs.List>
-
-              <Tabs.Content value="events" className="pt-4">
-                <SystemEventsTab />
-              </Tabs.Content>
-
-              <Tabs.Content value="history" className="pt-4">
-                <ChangeHistoryTab />
-              </Tabs.Content>
-            </Tabs.Root>
-          </CardContent>
-        </Card>
+        <AppMenu
+          apps={ADMIN_APPS}
+          columns={4}
+          data-testid="admin-app-menu"
+        />
       </div>
     </div>
   );

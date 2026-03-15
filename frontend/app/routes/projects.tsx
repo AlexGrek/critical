@@ -2,6 +2,7 @@ import type { Route } from "./+types/projects";
 import { useLoaderData, useRevalidator } from "react-router";
 import {
   Button,
+  Input,
   Card,
   CardContent,
   CardDescription,
@@ -18,9 +19,9 @@ import {
   PrincipalChip,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
-import { AlertCircle, Lock, Settings, Plus } from "lucide-react";
+import { AlertCircle, Lock, Settings, Plus, Github, GitBranch, Trash2, ExternalLink } from "lucide-react";
 import { formatDate } from "~/lib/utils";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef } from "react";
 import { resolvePrincipals } from "~/lib/principals";
 import type { PrincipalMap } from "~/lib/principals";
 
@@ -40,9 +41,20 @@ interface DeletionInfo {
   deleted_by: string;
 }
 
+type RepoProvider = "git" | "github" | "gitlab" | "bitbucket" | "svn" | "mercurial" | "custom";
+
+interface RepoLink {
+  url: string;
+  provider: RepoProvider;
+  name?: string;
+  default_branch?: string;
+}
+
 interface Project {
   id: string;
   name: string;
+  description?: string;
+  repositories?: RepoLink[];
   labels?: Record<string, string>;
   annotations?: Record<string, string>;
   enabled_services?: string[];
@@ -176,6 +188,81 @@ export default function ProjectPage() {
   }, [project, revalidator]);
 
   const enabledServices = project.enabled_services || [];
+  const repositories = project.repositories || [];
+
+  // ── Repositories ──────────────────────────────────────────────────────────
+  const [isAddingRepo, setIsAddingRepo] = useState(false);
+  const [repoForm, setRepoForm] = useState<{
+    url: string;
+    provider: RepoProvider;
+    name: string;
+    default_branch: string;
+  }>({ url: "", provider: "github", name: "", default_branch: "" });
+  const [repoSaving, setRepoSaving] = useState(false);
+  const [repoError, setRepoError] = useState("");
+  const [removingIdx, setRemovingIdx] = useState<number | null>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+
+  function detectProvider(url: string): RepoProvider {
+    if (url.includes("github.com")) return "github";
+    if (url.includes("gitlab.com")) return "gitlab";
+    if (url.includes("bitbucket.org")) return "bitbucket";
+    return "git";
+  }
+
+  const saveRepositories = useCallback(
+    async (repos: RepoLink[]) => {
+      const res = await fetch(`/api/v1/global/projects/${project.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ ...project, repositories: repos }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as Record<string, unknown>;
+        throw new Error(String(body.message ?? body.error ?? `HTTP ${res.status}`));
+      }
+      revalidator.revalidate();
+    },
+    [project, revalidator]
+  );
+
+  const handleAddRepo = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setRepoError("");
+      if (!repoForm.url.trim()) return;
+      setRepoSaving(true);
+      try {
+        const newRepo: RepoLink = {
+          url: repoForm.url.trim(),
+          provider: repoForm.provider,
+          ...(repoForm.name.trim() ? { name: repoForm.name.trim() } : {}),
+          ...(repoForm.default_branch.trim() ? { default_branch: repoForm.default_branch.trim() } : {}),
+        };
+        await saveRepositories([...repositories, newRepo]);
+        setIsAddingRepo(false);
+        setRepoForm({ url: "", provider: "github", name: "", default_branch: "" });
+      } catch (err) {
+        setRepoError(err instanceof Error ? err.message : "Failed to add repository");
+      } finally {
+        setRepoSaving(false);
+      }
+    },
+    [repoForm, repositories, saveRepositories]
+  );
+
+  const handleRemoveRepo = useCallback(
+    async (idx: number) => {
+      setRemovingIdx(idx);
+      try {
+        await saveRepositories(repositories.filter((_, i) => i !== idx));
+      } finally {
+        setRemovingIdx(null);
+      }
+    },
+    [repositories, saveRepositories]
+  );
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
@@ -319,6 +406,196 @@ export default function ProjectPage() {
                 </CardContent>
               </Card>
             </div>
+
+            {/* Repositories */}
+            <Card className="mb-8" data-testid="repositories-card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Repositories</CardTitle>
+                    <CardDescription>Source code repositories linked to this project</CardDescription>
+                  </div>
+                  {!isAddingRepo && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setIsAddingRepo(true);
+                        setTimeout(() => urlInputRef.current?.focus(), 50);
+                      }}
+                      data-testid="add-repo-button"
+                      title="Add repository"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {repositories.length === 0 && !isAddingRepo && (
+                  <Paragraph variant="muted" size="sm" data-testid="no-repos-message">
+                    No repositories linked yet.
+                  </Paragraph>
+                )}
+
+                {/* Repo list */}
+                {repositories.length > 0 && (
+                  <div className="space-y-2 mb-4" data-testid="repo-list">
+                    {repositories.map((repo, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800/60 rounded-(--radius-component) border border-gray-100 dark:border-gray-800"
+                        data-testid={`repo-entry-${idx}`}
+                      >
+                        <span className="shrink-0 text-gray-400 dark:text-gray-500">
+                          {repo.provider === "github" ? (
+                            <Github className="w-4 h-4" />
+                          ) : (
+                            <GitBranch className="w-4 h-4" />
+                          )}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <a
+                              href={repo.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm font-mono text-primary-600 dark:text-primary-400 hover:underline truncate"
+                              data-testid={`repo-url-${idx}`}
+                            >
+                              {repo.name || repo.url}
+                            </a>
+                            <ExternalLink className="w-3 h-3 shrink-0 text-gray-400" />
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="text-xs text-gray-400 dark:text-gray-500 capitalize">{repo.provider}</span>
+                            {repo.name && (
+                              <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate">{repo.url}</span>
+                            )}
+                            {repo.default_branch && (
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                branch: <code className="font-mono">{repo.default_branch}</code>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleRemoveRepo(idx)}
+                          disabled={removingIdx === idx}
+                          data-testid={`remove-repo-${idx}`}
+                          title="Remove repository"
+                          className="shrink-0 text-gray-400 hover:text-red-500"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add repo form */}
+                {isAddingRepo && (
+                  <form
+                    onSubmit={handleAddRepo}
+                    className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-800 mt-2"
+                    data-testid="add-repo-form"
+                  >
+                    {repoError && (
+                      <p className="text-xs text-red-600 dark:text-red-400" data-testid="repo-error">{repoError}</p>
+                    )}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Repository URL <span className="text-red-500">*</span>
+                      </label>
+                      <Input
+                        ref={urlInputRef}
+                        data-testid="repo-url-input"
+                        monospace
+                        value={repoForm.url}
+                        onChange={(e) => {
+                          const url = e.target.value;
+                          setRepoForm((f) => ({
+                            ...f,
+                            url,
+                            provider: url ? detectProvider(url) : f.provider,
+                          }));
+                        }}
+                        placeholder="https://github.com/org/repo"
+                        required
+                      />
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Provider</label>
+                        <select
+                          value={repoForm.provider}
+                          onChange={(e) => setRepoForm((f) => ({ ...f, provider: e.target.value as RepoProvider }))}
+                          data-testid="repo-provider-select"
+                          className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-(--radius-component) text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        >
+                          <option value="github">GitHub</option>
+                          <option value="gitlab">GitLab</option>
+                          <option value="bitbucket">Bitbucket</option>
+                          <option value="git">Git</option>
+                          <option value="svn">SVN</option>
+                          <option value="mercurial">Mercurial</option>
+                          <option value="custom">Custom</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Display name <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <Input
+                          data-testid="repo-name-input"
+                          value={repoForm.name}
+                          onChange={(e) => setRepoForm((f) => ({ ...f, name: e.target.value }))}
+                          placeholder="my-repo"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Default branch <span className="text-gray-400">(optional)</span>
+                        </label>
+                        <Input
+                          data-testid="repo-branch-input"
+                          monospace
+                          value={repoForm.default_branch}
+                          onChange={(e) => setRepoForm((f) => ({ ...f, default_branch: e.target.value }))}
+                          placeholder="main"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        size="sm"
+                        disabled={repoSaving || !repoForm.url.trim()}
+                        data-testid="save-repo-button"
+                      >
+                        {repoSaving ? "Saving…" : "Add repository"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setIsAddingRepo(false);
+                          setRepoError("");
+                          setRepoForm({ url: "", provider: "github", name: "", default_branch: "" });
+                        }}
+                        data-testid="cancel-add-repo"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Labels & Annotations */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

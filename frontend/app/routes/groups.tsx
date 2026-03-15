@@ -30,7 +30,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from "lucide-react";
-import { cn, formatDate } from "~/lib/utils";
+import { cn, formatDate, nameToId } from "~/lib/utils";
 
 // ---------------------------------------------------------------------------
 // API types
@@ -318,6 +318,7 @@ export default function Groups() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", id: "" });
   const [createError, setCreateError] = useState("");
+  const [idLocked, setIdLocked] = useState(false);
 
   // ---- Editor panel ----
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -518,6 +519,7 @@ export default function Groups() {
       setCreateOpen(false);
       setCreateForm({ name: "", id: "" });
       setCreateError("");
+      setIdLocked(false);
       revalidator.revalidate();
     }
 
@@ -587,6 +589,7 @@ export default function Groups() {
               if (!open) {
                 setCreateForm({ name: "", id: "" });
                 setCreateError("");
+                setIdLocked(false);
               }
             }}
           >
@@ -629,9 +632,14 @@ export default function Groups() {
                         id="group-name"
                         data-testid="group-name-input"
                         value={createForm.name}
-                        onChange={(e) =>
-                          setCreateForm({ ...createForm, name: e.target.value })
-                        }
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setCreateForm((f) => ({
+                            ...f,
+                            name,
+                            id: idLocked ? f.id : nameToId(name),
+                          }));
+                        }}
                         placeholder="Engineering Team"
                         required
                       />
@@ -648,6 +656,7 @@ export default function Groups() {
                         monospace
                         data-testid="group-id-input"
                         value={createForm.id}
+                        onFocus={() => setIdLocked(true)}
                         onChange={(e) =>
                           setCreateForm({
                             ...createForm,

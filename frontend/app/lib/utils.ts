@@ -71,3 +71,16 @@ export function truncate(str: string, length: number): string {
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+/**
+ * Derive a valid resource ID slug from a display name.
+ * Rules: lowercase, only [a-z0-9_], no leading digit, collapsed underscores.
+ * e.g. "Engineering Team!" → "engineering_team"
+ */
+export function nameToId(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_") // non-alphanumeric runs → single _
+    .replace(/^[_0-9]+/, "")     // strip leading underscores / digits
+    .replace(/_+$/, "");         // strip trailing underscores
+}

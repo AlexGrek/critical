@@ -25,7 +25,7 @@ import {
   Users,
   ArrowRight,
 } from "lucide-react";
-import { cn, formatDate } from "~/lib/utils";
+import { cn, formatDate, nameToId } from "~/lib/utils";
 
 // ---------------------------------------------------------------------------
 // API types
@@ -252,6 +252,7 @@ export default function ProjectsListPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", id: "" });
   const [createError, setCreateError] = useState("");
+  const [idLocked, setIdLocked] = useState(false);
 
   // Delete confirmation
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -290,6 +291,7 @@ export default function ProjectsListPage() {
         setCreateOpen(false);
         setCreateForm({ name: "", id: "" });
         setCreateError("");
+        setIdLocked(false);
         revalidator.revalidate();
       }
       if (result.intent === "delete" && "success" in result && result.success) {
@@ -334,6 +336,7 @@ export default function ProjectsListPage() {
               if (!open) {
                 setCreateForm({ name: "", id: "" });
                 setCreateError("");
+                setIdLocked(false);
               }
             }}
           >
@@ -376,12 +379,14 @@ export default function ProjectsListPage() {
                         id="project-name"
                         data-testid="project-name-input"
                         value={createForm.name}
-                        onChange={(e) =>
-                          setCreateForm({
-                            ...createForm,
-                            name: e.target.value,
-                          })
-                        }
+                        onChange={(e) => {
+                          const name = e.target.value;
+                          setCreateForm((f) => ({
+                            ...f,
+                            name,
+                            id: idLocked ? f.id : nameToId(name),
+                          }));
+                        }}
                         placeholder="My Awesome Project"
                         required
                       />
@@ -398,6 +403,7 @@ export default function ProjectsListPage() {
                         monospace
                         data-testid="project-id-input"
                         value={createForm.id}
+                        onFocus={() => setIdLocked(true)}
                         onChange={(e) =>
                           setCreateForm({
                             ...createForm,
