@@ -69,7 +69,7 @@ function UserAvatar({ user, size }: { user: AuthUser | null; size: number }) {
       <img
         src={user.avatarUrl}
         alt={user.name}
-        className="rounded-full object-cover"
+        className="rounded-(--radius-component) object-cover"
         style={{ width: size, height: size }}
         data-testid="topbar-avatar-img"
       />
@@ -80,7 +80,7 @@ function UserAvatar({ user, size }: { user: AuthUser | null; size: number }) {
     return (
       <div
         className={cn(
-          "rounded-full flex items-center justify-center",
+          "rounded-(--radius-component) flex items-center justify-center",
           "bg-primary-600 text-white font-medium select-none"
         )}
         style={{ width: size, height: size, fontSize: size * 0.4 }}
@@ -116,7 +116,7 @@ function UserMenu({ user, scrolled }: { user: AuthUser | null; scrolled: boolean
         <button
           className={cn(
             "flex items-center justify-center",
-            "rounded-full transition-colors cursor-pointer",
+            "rounded-(--radius-component) transition-colors cursor-pointer",
             "hover:ring-2 hover:ring-primary-500/40"
           )}
           aria-label="User menu"
