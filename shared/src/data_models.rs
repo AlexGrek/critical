@@ -220,3 +220,91 @@ pub struct Project {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub enabled_services: Vec<ProjectService>,
 }
+
+// ---------------------------------------------------------------------------
+// TicketGroup sub-types
+// ---------------------------------------------------------------------------
+
+/// Supported field types for custom ticket fields.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum TicketFieldType {
+    Text,
+    Number,
+    Boolean,
+    Date,
+    /// Reference to a principal (user, group, etc.)
+    User,
+    /// One value chosen from `options`
+    SingleSelect,
+    /// Multiple values chosen from `options`
+    MultiSelect,
+}
+
+/// A custom field definition within a ticket type.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TicketFieldDef {
+    pub name: String,
+    pub field_type: TicketFieldType,
+    pub required: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Allowed values for SingleSelect / MultiSelect fields.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub options: Vec<String>,
+}
+
+/// Workflow category that classifies a status for burndown / progress tracking.
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusCategory {
+    Todo,
+    InProgress,
+    Done,
+}
+
+/// A named workflow status belonging to a ticket type.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TicketStatus {
+    pub name: String,
+    pub category: StatusCategory,
+}
+
+/// A ticket type definition within a group (e.g. "Bug", "Story", "Epic").
+/// Each type has its own workflow statuses and optional custom fields.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TicketTypeDef {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Ordered workflow statuses for this ticket type.
+    pub statuses: Vec<TicketStatus>,
+    /// Custom fields beyond the standard set (title, assignee, priority, etc.).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub fields: Vec<TicketFieldDef>,
+}
+
+// ---------------------------------------------------------------------------
+// TicketGroup (project-scoped)
+// ---------------------------------------------------------------------------
+
+/// A JIRA-style issue type scheme scoped to a project.
+///
+/// The resource `id` must be 2-6 capital letters A-Z (e.g. `BUG`, `TASK`, `FEAT`).
+/// It is stored in ArangoDB as `_key = "tg_{id}"` (prefix added by the controller).
+/// Each group defines one or more ticket types, each with their own workflow
+/// statuses and optional custom fields.
+#[crit_derive::crit_resource(collection = "ticket_groups", prefix = "tg_")]
+pub struct TicketGroup {
+    /// Display name of the ticket group (e.g. "Engineering Bugs").
+    #[brief]
+    pub name: String,
+    /// Human-readable description of what ticket types this group covers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Ticket type definitions — each type has its own statuses and fields.
+    #[serde(default)]
+    pub ticket_types: Vec<TicketTypeDef>,
+    /// Parent project `_key` — injected by the scoped gitops handler on create.
+    pub project: String,
+}

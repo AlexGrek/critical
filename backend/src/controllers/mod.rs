@@ -8,12 +8,14 @@ pub mod gitops_controller;
 pub mod membership_controller;
 pub mod project_controller;
 pub mod crd_controller;
+pub mod ticket_group_controller;
 
 use crd_controller::CrdController;
 use gitops_controller::{DefaultKindController, GitopsController, KindController};
 use group_controller::GroupController;
 use membership_controller::MembershipController;
 use project_controller::ProjectController;
+use ticket_group_controller::TicketGroupController;
 use user_controller::UserController;
 
 pub struct Controller {
@@ -23,6 +25,7 @@ pub struct Controller {
     pub membership: MembershipController,
     pub project: ProjectController,
     pub crd: CrdController,
+    pub ticket_group: TicketGroupController,
     default: DefaultKindController,
 }
 
@@ -35,6 +38,7 @@ impl Controller {
             membership: MembershipController::new(db.clone()),
             project: ProjectController::new(db.clone()),
             crd: CrdController::new(db.clone()),
+            ticket_group: TicketGroupController::new(db.clone()),
             default: DefaultKindController,
         }
     }
@@ -47,6 +51,7 @@ impl Controller {
             "memberships" => &self.membership,
             "projects" => &self.project,
             "crds" => &self.crd,
+            "ticketgroups" => &self.ticket_group,
             _ => &self.default,
         }
     }

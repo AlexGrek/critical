@@ -19,6 +19,15 @@ pub fn to_singular_kind(kind: &str) -> &str {
     kind.strip_suffix('s').unwrap_or(kind)
 }
 
+/// Resource kinds that are project-scoped (accessed via /v1/projects/{project}/{kind}).
+/// These kinds cannot be listed/fetched via the global /v1/global/{kind} endpoint.
+const SCOPED_KINDS: &[&str] = &["ticketgroups"];
+
+/// Returns true if `kind` (plural form) is a project-scoped resource.
+pub fn is_scoped_kind(kind: &str) -> bool {
+    SCOPED_KINDS.contains(&kind)
+}
+
 #[derive(Debug, Serialize)]
 pub struct LoginRequest {
     pub user: String,
@@ -105,6 +114,46 @@ pub async fn apply_object(base_url: &str, token: &str, kind: &str, id: &str, bod
     post_authenticated(&url, token, body).await
 }
 
+// ─── scoped (project-namespaced) API ─────────────────────────────────────────
+
+pub async fn list_scoped_kind(base_url: &str, token: &str, project: &str, kind: &str) -> Result<Value> {
+    let url = format!("{}/api/v1/projects/{}/{}", base_url.trim_end_matches('/'), project, kind);
+    fetch_authenticated(&url, token).await
+}
+
+pub async fn get_scoped_kind(base_url: &str, token: &str, project: &str, kind: &str, id: &str) -> Result<Value> {
+    let url = format!("{}/api/v1/projects/{}/{}/{}", base_url.trim_end_matches('/'), project, kind, id);
+    fetch_authenticated(&url, token).await
+}
+
+/// Fetch a scoped resource, returning `None` if it does not exist (404).
+pub async fn try_get_scoped_kind(base_url: &str, token: &str, project: &str, kind: &str, id: &str) -> Result<Option<Value>> {
+    let url = format!("{}/api/v1/projects/{}/{}/{}", base_url.trim_end_matches('/'), project, kind, id);
+    let client = reqwest::Client::new();
+    let resp = client
+        .get(&url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await?;
+
+    if resp.status().as_u16() == 404 {
+        return Ok(None);
+    }
+    if resp.status().is_success() {
+        return Ok(Some(resp.json::<Value>().await?));
+    }
+    let status = resp.status();
+    match resp.json::<ApiErrorBody>().await {
+        Ok(body) => bail!("{} ({})", body.error.message, status),
+        Err(_) => bail!("request failed with status {}", status),
+    }
+}
+
+pub async fn apply_scoped_object(base_url: &str, token: &str, project: &str, kind: &str, id: &str, body: Value) -> Result<Value> {
+    let url = format!("{}/api/v1/projects/{}/{}/{}", base_url.trim_end_matches('/'), project, kind, id);
+    post_authenticated(&url, token, body).await
+}
+
 /// Fetch event log from the debug endpoint (requires godmode).
 pub async fn debug_events(base_url: &str, token: &str) -> Result<Value> {
     let url = format!("{}/api/v1/debug/events", base_url.trim_end_matches('/'));
@@ -153,6 +202,14 @@ mod tests {
         assert_eq!(to_singular_kind("memberships"), "membership");
         // already singular — unchanged
         assert_eq!(to_singular_kind("group"), "group");
+    }
+
+    #[test]
+    fn scoped_kind_detection() {
+        assert!(is_scoped_kind("ticketgroups"));
+        assert!(!is_scoped_kind("groups"));
+        assert!(!is_scoped_kind("users"));
+        assert!(!is_scoped_kind("projects"));
     }
 }
 

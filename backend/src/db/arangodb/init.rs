@@ -27,6 +27,7 @@ const VERTEX_COLLECTIONS: &[&str] = &[
     "persistent_files",
     "system_events",
     "crds",
+    "ticket_groups",
 ];
 
 /// Edge collections created at startup.
@@ -44,6 +45,7 @@ pub const WRITE_COLLECTIONS: &[&str] = &[
     "resource_history",
     "resource_events",
     "crds",
+    "ticket_groups",
 ];
 
 /// Cached collection handles opened from a database.
@@ -61,6 +63,7 @@ pub struct CollectionHandles {
     pub persistent_files: Collection<ReqwestClient>,
     pub system_events: Collection<ReqwestClient>,
     pub crds: Collection<ReqwestClient>,
+    pub ticket_groups: Collection<ReqwestClient>,
 }
 
 /// Obtain the database, creating it if it does not exist.
@@ -128,6 +131,10 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         .collection("crds")
         .await
         .map_err(|e| anyhow!(e.to_string()))?;
+    let ticket_groups = db
+        .collection("ticket_groups")
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
 
     Ok(CollectionHandles {
         users,
@@ -143,6 +150,7 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         persistent_files,
         system_events,
         crds,
+        ticket_groups,
     })
 }
 
@@ -204,7 +212,7 @@ async fn create_persistent_index(
 /// **Project-scoped collections** — composite index on `["project", "deletion"]`
 /// lets ArangoDB satisfy `FILTER doc.project == @id AND doc.deletion == null`
 /// without a full collection scan.  Add an entry here whenever a new scoped
-/// collection (e.g. `tasks`) is introduced.
+/// collection is introduced.  Current scoped collections: `ticket_groups`.
 ///
 /// **`memberships`** — edge collection filtered by `group`, `principal`, and
 /// `deletion` in various queries; composite `["group", "deletion"]` covers the
@@ -226,8 +234,7 @@ pub async fn ensure_indexes(
 
     // Indexes for project-scoped collections: composite filter on project + deletion.
     // Add new scoped collections here as they are introduced.
-    // Example (uncomment when tasks collection is added):
-    // create_persistent_index(base_url, db_name, user, password, "tasks", &["project", "deletion"]).await?;
+    create_persistent_index(base_url, db_name, user, password, "ticket_groups", &["project", "deletion"]).await?;
 
     // memberships: most queries filter by group (+ deletion); principal-first lookups also common.
     create_persistent_index(base_url, db_name, user, password, "memberships", &["group", "deletion"]).await?;

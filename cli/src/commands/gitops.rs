@@ -41,6 +41,7 @@ fn headers_for(kind: &str) -> &'static [&'static str] {
         "groups" | "projects" => &["NAME", "ID", "DESCRIPTION"],
         "users" => &["NAME", "ID", "JOB_TITLE"],
         "memberships" => &["ID", "PRINCIPAL", "GROUP"],
+        "ticketgroups" => &["ID", "NAME", "TYPES", "PROJECT"],
         _ => &["ID", "NAME"],
     }
 }
@@ -62,6 +63,19 @@ fn extract_row(kind: &str, item: &Value) -> Vec<String> {
             field(item, "principal"),
             field(item, "group"),
         ],
+        "ticketgroups" => {
+            let type_count = item
+                .get("ticket_types")
+                .and_then(|v| v.as_array())
+                .map(|a| a.len().to_string())
+                .unwrap_or_else(|| "-".to_string());
+            vec![
+                field(item, "id"),
+                field(item, "name"),
+                type_count,
+                field(item, "project"),
+            ]
+        }
         _ => vec![field(item, "id"), field(item, "name")],
     }
 }
@@ -242,4 +256,130 @@ pub async fn get_resource(kind: &str, id: &str, fmt: OutputFormat) -> Result<()>
 pub async fn describe_resource(kind: &str, id: &str) -> Result<()> {
     let api_kind = to_api_kind(kind);
     describe_impl(&api_kind, id).await
+}
+
+// ─── scoped (project-namespaced) helpers ─────────────────────────────────────
+
+async fn list_scoped_impl(project: &str, api_kind: &str, fmt: OutputFormat) -> Result<()> {
+    let ctx = context::require_current()?;
+    let response = api::list_scoped_kind(&ctx.url, &ctx.token, project, api_kind).await?;
+
+    let items = response
+        .get("items")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if items.is_empty() {
+        println!("No {} found in project '{}'.", api_kind, project);
+        return Ok(());
+    }
+
+    match fmt {
+        OutputFormat::Table => {
+            let headers = headers_for(api_kind);
+            let rows: Vec<Vec<String>> = items.iter().map(|item| extract_row(api_kind, item)).collect();
+            print_table(headers, &rows);
+        }
+        OutputFormat::Yaml => {
+            for item in &items {
+                let yaml = serde_yaml::to_string(item)?;
+                print!("---\n{}", yaml);
+            }
+        }
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&serde_json::json!({ "items": items }))?);
+        }
+    }
+
+    Ok(())
+}
+
+async fn get_scoped_impl(project: &str, api_kind: &str, id: &str, fmt: OutputFormat) -> Result<()> {
+    let ctx = context::require_current()?;
+    let response = api::get_scoped_kind(&ctx.url, &ctx.token, project, api_kind, id).await?;
+
+    match fmt {
+        OutputFormat::Table => {
+            let headers = headers_for(api_kind);
+            let row = extract_row(api_kind, &response);
+            print_table(headers, &[row]);
+        }
+        OutputFormat::Yaml => {
+            let yaml = serde_yaml::to_string(&response)?;
+            print!("{}", yaml);
+        }
+        OutputFormat::Json => {
+            println!("{}", serde_json::to_string_pretty(&response)?);
+        }
+    }
+
+    Ok(())
+}
+
+async fn describe_scoped_impl(project: &str, api_kind: &str, id: &str) -> Result<()> {
+    let singular = to_singular_kind(api_kind).to_string();
+    let ctx = context::require_current()?;
+    let mut response = api::get_scoped_kind(&ctx.url, &ctx.token, project, api_kind, id).await?;
+
+    if let Some(obj) = response.as_object_mut() {
+        obj.insert("kind".to_string(), serde_json::json!(singular));
+    }
+
+    let yaml = serde_yaml::to_string(&response)?;
+    print!("{}", yaml);
+    Ok(())
+}
+
+async fn list_scoped_interactive(project: &str, api_kind: &str) -> Result<()> {
+    use dialoguer::{FuzzySelect, theme::ColorfulTheme};
+
+    let ctx = context::require_current()?;
+    let data = api::list_scoped_kind(&ctx.url, &ctx.token, project, api_kind).await?;
+
+    let items = data["items"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    if items.is_empty() {
+        println!("No {} found in project '{}'.", api_kind, project);
+        return Ok(());
+    }
+
+    let labels: Vec<String> = items.iter().map(|item| {
+        let id = field(item, "id");
+        let name = field(item, "name");
+        if name.is_empty() { id } else { format!("{:<30} {}", id, name) }
+    }).collect();
+
+    let selection = FuzzySelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(format!("Select {} in project '{}'", api_kind, project))
+        .items(&labels)
+        .interact_opt()?;
+
+    match selection {
+        Some(idx) => {
+            let selected_id = field(&items[idx], "id");
+            describe_scoped_impl(project, api_kind, &selected_id).await
+        }
+        None => Ok(()),
+    }
+}
+
+// ─── public: ticketgroups ─────────────────────────────────────────────────────
+
+pub async fn list_ticket_groups(project: &str, fmt: OutputFormat, interactive: bool) -> Result<()> {
+    if interactive {
+        return list_scoped_interactive(project, "ticketgroups").await;
+    }
+    list_scoped_impl(project, "ticketgroups", fmt).await
+}
+
+pub async fn get_ticket_group(project: &str, id: &str, fmt: OutputFormat) -> Result<()> {
+    get_scoped_impl(project, "ticketgroups", id, fmt).await
+}
+
+pub async fn describe_ticket_group(project: &str, id: &str) -> Result<()> {
+    describe_scoped_impl(project, "ticketgroups", id).await
 }

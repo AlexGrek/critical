@@ -78,6 +78,7 @@ pub struct ArangoDb {
     pub persistent_files: Collection<ReqwestClient>,
     pub system_events: Collection<ReqwestClient>,
     pub crds: Collection<ReqwestClient>,
+    pub ticket_groups: Collection<ReqwestClient>,
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +147,7 @@ impl ArangoDb {
             persistent_files: handles.persistent_files,
             system_events: handles.system_events,
             crds: handles.crds,
+            ticket_groups: handles.ticket_groups,
         };
 
         instance.seed_permissions().await?;
@@ -183,6 +185,7 @@ impl ArangoDb {
             persistent_files: handles.persistent_files,
             system_events: handles.system_events,
             crds: handles.crds,
+            ticket_groups: handles.ticket_groups,
         })
     }
 
@@ -217,6 +220,7 @@ impl ArangoDb {
             persistent_files: handles.persistent_files,
             system_events: handles.system_events,
             crds: handles.crds,
+            ticket_groups: handles.ticket_groups,
         })
     }
 

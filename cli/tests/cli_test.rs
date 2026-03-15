@@ -12,15 +12,39 @@ use tempfile::TempDir;
 
 const BACKEND_URL: &str = "http://localhost:3742";
 
+// ─── raw HTTP primitives ──────────────────────────────────────────────────────
+
+fn api_get(token: &str, url: &str) -> reqwest::blocking::Response {
+    reqwest::blocking::Client::new()
+        .get(url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .unwrap_or_else(|e| panic!("GET {} failed: {}", url, e))
+}
+
+fn api_post(token: &str, url: &str, body: serde_json::Value) -> reqwest::blocking::Response {
+    reqwest::blocking::Client::new()
+        .post(url)
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&body)
+        .send()
+        .unwrap_or_else(|e| panic!("POST {} failed: {}", url, e))
+}
+
+fn api_delete(token: &str, url: &str) {
+    let _ = reqwest::blocking::Client::new()
+        .delete(url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send();
+}
+
+// ─── auth helpers ─────────────────────────────────────────────────────────────
+
 /// Register a test user via the API directly (bypass CLI).
 fn register_user(username: &str, password: &str) {
-    let client = reqwest::blocking::Client::new();
-    let resp = client
+    let resp = reqwest::blocking::Client::new()
         .post(format!("{}/api/v1/register", BACKEND_URL))
-        .json(&serde_json::json!({
-            "user": username,
-            "password": password,
-        }))
+        .json(&serde_json::json!({ "user": username, "password": password }))
         .send()
         .expect("failed to send register request");
 
@@ -34,44 +58,27 @@ fn register_user(username: &str, password: &str) {
 
 /// Login a user via the API and return JWT token.
 fn login_user(username: &str, password: &str) -> String {
-    let client = reqwest::blocking::Client::new();
-    let resp = client
+    let resp = reqwest::blocking::Client::new()
         .post(format!("{}/api/v1/login", BACKEND_URL))
-        .json(&serde_json::json!({
-            "user": username,
-            "password": password,
-        }))
+        .json(&serde_json::json!({ "user": username, "password": password }))
         .send()
         .expect("failed to send login request");
 
-    assert!(
-        resp.status().is_success(),
-        "login failed with status: {}",
-        resp.status()
-    );
+    assert!(resp.status().is_success(), "login failed: {}", resp.status());
 
     let body: serde_json::Value = resp.json().expect("failed to parse login response");
-    body.get("token")
-        .and_then(|v| v.as_str())
-        .expect("token not in response")
-        .to_string()
+    body["token"].as_str().expect("token not in response").to_string()
 }
+
+// ─── resource helpers ─────────────────────────────────────────────────────────
 
 /// Create a test group via the API.
 fn create_group(token: &str, group_id: &str, name: &str) {
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .post(format!("{}/api/v1/global/groups", BACKEND_URL))
-        .header("Authorization", format!("Bearer {}", token))
-        .json(&serde_json::json!({
-            "id": group_id,
-            "name": name,
-            "acl": {}
-        }))
-        .send()
-        .expect("failed to send create group request");
-
-    // 201 = created, 409 = already exists
+    let resp = api_post(
+        token,
+        &format!("{}/api/v1/global/groups", BACKEND_URL),
+        serde_json::json!({ "id": group_id, "name": name, "acl": {} }),
+    );
     assert!(
         resp.status().as_u16() == 201 || resp.status().as_u16() == 409,
         "unexpected create group status: {}",
@@ -534,6 +541,65 @@ fn write_dummy_context(home: &TempDir) {
     .unwrap();
 }
 
+/// Create a project via the API (requires ADM_CONFIG_EDITOR or USR_CREATE_PROJECTS).
+fn create_project(token: &str, project_id: &str, name: &str) {
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .post(format!("{}/api/v1/global/projects", BACKEND_URL))
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&serde_json::json!({ "id": project_id, "name": name }))
+        .send()
+        .expect("failed to send create project request");
+
+    assert!(
+        resp.status().as_u16() == 201 || resp.status().as_u16() == 409,
+        "unexpected create project status: {}",
+        resp.status()
+    );
+}
+
+/// Delete a project via the API (best-effort cleanup).
+fn delete_project(token: &str, project_id: &str) {
+    let client = reqwest::blocking::Client::new();
+    let _ = client
+        .delete(format!("{}/api/v1/global/projects/{}", BACKEND_URL, project_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .send();
+}
+
+/// Create a ticket group via the API.
+fn create_ticket_group(token: &str, project_id: &str, tg_id: &str, name: &str) {
+    let client = reqwest::blocking::Client::new();
+    let resp = client
+        .post(format!("{}/api/v1/projects/{}/ticketgroups", BACKEND_URL, project_id))
+        .header("Authorization", format!("Bearer {}", token))
+        .json(&serde_json::json!({
+            "id": tg_id,
+            "name": name,
+            "ticket_types": [],
+        }))
+        .send()
+        .expect("failed to send create ticket group request");
+
+    assert!(
+        resp.status().as_u16() == 201 || resp.status().as_u16() == 409,
+        "unexpected create ticket group status: {}",
+        resp.status()
+    );
+}
+
+/// Delete a ticket group via the API (best-effort cleanup).
+fn delete_ticket_group(token: &str, project_id: &str, tg_id: &str) {
+    let client = reqwest::blocking::Client::new();
+    let _ = client
+        .delete(format!(
+            "{}/api/v1/projects/{}/ticketgroups/{}",
+            BACKEND_URL, project_id, tg_id
+        ))
+        .header("Authorization", format!("Bearer {}", token))
+        .send();
+}
+
 /// Delete a group via the API (best-effort cleanup).
 fn delete_group(token: &str, group_id: &str) {
     let client = reqwest::blocking::Client::new();
@@ -814,4 +880,154 @@ fn test_debug_events_requires_godmode() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("Forbidden").or(predicate::str::contains("Unauthorized")));
+}
+
+// --- TicketGroups commands ---
+
+/// Non-ignored: missing project field on a scoped resource is caught before any HTTP call.
+#[test]
+fn test_apply_scoped_missing_project_fails() {
+    let home = TempDir::new().unwrap();
+    write_dummy_context(&home);
+
+    cr1t_cmd(&home)
+        .args(["apply"])
+        .write_stdin("kind: ticketgroup\nid: BUG\nname: Bugs\n")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("project"));
+}
+
+#[test]
+#[ignore]
+fn test_ticketgroups_list_empty() {
+    let home = TempDir::new().unwrap();
+    // Use admin (godmode) to create a project — regular users need USR_CREATE_PROJECTS.
+    let admin_token = login_user("admin", "admin123");
+    let project_id = format!("tgtest_{}", &unique_user()[8..]);
+
+    create_project(&admin_token, &project_id, "TG Test Project");
+    write_context(&home, &admin_token);
+
+    cr1t_cmd(&home)
+        .args(["ticket-groups", "list", "--project", &project_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No ticketgroups found"));
+
+    delete_project(&admin_token, &project_id);
+}
+
+#[test]
+#[ignore]
+fn test_ticketgroups_list_with_data() {
+    let home = TempDir::new().unwrap();
+    let admin_token = login_user("admin", "admin123");
+    let project_id = format!("tgdata_{}", &unique_user()[8..]);
+    let tg_id = "BUG";
+    let tg_name = "Bug Tracking";
+
+    create_project(&admin_token, &project_id, "TG Data Project");
+    create_ticket_group(&admin_token, &project_id, tg_id, tg_name);
+    write_context(&home, &admin_token);
+
+    cr1t_cmd(&home)
+        .args(["ticket-groups", "list", "--project", &project_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(tg_name));
+
+    delete_ticket_group(&admin_token, &project_id, &format!("tg_{}", tg_id));
+    delete_project(&admin_token, &project_id);
+}
+
+#[test]
+#[ignore]
+fn test_ticketgroups_list_yaml_output() {
+    let home = TempDir::new().unwrap();
+    let admin_token = login_user("admin", "admin123");
+    let project_id = format!("tgyaml_{}", &unique_user()[8..]);
+    let tg_id = "TASK";
+
+    create_project(&admin_token, &project_id, "TG Yaml Project");
+    create_ticket_group(&admin_token, &project_id, tg_id, "Tasks");
+    write_context(&home, &admin_token);
+
+    cr1t_cmd(&home)
+        .args(["ticket-groups", "list", "--project", &project_id, "-o", "yaml"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("name: Tasks"));
+
+    delete_ticket_group(&admin_token, &project_id, &format!("tg_{}", tg_id));
+    delete_project(&admin_token, &project_id);
+}
+
+#[test]
+#[ignore]
+fn test_ticketgroups_describe() {
+    let home = TempDir::new().unwrap();
+    let admin_token = login_user("admin", "admin123");
+    let project_id = format!("tgdesc_{}", &unique_user()[8..]);
+    let tg_id = "FEAT";
+
+    create_project(&admin_token, &project_id, "TG Describe Project");
+    create_ticket_group(&admin_token, &project_id, tg_id, "Features");
+    write_context(&home, &admin_token);
+
+    cr1t_cmd(&home)
+        .args(["ticket-groups", "describe", "--project", &project_id, &format!("tg_{}", tg_id)])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("kind: ticketgroup"))
+        .stdout(predicate::str::contains("name: Features"));
+
+    delete_ticket_group(&admin_token, &project_id, &format!("tg_{}", tg_id));
+    delete_project(&admin_token, &project_id);
+}
+
+#[test]
+#[ignore]
+fn test_ticketgroups_describe_not_found() {
+    let home = TempDir::new().unwrap();
+    let admin_token = login_user("admin", "admin123");
+    let project_id = format!("tg404_{}", &unique_user()[8..]);
+
+    create_project(&admin_token, &project_id, "TG 404 Project");
+    write_context(&home, &admin_token);
+
+    cr1t_cmd(&home)
+        .args(["ticket-groups", "describe", "--project", &project_id, "tg_NOPE"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("404").or(predicate::str::contains("not found")));
+
+    delete_project(&admin_token, &project_id);
+}
+
+#[test]
+#[ignore]
+fn test_apply_creates_ticketgroup() {
+    let home = TempDir::new().unwrap();
+    let admin_token = login_user("admin", "admin123");
+    let project_id = format!("tgapply_{}", &unique_user()[8..]);
+    let tg_id = "CR";
+
+    create_project(&admin_token, &project_id, "TG Apply Project");
+    write_context(&home, &admin_token);
+
+    let yaml = format!(
+        "kind: ticketgroup\nid: {}\nproject: {}\nname: Change Requests\nticket_types: []\n",
+        tg_id, project_id
+    );
+
+    cr1t_cmd(&home)
+        .args(["apply"])
+        .write_stdin(yaml)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("ticketgroup/{} applied", tg_id)));
+
+    delete_ticket_group(&admin_token, &project_id, &format!("tg_{}", tg_id));
+    delete_project(&admin_token, &project_id);
 }

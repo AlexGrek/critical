@@ -99,10 +99,51 @@ enum Commands {
         filename: Option<PathBuf>,
     },
 
+    /// Manage ticket groups (project-scoped issue type schemes)
+    TicketGroups {
+        #[command(subcommand)]
+        action: TicketGroupsAction,
+    },
+
     /// Debug and introspection commands (requires godmode)
     Debug {
         #[command(subcommand)]
         action: DebugAction,
+    },
+}
+
+#[derive(Subcommand)]
+enum TicketGroupsAction {
+    /// List ticket groups in a project
+    List {
+        /// Project ID
+        #[arg(short = 'p', long = "project")]
+        project: String,
+        /// Output format
+        #[arg(short = 'o', long = "output", value_name = "FORMAT", default_value = "table")]
+        output: OutputFormat,
+        /// Open interactive fuzzy-select
+        #[arg(short = 'i', long = "interactive")]
+        interactive: bool,
+    },
+    /// Get a single ticket group
+    Get {
+        /// Project ID
+        #[arg(short = 'p', long = "project")]
+        project: String,
+        /// Ticket group ID
+        id: String,
+        /// Output format
+        #[arg(short = 'o', long = "output", value_name = "FORMAT", default_value = "table")]
+        output: OutputFormat,
+    },
+    /// Describe a ticket group in full YAML (with kind field)
+    Describe {
+        /// Project ID
+        #[arg(short = 'p', long = "project")]
+        project: String,
+        /// Ticket group ID
+        id: String,
     },
 }
 
@@ -182,6 +223,17 @@ async fn main() {
         Commands::Describe { kind, id } => commands::gitops::describe_resource(&kind, &id).await,
         Commands::Edit { kind, id } => commands::edit::run(&kind, &id).await,
         Commands::Apply { filename } => commands::apply::run(filename.as_deref()).await,
+        Commands::TicketGroups { action } => match action {
+            TicketGroupsAction::List { project, output, interactive } => {
+                commands::gitops::list_ticket_groups(&project, output, interactive).await
+            }
+            TicketGroupsAction::Get { project, id, output } => {
+                commands::gitops::get_ticket_group(&project, &id, output).await
+            }
+            TicketGroupsAction::Describe { project, id } => {
+                commands::gitops::describe_ticket_group(&project, &id).await
+            }
+        },
         Commands::Debug { action } => match action {
             DebugAction::Events { output } => commands::debug::events(output).await,
         },

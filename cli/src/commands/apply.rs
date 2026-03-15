@@ -69,26 +69,53 @@ pub async fn run(filename: Option<&Path>) -> Result<()> {
     for (kind, id, mut body) in documents {
         let api_kind = to_api_kind(&kind);
 
-        // Fetch the existing resource to obtain its hash_code. If the resource
-        // does not exist yet this is a create, and no hash is injected. Any
-        // other error (auth, network) is surfaced immediately.
-        if let Some(existing) = api::try_get_kind(&ctx.url, &ctx.token, &api_kind, &id).await? {
-            if let Some(hash) = existing.get("hash_code").and_then(|v| v.as_str()) {
-                if let Some(obj) = body.as_object_mut() {
-                    obj.insert("hash_code".to_string(), serde_json::Value::String(hash.to_string()));
+        if api::is_scoped_kind(&api_kind) {
+            // Scoped resources (e.g. ticketgroups) require a `project` field in the body
+            // and are applied via /v1/projects/{project}/{kind}/{id}.
+            let project = body
+                .get("project")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| anyhow::anyhow!("{}: scoped resource requires a 'project' field", kind))?
+                .to_string();
+
+            if let Some(existing) = api::try_get_scoped_kind(&ctx.url, &ctx.token, &project, &api_kind, &id).await? {
+                if let Some(hash) = existing.get("hash_code").and_then(|v| v.as_str()) {
+                    if let Some(obj) = body.as_object_mut() {
+                        obj.insert("hash_code".to_string(), serde_json::Value::String(hash.to_string()));
+                    }
                 }
             }
+
+            api::apply_scoped_object(&ctx.url, &ctx.token, &project, &api_kind, &id, body).await
+                .map_err(|e| {
+                    if e.to_string().contains("(409 Conflict)") {
+                        anyhow::anyhow!("{}/{} was modified since last read — re-run apply to retry", kind, id)
+                    } else {
+                        e
+                    }
+                })?;
+        } else {
+            // Fetch the existing resource to obtain its hash_code. If the resource
+            // does not exist yet this is a create, and no hash is injected. Any
+            // other error (auth, network) is surfaced immediately.
+            if let Some(existing) = api::try_get_kind(&ctx.url, &ctx.token, &api_kind, &id).await? {
+                if let Some(hash) = existing.get("hash_code").and_then(|v| v.as_str()) {
+                    if let Some(obj) = body.as_object_mut() {
+                        obj.insert("hash_code".to_string(), serde_json::Value::String(hash.to_string()));
+                    }
+                }
+            }
+
+            api::apply_object(&ctx.url, &ctx.token, &api_kind, &id, body).await
+                .map_err(|e| {
+                    if e.to_string().contains("(409 Conflict)") {
+                        anyhow::anyhow!("{}/{} was modified since last read — re-run apply to retry", kind, id)
+                    } else {
+                        e
+                    }
+                })?;
         }
 
-        api::apply_object(&ctx.url, &ctx.token, &api_kind, &id, body).await
-            .map_err(|e| {
-                // api.rs formats errors as "{message} ({status})" — detect 409 by suffix.
-                if e.to_string().contains("(409 Conflict)") {
-                    anyhow::anyhow!("{}/{} was modified since last read — re-run apply to retry", kind, id)
-                } else {
-                    e
-                }
-            })?;
         println!("{}/{} applied", kind, id);
     }
 

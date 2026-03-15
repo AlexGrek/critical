@@ -97,7 +97,7 @@ fn resource_kind_name(&self) -> &str  // e.g. "tasks" for scoped resources
 fn super_permission(&self) -> Option<&str>
 ```
 
-**Adding a new resource kind — checklist:**
+**Adding a new global resource kind — checklist:**
 1. Create `backend/src/controllers/{kind}_controller.rs`
 2. `struct {Kind}Controller { db: Arc<ArangoDb> }` + `impl {Kind}Controller { pub fn new(db: Arc<ArangoDb>) -> Self }`
 3. `#[async_trait] impl KindController for {Kind}Controller { ... }`
@@ -108,6 +108,55 @@ fn super_permission(&self) -> Option<&str>
 
 **NEVER** add kind-specific `match kind { ... }` logic in route handlers.
 All kind-specific behavior lives in controllers.
+
+---
+
+## Adding a Project-Scoped Resource Kind
+
+Scoped resources live under `/v1/projects/{project}/{kind}` and inherit access from the parent project's ACL. The first example in this codebase is `TicketGroup` (`ticket_groups` collection, controller `ticket_group_controller.rs`).
+
+**Full checklist (global checklist steps 1-7 apply, PLUS):**
+
+### Model (`shared/src/data_models.rs`)
+- Add the struct with `#[crit_derive::crit_resource(collection = "{collection}", prefix = "{xx}_")]`
+- Include a `pub project: String` field (injected by the scoped handler — do NOT mark `#[serde(default)]`)
+- Use `#[serde(default)]` or `Option<T>` for all other optional fields
+- Mark list-safe fields with `#[brief]`
+
+### Controller
+- Return `true` from `is_scoped()`
+- Return `None` from `super_permission()` — access governed by project ACL, unless the resource warrants its own bypass permission
+- Implement `can_read` / `can_write` as `Ok(true)` — **these are NOT called by `scoped_gitops` handlers**; the handler uses `check_hybrid_acl` directly
+- Validate the `id` field in `to_internal()` if it has format constraints (e.g. 2-6 capital letters), apply prefix, strip unknown fields, then call `standard_to_internal()`
+- Call only `inject_create_defaults(body, user_id)` in `prepare_create()` — do NOT add ACL entries; scoped resources inherit project ACL
+- Set `list_projection_fields()` to exclude large nested fields (e.g. `ticket_types`) from list queries
+
+```rust
+fn is_scoped(&self) -> bool { true }
+fn super_permission(&self) -> Option<&str> { None }
+async fn can_read(&self, _: &str, _: Option<&Value>) -> Result<bool, AppError> { Ok(true) }
+async fn can_write(&self, _: &str, _: Option<&Value>) -> Result<bool, AppError> { Ok(true) }
+```
+
+### Database (`backend/src/db/arangodb/`)
+- Add collection name to `VERTEX_COLLECTIONS` in `init.rs`
+- Add to `WRITE_COLLECTIONS` in `init.rs`
+- Add `pub {col}: Collection<ReqwestClient>` field to `CollectionHandles` struct in `init.rs`
+- Add `db.collection("{col}")` handle in `open_collections()` in `init.rs`
+- Add `pub {col}: Collection<ReqwestClient>` field to `ArangoDb` struct in `mod.rs`
+- Wire `{col}: handles.{col}` in all three `connect_basic`, `connect_anon`, `connect_jwt` in `mod.rs`
+- Add scoped index in `ensure_indexes()`:
+  ```rust
+  create_persistent_index(url, db, user, pass, "{collection}", &["project", "deletion"]).await?;
+  ```
+
+### ACL behaviour for scoped resources
+The `scoped_gitops` handler resolves access as follows:
+1. Compute `super_bypass = godmode || ctrl.super_permission()` — if `None`, only godmode bypasses
+2. **Create**: caller must have `CREATE` bit on the project's ACL (scoped to resource kind or wildcard)
+3. **Read/write/delete**: `ctrl.check_hybrid_acl(doc, principals, required_perm, project_acl)` — uses resource's own ACL if non-empty, else project ACL filtered by `scope`
+
+The `scope` field on project ACL entries restricts an entry to one resource kind (e.g. `"ticketgroups"`). An absent or `"*"` scope matches all kinds.
 
 **Handler response contracts** (see `docs/gitops-controller.md` for full lifecycle):
 - **POST create** → 201 + full document via `ctrl.to_external(doc_snapshot)`
