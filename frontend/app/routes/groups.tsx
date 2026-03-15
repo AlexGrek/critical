@@ -15,9 +15,11 @@ import {
   Tabs,
   ResourcePicker,
   YamlEditor,
+  PrincipalChip,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { usePrincipals } from "~/lib/usePrincipals";
 import {
   Plus,
   X,
@@ -924,6 +926,17 @@ function GroupEditor({
     [group]
   );
 
+  // Collect all principal IDs from members + ACL for bulk resolution
+  const principalIds = useMemo(() => {
+    const ids = new Set<string>();
+    members.forEach((m) => ids.add(m.principal));
+    currentAcl?.list?.forEach((entry) =>
+      entry.principals.forEach((p) => ids.add(p))
+    );
+    return [...ids].filter(Boolean);
+  }, [members, currentAcl]);
+  const principals = usePrincipals(principalIds);
+
   return (
     <Card
       className="overflow-hidden flex flex-col sticky top-4 max-h-[calc(100vh-120px)]"
@@ -1166,8 +1179,12 @@ function GroupEditor({
                         key={member.id}
                         data-testid={`member-row-${member.principal}`}
                       >
-                        <Table.Cell className="font-mono text-xs">
-                          {member.principal}
+                        <Table.Cell>
+                          <PrincipalChip
+                            id={member.principal}
+                            info={principals[member.principal]}
+                            data-testid={`member-chip-${member.principal}`}
+                          />
                         </Table.Cell>
                         <Table.Cell className="text-right">
                           <Button
@@ -1237,9 +1254,12 @@ function GroupEditor({
                             key={`${principal}-${entry.permissions}`}
                             className="flex items-center gap-2"
                           >
-                            <span className="font-mono text-xs text-gray-600 dark:text-gray-400 truncate flex-1">
-                              {principal}
-                            </span>
+                            <PrincipalChip
+                              id={principal}
+                              info={principals[principal]}
+                              className="flex-1 min-w-0"
+                              data-testid={`acl-chip-${principal}`}
+                            />
                             <PermissionBadge permissions={entry.permissions} />
                           </div>
                         ))

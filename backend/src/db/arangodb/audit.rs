@@ -1,10 +1,12 @@
+use std::collections::HashMap;
+
 use anyhow::{Result, anyhow};
 use arangors::document::Document;
 use serde_json::{Value, json};
 
 use crit_shared::util_models::*;
 
-use super::ArangoDb;
+use super::{ArangoDb, PaginatedResult};
 
 impl ArangoDb {
     /// Patch a user document to update a single image ULID field (`avatar_ulid` or
@@ -16,17 +18,30 @@ impl ArangoDb {
         field: &str,
         ulid: Option<&str>,
     ) -> Result<()> {
+        self.patch_entity_image_ulid("users", user_id, field, ulid).await
+    }
+
+    /// Generic version of `patch_user_image_ulid` — works for any principal collection
+    /// (users, groups, service_accounts, pipeline_accounts).
+    pub async fn patch_entity_image_ulid(
+        &self,
+        collection: &str,
+        key: &str,
+        field: &str,
+        ulid: Option<&str>,
+    ) -> Result<()> {
         let value = ulid
             .map(|u| Value::String(u.to_string()))
             .unwrap_or(Value::Null);
         let patch = serde_json::json!({ field: value });
         let query = r#"
-            FOR doc IN users
+            FOR doc IN @@col
               FILTER doc._key == @id
-              UPDATE doc WITH @patch IN users
+              UPDATE doc WITH @patch IN @@col
         "#;
         let vars = std::collections::HashMap::from([
-            ("id", Value::String(user_id.to_string())),
+            ("@col", Value::String(collection.to_string())),
+            ("id", Value::String(key.to_string())),
             ("patch", patch),
         ]);
         self.aql::<Value>(query, vars).await?;
@@ -191,6 +206,54 @@ impl ArangoDb {
             .map_err(|e| anyhow!(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// List resource history entries across all resources, sorted by changed_at DESC.
+    /// `kind` optionally filters by resource_kind (e.g. "groups", "users").
+    /// `offset` is a zero-based page offset for pagination.
+    pub async fn list_history_entries(
+        &self,
+        kind: Option<&str>,
+        limit: u32,
+        offset: u32,
+    ) -> Result<PaginatedResult> {
+        let mut filters = Vec::new();
+        let mut vars: HashMap<&str, Value> = HashMap::new();
+
+        if let Some(k) = kind {
+            filters.push("doc.resource_kind == @kind");
+            vars.insert("kind", Value::String(k.to_string()));
+        }
+
+        let filter_clause = if filters.is_empty() {
+            String::new()
+        } else {
+            format!("FILTER {}", filters.join(" AND "))
+        };
+
+        vars.insert("limit", Value::Number((limit + 1).into()));
+        vars.insert("offset", Value::Number(offset.into()));
+
+        let query = format!(
+            "FOR doc IN resource_history {filter_clause} SORT doc.changed_at DESC LIMIT @offset, @limit RETURN doc"
+        );
+
+        let mut docs: Vec<Value> = self.aql::<Value>(&query, vars).await?;
+
+        let has_more = docs.len() > limit as usize;
+        if has_more {
+            docs.truncate(limit as usize);
+        }
+
+        Ok(PaginatedResult {
+            docs,
+            next_cursor: if has_more {
+                Some((offset + limit).to_string())
+            } else {
+                None
+            },
+            has_more,
+        })
     }
 
     /// List all non-system ArangoDB collections in the current database.

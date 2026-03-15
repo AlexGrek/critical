@@ -325,4 +325,61 @@ impl ArangoDb {
             Err(e) => Err(anyhow!(e.to_string())),
         }
     }
+
+    /// Batch-fetch principal info across all 4 principal collections in a single AQL.
+    /// Returns a list of `{id, type, name, avatar_ulid}` objects for every ID found.
+    /// IDs not found in any collection are simply absent from the result.
+    pub async fn batch_resolve_principals(&self, ids: &[String]) -> Result<Vec<serde_json::Value>> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Partition IDs by prefix so each sub-query only scans its own collection.
+        let mut user_ids = vec![];
+        let mut group_ids = vec![];
+        let mut sa_ids = vec![];
+        let mut pa_ids = vec![];
+        for id in ids {
+            if id.starts_with("g_") {
+                group_ids.push(serde_json::Value::String(id.clone()));
+            } else if id.starts_with("sa_") {
+                sa_ids.push(serde_json::Value::String(id.clone()));
+            } else if id.starts_with("pa_") {
+                pa_ids.push(serde_json::Value::String(id.clone()));
+            } else {
+                user_ids.push(serde_json::Value::String(id.clone()));
+            }
+        }
+
+        let query = r#"
+            LET results = UNION(
+                (FOR doc IN users
+                    FILTER doc._key IN @user_ids
+                    FILTER doc.deletion == null
+                    RETURN { id: doc._key, type: "user", name: doc.personal.name, avatar_ulid: doc.avatar_ulid }),
+                (FOR doc IN groups
+                    FILTER doc._key IN @group_ids
+                    FILTER doc.deletion == null
+                    RETURN { id: doc._key, type: "group", name: doc.name, avatar_ulid: doc.avatar_ulid }),
+                (FOR doc IN service_accounts
+                    FILTER doc._key IN @sa_ids
+                    FILTER doc.deletion == null
+                    RETURN { id: doc._key, type: "service_account", name: doc.name, avatar_ulid: doc.avatar_ulid }),
+                (FOR doc IN pipeline_accounts
+                    FILTER doc._key IN @pa_ids
+                    FILTER doc.deletion == null
+                    RETURN { id: doc._key, type: "pipeline_account", name: doc.name, avatar_ulid: doc.avatar_ulid })
+            )
+            FOR r IN results RETURN r
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            ("user_ids", json!(user_ids)),
+            ("group_ids", json!(group_ids)),
+            ("sa_ids", json!(sa_ids)),
+            ("pa_ids", json!(pa_ids)),
+        ]);
+
+        self.aql(query, vars).await
+    }
 }

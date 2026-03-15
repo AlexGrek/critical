@@ -43,6 +43,13 @@ pub struct Group {
     #[brief]
     pub name: String,
     pub description: Option<String>,
+    /// ULID of the group's avatar. Files in `group_avatars/`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[brief]
+    pub avatar_ulid: Option<String>,
+    /// ULID of the group's wallpaper. Files in `group_wallpapers/`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallpaper_ulid: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -56,6 +63,13 @@ pub struct ServiceAccount {
     pub description: Option<String>,
     /// Hashed API token for authentication.
     pub token_hash: String,
+    /// ULID of the service account's avatar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[brief]
+    pub avatar_ulid: Option<String>,
+    /// ULID of the service account's wallpaper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallpaper_ulid: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -71,6 +85,31 @@ pub struct PipelineAccount {
     pub scope: Option<String>,
     /// Hashed API token for authentication.
     pub token_hash: String,
+    /// ULID of the pipeline account's avatar.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[brief]
+    pub avatar_ulid: Option<String>,
+    /// ULID of the pipeline account's wallpaper.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wallpaper_ulid: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Principal info (unified cross-type identity card)
+// ---------------------------------------------------------------------------
+
+/// Lightweight identity card for any principal, used by the resolve endpoint.
+/// `name` is the display name: `personal.name` for users, `name` for groups/sa/pa.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PrincipalInfo {
+    /// Principal type: `"user"`, `"group"`, `"service_account"`, `"pipeline_account"`.
+    #[serde(rename = "type")]
+    pub principal_type: String,
+    /// Display name (`personal.name` for users, `name` for groups/sa/pa).
+    pub name: String,
+    /// ULID of the principal's avatar, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub avatar_ulid: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

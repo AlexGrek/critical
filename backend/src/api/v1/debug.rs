@@ -178,6 +178,47 @@ pub async fn get_access_debug(
     Ok(Json(report))
 }
 
+/// List resource history entries with optional kind filter and offset pagination.
+///
+/// `GET /v1/debug/history`
+/// Query params:
+///   - `kind` — filter by resource_kind (e.g. "groups", "users")
+///   - `limit` — max docs per page (default 50, max 200)
+///   - `offset` — zero-based page offset (default 0)
+///
+/// Requires ADM_GODMODE (enforced by godmode_middleware on the route group).
+/// Returns `{ "entries": [...], "has_more": bool, "next_offset": number|null, "count": N }`
+pub async fn list_history(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<HashMap<String, String>>,
+) -> Result<Json<Value>, AppError> {
+    let kind = params.get("kind").cloned();
+    let limit = params
+        .get("limit")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(50)
+        .min(200);
+    let offset = params
+        .get("offset")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+
+    let result = state
+        .db
+        .list_history_entries(kind.as_deref(), limit, offset)
+        .await
+        .map_err(AppError::Internal)?;
+
+    let next_offset: Option<u32> = result.next_cursor.as_ref().and_then(|c| c.parse().ok());
+    let count = result.docs.len();
+    Ok(Json(json!({
+        "entries": result.docs,
+        "has_more": result.has_more,
+        "next_offset": next_offset,
+        "count": count,
+    })))
+}
+
 /// List system events with optional kind/priority filters and pagination.
 ///
 /// `GET /v1/debug/events`

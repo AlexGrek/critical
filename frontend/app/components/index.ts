@@ -22,3 +22,5 @@ export { YamlEditor } from "./YamlEditor";
 export type { YamlEditorProps } from "./YamlEditor";
 export { AppMenu } from "./AppMenu";
 export type { AppItem, AppMenuProps } from "./AppMenu";
+export { PrincipalChip } from "./PrincipalChip";
+export type { PrincipalChipProps } from "./PrincipalChip";

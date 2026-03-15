@@ -9,6 +9,7 @@
 | `/login` | none | User login (returns JWT) |
 | `/v1/static/{*path}` | none | Serve processed images from object store |
 | `/v1/*` | JWT | Protected API routes |
+| `/v1/principals/resolve` | JWT | Batch-resolve principal IDs to identity cards |
 | `/v1/ws` | JWT | WebSocket endpoint |
 | `/swagger-ui` | none | OpenAPI documentation |
 
@@ -103,13 +104,59 @@ List responses return a summary view of each resource (brief fields only), not t
 | `service_accounts` | `id`, `meta`, `name` |
 | `pipeline_accounts` | `id`, `meta`, `name` |
 
+## Principal Resolution (`/v1/principals/resolve`)
+
+Batch-resolve principal IDs (users, groups, service accounts, pipeline accounts) to lightweight identity cards. Designed for high-frequency use — results are cached per-principal with 10-minute TTL and a 2048-entry LRU bound.
+
+```
+POST /v1/principals/resolve
+Content-Type: application/json
+
+{ "ids": ["u_alice", "g_engineering", "sa_github", "nonexistent"] }
+```
+
+**Query parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `no-cache` | bool | `true` to bypass cache, force DB fetch and refresh cached entries. Default `false` |
+
+**Response** `200 OK` (always — partial failures are inline):
+```json
+{
+  "u_alice":        { "type": "user",            "name": "Alice",           "avatar_ulid": "01jz..." },
+  "g_engineering":  { "type": "group",           "name": "Engineering" },
+  "sa_github":      { "type": "service_account", "name": "GitHub Actions" },
+  "nonexistent":    { "error": "not_found" }
+}
+```
+
+**Contract:**
+- Every requested ID appears as a key in the output map — no exceptions
+- Found principals return `{ type, name, avatar_ulid? }` where `name` is the display name (`personal.name` for users, `name` for all others)
+- Not-found or soft-deleted principals return `{ "error": "not_found" }`
+- Maximum 500 IDs per request (returns `400` if exceeded)
+- Negative results (not_found) are also cached
+
+**Cache behavior:**
+- Per-principal TTL cache: 10-minute expiry, max 2048 entries (LRU eviction)
+- Cache hits are served without DB query; only misses trigger a batch AQL
+- `?no-cache=true` forces DB fetch for all requested IDs and refreshes their cache entries
+- Use `no-cache` sparingly — it's for cases where the frontend knows data just changed (e.g. after avatar upload or name edit)
+
+---
+
 ## Media Upload (`/v1/global/{kind}/{id}/upload/{upload_type}`)
 
-Upload an avatar or wallpaper image for a user. The response is returned immediately after the raw file is stored; image processing (crop → resize → WebP encode) continues in a background task.
+Upload an avatar or wallpaper image for a principal entity. The response is returned immediately after the raw file is stored; image processing (crop → resize → WebP encode) continues in a background task.
+
+Supported kinds: `users`, `groups`.
 
 ```
 POST /v1/global/users/{user_id}/upload/avatar
 POST /v1/global/users/{user_id}/upload/wallpaper
+POST /v1/global/groups/{group_id}/upload/avatar
+POST /v1/global/groups/{group_id}/upload/wallpaper
 Content-Type: multipart/form-data
 
 file=<image bytes>   (JPEG / PNG / WebP, max 5 MB)
@@ -123,10 +170,13 @@ file=<image bytes>   (JPEG / PNG / WebP, max 5 MB)
 The returned ULID is immediately written to the user's `avatar_ulid` or `wallpaper_ulid` field. Once the background task completes, the processed WebP files are available at the static endpoint.
 
 **Authorization:**
-- A user may upload their own media (self-upload)
-- `ADM_USER_MANAGER` may upload for any user
-- `ADM_GODMODE` bypasses all checks
-- Any other caller receives `404` (to avoid leaking whether the target user exists)
+
+| Kind | Allowed callers |
+|------|----------------|
+| `users` | Self-upload; `ADM_USER_MANAGER`; `ADM_GODMODE` |
+| `groups` | Caller with `MODIFY` ACL on the group; `ADM_USER_MANAGER`; `ADM_GODMODE` |
+
+Unauthorized callers receive `404` (to avoid leaking whether the target entity exists).
 
 **Background processing:**
 1. Fetch raw bytes from `raw_uploads/`
@@ -137,7 +187,7 @@ The returned ULID is immediately written to the user's `avatar_ulid` or `wallpap
 
 Only one image conversion runs at a time (global `Semaphore(1)` in `AppState`). Additional uploads queue up and are processed in order.
 
-Currently only `kind = "users"` is supported.
+Currently `kind = "users"` and `kind = "groups"` are supported.
 
 ---
 
@@ -150,6 +200,10 @@ GET /v1/static/user_avatars/{ulid}_hd.webp
 GET /v1/static/user_avatars/{ulid}_thumb.webp
 GET /v1/static/user_wallpapers/{ulid}_hd.webp
 GET /v1/static/user_wallpapers/{ulid}_thumb.webp
+GET /v1/static/group_avatars/{ulid}_hd.webp
+GET /v1/static/group_avatars/{ulid}_thumb.webp
+GET /v1/static/group_wallpapers/{ulid}_hd.webp
+GET /v1/static/group_wallpapers/{ulid}_thumb.webp
 ```
 
 **Response:** raw WebP bytes with:
@@ -157,7 +211,7 @@ GET /v1/static/user_wallpapers/{ulid}_thumb.webp
 - `Cache-Control: public, max-age=31536000, immutable`
 
 **Restrictions:**
-- Only `user_avatars/` and `user_wallpapers/` directory prefixes are served — all other paths return `404`
+- Only `user_avatars/`, `user_wallpapers/`, `group_avatars/`, and `group_wallpapers/` directory prefixes are served — all other paths return `404`
 - Path traversal (`..`) is rejected
 - If the object store is not configured, returns `404`
 

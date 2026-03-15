@@ -30,8 +30,12 @@ pub async fn serve_static(
     Path(path): Path<String>,
     State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, AppError> {
-    // Only expose the two public image directories.
-    if !path.starts_with("user_avatars/") && !path.starts_with("user_wallpapers/") {
+    // Only expose the allowed public image directories.
+    let allowed = path.starts_with("user_avatars/")
+        || path.starts_with("user_wallpapers/")
+        || path.starts_with("group_avatars/")
+        || path.starts_with("group_wallpapers/");
+    if !allowed {
         return Err(AppError::not_found("not found"));
     }
 

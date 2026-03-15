@@ -19,7 +19,7 @@ use super::gitops_controller::{
 /// Any field not in this list is stripped in `to_internal` before DB write.
 const GROUP_ALLOWED_FIELDS: &[&str] = &[
     "id", "_key",
-    "name", "description",
+    "name", "description", "avatar_ulid", "wallpaper_ulid",
     "labels", "annotations", "acl", "state", "deletion", "hash_code",
 ];
 
@@ -188,7 +188,7 @@ impl KindController for GroupController {
 
     fn list_projection_fields(&self) -> Option<&'static [&'static str]> {
         // _key → "id" after to_external; "acl" needed by can_read for ACL checks
-        Some(&["_key", "name", "acl", "labels"])
+        Some(&["_key", "name", "avatar_ulid", "acl", "labels"])
     }
 
     fn super_permission(&self) -> Option<&str> {

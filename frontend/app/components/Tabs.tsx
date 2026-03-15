@@ -32,7 +32,7 @@ const TabsTrigger = React.forwardRef<
   <RadixTabs.Trigger
     ref={ref}
     className={cn(
-      "relative px-4 py-2.5 text-sm font-medium",
+      "relative px-4 py-2.5 text-sm font-medium cursor-pointer",
       "text-gray-500 dark:text-gray-400",
       "hover:text-gray-900 dark:hover:text-gray-100 transition-colors",
       // Active indicator — a 2px bottom border that overlaps the List border

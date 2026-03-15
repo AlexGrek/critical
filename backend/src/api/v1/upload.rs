@@ -1,12 +1,11 @@
 //! Media upload endpoint: POST /v1/global/{kind}/{id}/upload/{upload_type}
 //!
-//! Currently only `kind = "users"` is supported. `upload_type` is one of
-//! `"avatar"` or `"wallpaper"`.
+//! Supported kinds: `users`, `groups`.
+//! `upload_type` is one of `"avatar"` or `"wallpaper"`.
 //!
 //! # Authorization
-//! - A user may upload their own media.
-//! - `ADM_USER_MANAGER` may upload for any user.
-//! - `ADM_GODMODE` bypasses all checks.
+//! **users**: self-upload, or caller has `ADM_USER_MANAGER` / `ADM_GODMODE`.
+//! **groups**: caller has `MODIFY` ACL on the group, `ADM_USER_MANAGER`, or `ADM_GODMODE`.
 //!
 //! # Request
 //! `Content-Type: multipart/form-data` with a single `"file"` field
@@ -14,7 +13,7 @@
 //!
 //! # Response
 //! `201 Created` with `{ "ulid": "<ulid>" }` — the ULID that was stored in
-//! the user document. The image is not yet processed at response time; a
+//! the entity document. The image is not yet processed at response time; a
 //! background Tokio task continues the conversion.
 
 use std::sync::Arc;
@@ -31,6 +30,7 @@ use tokio::sync::Semaphore;
 use ulid::Ulid;
 
 use crate::{
+    controllers::gitops_controller::KindController,
     error::AppError,
     middleware::auth::AuthenticatedUser,
     services::{
@@ -58,11 +58,15 @@ pub async fn upload_media(
 ) -> Result<impl IntoResponse, AppError> {
     log::debug!("[upload] request: caller={caller_id} kind={kind} target={target_id} type={upload_type_str}");
 
-    // Only users are supported for now; projects come later.
-    if kind != "users" {
-        log::debug!("[upload] rejected: unsupported kind={kind}");
-        return Err(AppError::not_found("upload not supported for this resource kind"));
-    }
+    // Determine which collection and storage dir prefix to use.
+    let (collection, entity_dir_prefix) = match kind.as_str() {
+        "users" => ("users", "user"),
+        "groups" => ("groups", "group"),
+        _ => {
+            log::debug!("[upload] rejected: unsupported kind={kind}");
+            return Err(AppError::not_found("upload not supported for this resource kind"));
+        }
+    };
 
     // Parse upload type.
     let upload_type = match upload_type_str.as_str() {
@@ -75,6 +79,16 @@ pub async fn upload_media(
             ))
         }
     };
+
+    // Compute storage directory: e.g. "user_avatars", "group_wallpapers".
+    let storage_dir = format!(
+        "{}_{}",
+        entity_dir_prefix,
+        match upload_type {
+            UploadType::Avatar => "avatars",
+            UploadType::Wallpaper => "wallpapers",
+        }
+    );
 
     // Object store must be configured.
     let store = state
@@ -89,7 +103,6 @@ pub async fn upload_media(
     log::trace!("[upload] object store available");
 
     // Pre-flight size check using Content-Length header (if present).
-    // Multipart overhead is small; an extra 4 KiB margin is plenty.
     if let Some(cl) = headers.get("content-length") {
         if let Ok(size) = cl.to_str().unwrap_or("0").parse::<usize>() {
             log::trace!("[upload] content-length preflight: {size} bytes (limit {})", MAX_UPLOAD_BYTES);
@@ -103,25 +116,29 @@ pub async fn upload_media(
         }
     }
 
-    // Authorization check.
-    log::trace!("[upload] checking upload access for caller={caller_id} target={target_id}");
-    check_upload_access(&state, &caller_id, &target_id).await?;
+    // Authorization check — kind-specific.
+    log::trace!("[upload] checking upload access for caller={caller_id} target={target_id} kind={kind}");
+    match kind.as_str() {
+        "users" => check_user_upload_access(&state, &caller_id, &target_id).await?,
+        "groups" => check_group_upload_access(&state, &caller_id, &target_id).await?,
+        _ => unreachable!(),
+    }
     log::trace!("[upload] access check passed");
 
-    // Verify the target user exists.
-    log::trace!("[upload] verifying target user {target_id} exists");
-    if state.db.get_user_by_id(&target_id).await?.is_none() {
-        log::debug!("[upload] rejected: target user {target_id} not found");
-        return Err(AppError::not_found("user not found"));
+    // Verify the target entity exists.
+    log::trace!("[upload] verifying target {kind}/{target_id} exists");
+    if state.db.generic_get(collection, &target_id).await?.is_none() {
+        log::debug!("[upload] rejected: target {kind}/{target_id} not found");
+        return Err(AppError::not_found("entity not found"));
     }
-    log::trace!("[upload] target user {target_id} confirmed");
+    log::trace!("[upload] target {kind}/{target_id} confirmed");
 
     // Read the `file` field from the multipart body.
     log::trace!("[upload] reading multipart file field");
     let raw_bytes = read_file_field(&mut multipart).await?;
     log::debug!("[upload] received {} bytes from multipart", raw_bytes.len());
 
-    // Validate format from magic bytes (no I/O until here).
+    // Validate format from magic bytes.
     let fmt = image_processing::detect_format(&raw_bytes)
         .ok_or_else(|| {
             log::debug!("[upload] rejected: unrecognized image format ({} bytes)", raw_bytes.len());
@@ -156,31 +173,36 @@ pub async fn upload_media(
     state.db.generic_create("unprocessed_images", unprocessed).await?;
     log::debug!("[upload] unprocessed_images record created for {ulid}");
 
-    // Update the user document with this ULID so the field is visible immediately.
+    // Update the entity document with this ULID so the field is visible immediately.
     let ulid_field = match upload_type {
         UploadType::Avatar => "avatar_ulid",
         UploadType::Wallpaper => "wallpaper_ulid",
     };
-    log::trace!("[upload] patching user {target_id} {ulid_field}={ulid}");
+    log::trace!("[upload] patching {kind}/{target_id} {ulid_field}={ulid}");
     state
         .db
-        .patch_user_image_ulid(&target_id, ulid_field, Some(&ulid))
+        .patch_entity_image_ulid(collection, &target_id, ulid_field, Some(&ulid))
         .await?;
-    log::debug!("[upload] user {target_id} {ulid_field} updated to {ulid}");
+    log::debug!("[upload] {kind}/{target_id} {ulid_field} updated to {ulid}");
 
     log::info!(
-        "[upload] raw upload accepted: {filename} for {target_id} by {caller_id} (bg processing queued)"
+        "[upload] raw upload accepted: {filename} for {kind}/{target_id} by {caller_id} (bg processing queued)"
     );
 
-    state.events.objectstore_event(EventPriority::Minor, Some(&caller_id), vec![format!("{}/{}", kind, target_id)], Some(serde_json::json!({ "action": "upload", "upload_type": upload_type_str }))).await;
+    state.events.objectstore_event(
+        EventPriority::Minor,
+        Some(&caller_id),
+        vec![format!("{}/{}", kind, target_id)],
+        Some(json!({ "action": "upload", "upload_type": upload_type_str })),
+    ).await;
 
     // Spawn background image processing — response returns immediately.
-    // The semaphore ensures only one conversion runs at a time; others queue up.
     let bg_db = state.db.clone();
     let bg_ulid = ulid.clone();
     let bg_sem = state.image_processing_semaphore.clone();
+    let bg_storage_dir = storage_dir.clone();
     tokio::spawn(async move {
-        process_upload_background(bg_ulid, filename, upload_type, target_id, bg_db, store, bg_sem).await;
+        process_upload_background(bg_ulid, filename, upload_type, target_id, bg_db, store, bg_sem, bg_storage_dir).await;
     });
 
     Ok((StatusCode::CREATED, Json(json!({ "ulid": ulid }))))
@@ -198,12 +220,10 @@ async fn process_upload_background(
     db: Arc<crate::db::ArangoDb>,
     store: ObjectStoreService,
     sem: Arc<Semaphore>,
+    storage_dir: String,
 ) {
     log::debug!("[upload:bg] task spawned for ulid={ulid} filename={filename} type={upload_type:?}");
 
-    // Acquire the semaphore before doing any CPU-intensive work.
-    // If another conversion is already running, this awaits until it finishes.
-    // The permit is released automatically when it drops at function exit.
     log::trace!("[upload:bg] waiting for semaphore (ulid={ulid})");
     let _permit = match sem.acquire().await {
         Ok(p) => p,
@@ -216,9 +236,8 @@ async fn process_upload_background(
     log::debug!("[upload:bg] semaphore acquired, starting conversion for {filename}");
 
     let raw_path = format!("raw_uploads/{}", filename);
-    let dir = upload_type.storage_dir();
-    let hd_path = format!("{}/{}_hd.webp", dir, ulid);
-    let thumb_path = format!("{}/{}_thumb.webp", dir, ulid);
+    let hd_path = format!("{}/{}_hd.webp", storage_dir, ulid);
+    let thumb_path = format!("{}/{}_thumb.webp", storage_dir, ulid);
     log::trace!("[upload:bg] paths: raw={raw_path} hd={hd_path} thumb={thumb_path}");
 
     // Step 1: fetch raw bytes from object storage.
@@ -236,8 +255,6 @@ async fn process_upload_background(
     };
 
     // Step 2: process (crop + resize + WebP encode) on the blocking thread pool.
-    // process_image is CPU-intensive (Lanczos3 resize); running it directly in an
-    // async task would block Tokio's worker threads and starve the runtime.
     log::debug!("[upload:bg] step 2: spawning blocking image processing for {filename}");
     let raw_bytes_for_processing = raw_bytes.clone();
     let processed = match tokio::task::spawn_blocking(move || {
@@ -287,7 +304,7 @@ async fn process_upload_background(
     log::trace!("[upload:bg] step 4: creating persistent_files record for {ulid}");
     let pf = PersistentFile {
         id: ulid.clone(),
-        category: dir.to_string(),
+        category: storage_dir.clone(),
         relation_type: "principal".to_string(),
         owner: owner_id.clone(),
         format: "webp".to_string(),
@@ -325,7 +342,6 @@ async fn process_upload_background(
     log::trace!("[upload:bg] step 5: cleaning up raw upload {raw_path}");
     let _ = store.delete(&raw_path).await;
     if let Err(e) = db.generic_delete("unprocessed_images", &ulid).await {
-        // Non-fatal — the record will be a stale orphan but the image is live.
         log::warn!("[upload:bg] step 5: could not delete unprocessed_images/{ulid}: {e}");
     } else {
         log::trace!("[upload:bg] step 5 OK: raw and unprocessed_images/{ulid} removed");
@@ -381,15 +397,15 @@ async fn read_file_field(multipart: &mut Multipart) -> Result<bytes::Bytes, AppE
     ))
 }
 
-/// Check whether `caller_id` is allowed to upload media for `target_id`.
+/// Check whether `caller_id` is allowed to upload media for a user target.
 ///
 /// Allowed if:
 /// - The caller is the target user themselves.
 /// - The caller has `ADM_GODMODE`.
 /// - The caller has `ADM_USER_MANAGER`.
 ///
-/// On denial we return 404 (not 403) to avoid leaking whether the target user exists.
-async fn check_upload_access(
+/// On denial we return 404 to avoid leaking whether the target exists.
+async fn check_user_upload_access(
     state: &AppState,
     caller_id: &str,
     target_id: &str,
@@ -413,6 +429,46 @@ async fn check_upload_access(
         log::debug!("[upload] ADM_USER_MANAGER bypass for {caller_id} uploading to {target_id}");
         return Ok(());
     }
-    log::debug!("[upload] access denied: {caller_id} cannot upload for {target_id}");
+    log::debug!("[upload] access denied: {caller_id} cannot upload for user {target_id}");
     Err(AppError::not_found("user not found"))
+}
+
+/// Check whether `caller_id` is allowed to upload media for a group.
+///
+/// Allowed if:
+/// - The caller has `ADM_GODMODE`.
+/// - The caller has `ADM_USER_MANAGER`.
+/// - The caller has `MODIFY` ACL on the group (i.e. is an editor).
+///
+/// On denial we return 404 to avoid leaking whether the group exists.
+async fn check_group_upload_access(
+    state: &AppState,
+    caller_id: &str,
+    target_id: &str,
+) -> Result<(), AppError> {
+    if state
+        .db
+        .has_permission(caller_id, super_permissions::ADM_GODMODE)
+        .await?
+    {
+        log::debug!("[upload] godmode bypass for {caller_id} uploading to group {target_id}");
+        return Ok(());
+    }
+
+    // Fetch the group document so we can pass it to can_write for ACL check.
+    // can_write also handles ADM_USER_MANAGER internally.
+    let doc = match state.db.generic_get("groups", target_id).await? {
+        Some(d) => d,
+        None => {
+            log::debug!("[upload] access denied: group {target_id} not found");
+            return Err(AppError::not_found("group not found"));
+        }
+    };
+
+    let allowed = state.controller.group.can_write(caller_id, Some(&doc)).await?;
+    if !allowed {
+        log::debug!("[upload] access denied: {caller_id} lacks MODIFY on group {target_id}");
+        return Err(AppError::not_found("group not found"));
+    }
+    Ok(())
 }

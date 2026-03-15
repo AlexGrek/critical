@@ -15,11 +15,14 @@ import {
   Tabs,
   YamlEditor,
   Modal,
+  PrincipalChip,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
 import { AlertCircle, Lock, Settings, Plus } from "lucide-react";
 import { formatDate } from "~/lib/utils";
 import { useState, useMemo, useCallback } from "react";
+import { resolvePrincipals } from "~/lib/principals";
+import type { PrincipalMap } from "~/lib/principals";
 
 // ---------------------------------------------------------------------------
 // API types
@@ -95,7 +98,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   const project: Project = await response.json();
-  return { project };
+
+  // Collect all principal IDs present in the document
+  const principalIds = [
+    project.state?.created_by,
+    project.state?.updated_by,
+    ...(project.acl?.list?.flatMap((e) => e.principals) ?? []),
+  ].filter((id): id is string => !!id);
+
+  const principals = await resolvePrincipals(
+    principalIds,
+    request.headers.get("Cookie") || ""
+  );
+
+  return { project, principals };
 }
 
 // ---------------------------------------------------------------------------
@@ -103,7 +119,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 // ---------------------------------------------------------------------------
 
 export default function ProjectPage() {
-  const { project } = useLoaderData<typeof loader>();
+  const { project, principals } = useLoaderData<typeof loader>();
   const [currentAcl, setCurrentAcl] = useState<AccessControlStore>(
     (project.acl as AccessControlStore) || { list: [], last_mod_date: new Date().toISOString() }
   );
@@ -259,9 +275,13 @@ export default function ProjectPage() {
                       : "Unknown"}
                   </Paragraph>
                   {project.state?.created_by && (
-                    <Paragraph className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                      by <code className="font-mono">{project.state.created_by}</code>
-                    </Paragraph>
+                    <div className="mt-2">
+                      <PrincipalChip
+                        id={project.state.created_by}
+                        info={principals[project.state.created_by]}
+                        data-testid="project-created-by"
+                      />
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -277,9 +297,13 @@ export default function ProjectPage() {
                       : "Unknown"}
                   </Paragraph>
                   {project.state?.updated_by && (
-                    <Paragraph className="text-xs text-gray-600 dark:text-gray-400 mt-2">
-                      by <code className="font-mono">{project.state.updated_by}</code>
-                    </Paragraph>
+                    <div className="mt-2">
+                      <PrincipalChip
+                        id={project.state.updated_by}
+                        info={principals[project.state.updated_by]}
+                        data-testid="project-updated-by"
+                      />
+                    </div>
                   )}
                 </CardContent>
               </Card>
@@ -430,14 +454,14 @@ export default function ProjectPage() {
                     className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/50 rounded-(--radius-component) border border-gray-100 dark:border-gray-800"
                     data-testid={`acl-display-entry-${idx}`}
                   >
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-2">
                       {entry.principals.map((p) => (
-                        <code
+                        <PrincipalChip
                           key={p}
-                          className="text-xs font-mono px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 rounded-(--radius-component) text-gray-700 dark:text-gray-300"
-                        >
-                          {p}
-                        </code>
+                          id={p}
+                          info={principals[p]}
+                          data-testid={`acl-principal-${p}`}
+                        />
                       ))}
                     </div>
                     <PermissionBadge permissions={entry.permissions} />

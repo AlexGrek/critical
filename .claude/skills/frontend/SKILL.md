@@ -274,6 +274,7 @@ Always use the project's custom components instead.
 | `ThemeCombobox` | `~/components` | Theme picker dropdown |
 | `TopBar` | `~/components` | Fixed app header (h-14, z-50) with animated logo toggle and user button. Props: `isOpen`, `onToggle` |
 | `SideMenu` | `~/components` | Collapsible nav sidebar (w-64) with sections, active-link detection, theme picker at bottom. Props: `isOpen`, `isDesktop`, `onClose` |
+| `PrincipalChip` | `~/components` | Inline avatar + display name for any principal (user/group/SA/PA). Props: `id` (raw principal ID), `info` (resolved `PrincipalInfo`), `size` (`xs`\|`sm`\|`md`). Falls back to monospace ID when info is not yet resolved. **Always use this — never display raw principal IDs.** |
 
 ### Component Patterns
 
@@ -440,7 +441,8 @@ frontend/
 │   │   ├── SideMenu.tsx           # Collapsible sidebar; uses --color-nav-* CSS vars
 │   │   ├── AclEditor.tsx          # ACL modal editor (AccessControlStore)
 │   │   ├── ResourcePicker.tsx     # Async search-as-you-type dropdown for any kind
-│   │   └── YamlEditor.tsx         # Textarea YAML editor for resource documents
+│   │   ├── YamlEditor.tsx         # Textarea YAML editor for resource documents
+│   │   └── PrincipalChip.tsx      # Avatar + name chip for any principal kind
 │   ├── contexts/
 │   │   └── ThemeContext.tsx        # Theme state management
 │   └── lib/
@@ -551,6 +553,113 @@ const handleYamlSave = useCallback(async (parsed: Record<string, unknown>) => {
 - After `onSave` resolves: call both `loadGroup(id)` (or equivalent client re-fetch) AND `revalidator.revalidate()` to refresh all UI from server.
 - **NEVER** have `onChange` on YamlEditor — the prop does not exist. YAML changes stay local.
 - `yaml` package (`import { stringify, parse } from "yaml"`) is already installed
+
+---
+
+## Displaying Principals — ALWAYS Use PrincipalChip (MANDATORY)
+
+**NEVER display a raw principal ID** (e.g. `u_alice`, `g_eng`) as plain text or in a
+`<code>` tag. Always resolve it and render it with `PrincipalChip`.
+
+### API contract — `POST /api/v1/principals/resolve`
+
+```ts
+// Request
+{ "ids": ["u_alice", "g_eng", "sa_ci"] }   // up to 500 IDs per call
+
+// Response — every requested ID is a key; partial failures are inline
+{
+  "u_alice": { "type": "user", "name": "Alice", "avatar_ulid": "01jz..." },
+  "g_eng":   { "type": "group", "name": "Engineering" },
+  "sa_ci":   { "type": "service_account", "name": "CI Runner" },
+  "gone":    { "error": "not_found" }
+}
+```
+
+### Helper utilities (`~/lib/principals`)
+
+```ts
+import { resolvePrincipals, resolvePrincipalsClient } from "~/lib/principals";
+import type { PrincipalMap } from "~/lib/principals";
+
+// In an SSR loader — forward the request cookie
+const principals = await resolvePrincipals(ids, request.headers.get("Cookie") || "");
+
+// Client-side (effect / hook) — credentials sent automatically
+const principals = await resolvePrincipalsClient(ids);
+```
+
+### `usePrincipals` hook — for client-fetched lists (`~/lib/usePrincipals`)
+
+Use this inside components that load data incrementally (lazy lists, "load more", etc.).
+It accumulates resolved data across renders and never re-fetches already-resolved IDs.
+
+```ts
+import { usePrincipals } from "~/lib/usePrincipals";
+
+// Derive a stable list of IDs from local state, then resolve
+const principalIds = useMemo(
+  () => [...new Set(entries.map((e) => e.changed_by).filter(Boolean))],
+  [entries]
+);
+const principals = usePrincipals(principalIds);
+
+// In JSX
+<PrincipalChip id={entry.changed_by} info={principals[entry.changed_by]} />
+```
+
+### `PrincipalChip` — the only correct way to display a principal
+
+```tsx
+import { PrincipalChip } from "~/components";
+
+// Table cell / inline
+<PrincipalChip id={entry.changed_by} info={principals[entry.changed_by]} />
+
+// Larger display
+<PrincipalChip id={project.state.created_by} info={principals[project.state.created_by]} size="md" />
+```
+
+Props:
+- `id` — the raw principal ID (required, shown as fallback while unresolved)
+- `info` — the resolved `PrincipalInfo` object from the map (pass `undefined` while loading)
+- `size` — `"xs"` | `"sm"` (default) | `"md"`
+- `data-testid` — always set for Playwright targeting
+
+### Pattern — SSR loader (projects, single-resource pages)
+
+```ts
+export async function loader({ request, params }: Route.LoaderArgs) {
+  const resource = await fetchResource(...);
+
+  const principalIds = [
+    resource.state?.created_by,
+    resource.state?.updated_by,
+    ...(resource.acl?.list?.flatMap((e) => e.principals) ?? []),
+  ].filter((id): id is string => !!id);
+
+  const principals = await resolvePrincipals(principalIds, request.headers.get("Cookie") || "");
+  return { resource, principals };
+}
+
+export default function Page() {
+  const { resource, principals } = useLoaderData<typeof loader>();
+  return (
+    <PrincipalChip
+      id={resource.state.created_by}
+      info={principals[resource.state.created_by]}
+      data-testid="created-by"
+    />
+  );
+}
+```
+
+### Where to use
+
+- Member lists (group members, project members) — replace raw `member.principal`
+- ACL display (entry.principals array) — replace raw monospace IDs
+- Audit/history tables — replace raw `changed_by`, `principal` columns
+- "Created by" / "Updated by" cards — replace `<code className="font-mono">` ID display
 
 ---
 
@@ -815,6 +924,7 @@ Proactively refactor pages to remove redundant className props:
 ## Self-Review Before Finishing
 
 - [ ] **Custom components used**: No bare `<button>`, `<input>`, or ad-hoc cards/modals
+- [ ] **Principal IDs always resolved**: No raw principal ID (`u_*`, `g_*`, `sa_*`, `pa_*`) displayed as plain text or `<code>` — use `PrincipalChip` with data resolved via `resolvePrincipals` (loader) or `usePrincipals` (client) — see "Displaying Principals" section
 - [ ] **Component styling encapsulated**: No redundant className on Card/CardContent/CardTitle; using `variant` prop on Paragraph instead of manual color classes — see "Component Styling Encapsulation" section
 - [ ] **No narrow containers**: Route cards/forms use `w-full` (not restrictive `max-w-sm`/`max-w-xl`) — see "Layout Width" section above
 - [ ] **Theme roundness**: All `rounded-*` use `rounded-(--radius-component)` variants, never hardcoded

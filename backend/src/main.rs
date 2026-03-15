@@ -70,6 +70,10 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
             Router::new()
                 .route("/ws", get(ws_handler))
                 .route(
+                    "/principals/resolve",
+                    post(api::v1::principals::resolve_principals),
+                )
+                .route(
                     "/global/{kind}",
                     get(api::v1::gitops::list_objects).post(api::v1::gitops::create_object),
                 )
@@ -132,6 +136,7 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                         )
                         .route("/access", get(api::v1::debug::get_access_debug))
                         .route("/events", get(api::v1::debug::list_events))
+                        .route("/history", get(api::v1::debug::list_history))
                         .layer(from_fn_with_state(
                             shared_state.clone(),
                             middleware::godmode_middleware,
