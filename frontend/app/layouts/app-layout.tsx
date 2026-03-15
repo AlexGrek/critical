@@ -8,22 +8,61 @@ import type { Route } from "./+types/app-layout";
 const TOPBAR_FULL = 56;
 const TOPBAR_COMPACT = 40;
 
+export interface AuthUser {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
+function getUserIdFromCookie(cookieHeader: string): string | null {
+  const match = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
+  if (!match) return null;
+  const parts = match[1].split(".");
+  if (parts.length < 2) return null;
+  try {
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const json = atob(b64);
+    const payload = JSON.parse(json) as { sub?: string };
+    return payload.sub ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function loader({ request }: Route.LoaderArgs) {
+  const cookie = request.headers.get("Cookie") || "";
   try {
     const res = await fetch("http://localhost:3742/api/v1/accesscheck/me/permissions", {
-      headers: { Cookie: request.headers.get("Cookie") || "" },
+      headers: { Cookie: cookie },
     });
-    if (res.ok) {
-      return { isAuthenticated: true };
-    }
+    if (!res.ok) return { isAuthenticated: false, user: null };
+
+    // Auth confirmed — fetch user details for avatar
+    const userId = getUserIdFromCookie(cookie);
+    if (!userId) return { isAuthenticated: true, user: null };
+
+    const userRes = await fetch(
+      `http://localhost:3742/api/v1/global/users/${userId}`,
+      { headers: { Cookie: cookie } }
+    );
+    if (!userRes.ok) return { isAuthenticated: true, user: null };
+
+    const userData = await userRes.json();
+    const user: AuthUser = {
+      id: userData.id,
+      name: userData.personal?.name || userData.id.replace(/^u_/, ""),
+      avatarUrl: userData.avatar_ulid
+        ? `/api/v1/static/user_avatars/${userData.avatar_ulid}_thumb.webp`
+        : null,
+    };
+    return { isAuthenticated: true, user };
   } catch {
-    // Server unreachable — treat as not authenticated
+    return { isAuthenticated: false, user: null };
   }
-  return { isAuthenticated: false };
 }
 
 export default function AppLayout({ loaderData }: Route.ComponentProps) {
-  const { isAuthenticated } = loaderData;
+  const { isAuthenticated, user } = loaderData;
   const [isOpen, setIsOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -60,7 +99,7 @@ export default function AppLayout({ loaderData }: Route.ComponentProps) {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
-      <TopBar isOpen={isOpen} onToggle={() => setIsOpen((v) => !v)} scrolled={scrolled} isAuthenticated={isAuthenticated} />
+      <TopBar isOpen={isOpen} onToggle={() => setIsOpen((v) => !v)} scrolled={scrolled} isAuthenticated={isAuthenticated} user={user} />
 
       <SideMenu
         isOpen={isOpen}
