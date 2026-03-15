@@ -68,7 +68,9 @@
       "Bash(ls -la /Users/vedmedik/dev/critical/backend/itests/tests/*.py)",
       "WebSearch",
       "Bash(cargo run --bin cr1t -- edit --help)",
-      "Bash(cargo run --bin cr1t)"
+      "Bash(cargo run --bin cr1t)",
+      "Bash(ls /Users/vedmedik/dev/critical/*.env)",
+      "Bash(ls /Users/vedmedik/dev/critical/.env*)"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"

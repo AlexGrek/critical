@@ -543,14 +543,11 @@ fn write_dummy_context(home: &TempDir) {
 
 /// Create a project via the API (requires ADM_CONFIG_EDITOR or USR_CREATE_PROJECTS).
 fn create_project(token: &str, project_id: &str, name: &str) {
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .post(format!("{}/api/v1/global/projects", BACKEND_URL))
-        .header("Authorization", format!("Bearer {}", token))
-        .json(&serde_json::json!({ "id": project_id, "name": name }))
-        .send()
-        .expect("failed to send create project request");
-
+    let resp = api_post(
+        token,
+        &format!("{}/api/v1/global/projects", BACKEND_URL),
+        serde_json::json!({ "id": project_id, "name": name }),
+    );
     assert!(
         resp.status().as_u16() == 201 || resp.status().as_u16() == 409,
         "unexpected create project status: {}",
@@ -560,27 +557,16 @@ fn create_project(token: &str, project_id: &str, name: &str) {
 
 /// Delete a project via the API (best-effort cleanup).
 fn delete_project(token: &str, project_id: &str) {
-    let client = reqwest::blocking::Client::new();
-    let _ = client
-        .delete(format!("{}/api/v1/global/projects/{}", BACKEND_URL, project_id))
-        .header("Authorization", format!("Bearer {}", token))
-        .send();
+    api_delete(token, &format!("{}/api/v1/global/projects/{}", BACKEND_URL, project_id));
 }
 
 /// Create a ticket group via the API.
 fn create_ticket_group(token: &str, project_id: &str, tg_id: &str, name: &str) {
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .post(format!("{}/api/v1/projects/{}/ticketgroups", BACKEND_URL, project_id))
-        .header("Authorization", format!("Bearer {}", token))
-        .json(&serde_json::json!({
-            "id": tg_id,
-            "name": name,
-            "ticket_types": [],
-        }))
-        .send()
-        .expect("failed to send create ticket group request");
-
+    let resp = api_post(
+        token,
+        &format!("{}/api/v1/projects/{}/ticketgroups", BACKEND_URL, project_id),
+        serde_json::json!({ "id": tg_id, "name": name, "ticket_types": [] }),
+    );
     assert!(
         resp.status().as_u16() == 201 || resp.status().as_u16() == 409,
         "unexpected create ticket group status: {}",
@@ -590,23 +576,12 @@ fn create_ticket_group(token: &str, project_id: &str, tg_id: &str, name: &str) {
 
 /// Delete a ticket group via the API (best-effort cleanup).
 fn delete_ticket_group(token: &str, project_id: &str, tg_id: &str) {
-    let client = reqwest::blocking::Client::new();
-    let _ = client
-        .delete(format!(
-            "{}/api/v1/projects/{}/ticketgroups/{}",
-            BACKEND_URL, project_id, tg_id
-        ))
-        .header("Authorization", format!("Bearer {}", token))
-        .send();
+    api_delete(token, &format!("{}/api/v1/projects/{}/ticketgroups/{}", BACKEND_URL, project_id, tg_id));
 }
 
 /// Delete a group via the API (best-effort cleanup).
 fn delete_group(token: &str, group_id: &str) {
-    let client = reqwest::blocking::Client::new();
-    let _ = client
-        .delete(format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id))
-        .header("Authorization", format!("Bearer {}", token))
-        .send();
+    api_delete(token, &format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id));
 }
 
 #[test]
@@ -635,17 +610,8 @@ fn test_apply_creates_group_from_file() {
         )));
 
     // Verify group exists with the correct name
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .get(format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id))
-        .header("Authorization", format!("Bearer {}", token))
-        .send()
-        .unwrap();
-    assert_eq!(
-        resp.status().as_u16(),
-        200,
-        "group should exist after apply"
-    );
+    let resp = api_get(&token, &format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id));
+    assert_eq!(resp.status().as_u16(), 200, "group should exist after apply");
     let body: serde_json::Value = resp.json().unwrap();
     assert_eq!(body["name"].as_str().unwrap(), "Apply Test");
 
@@ -665,7 +631,6 @@ fn test_apply_updates_group_from_file() {
     write_context(&home, &token);
 
     let yaml_path = home.path().join("group.yaml");
-    let client = reqwest::blocking::Client::new();
 
     // First apply — create the group
     std::fs::write(
@@ -679,11 +644,7 @@ fn test_apply_updates_group_from_file() {
         .success();
 
     // Fetch current ACL so the update preserves permissions
-    let existing: serde_json::Value = client
-        .get(format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id))
-        .header("Authorization", format!("Bearer {}", token))
-        .send()
-        .unwrap()
+    let existing: serde_json::Value = api_get(&token, &format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id))
         .json()
         .unwrap();
     let acl = &existing["acl"];
@@ -705,11 +666,7 @@ fn test_apply_updates_group_from_file() {
         )));
 
     // Verify name changed
-    let updated: serde_json::Value = client
-        .get(format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id))
-        .header("Authorization", format!("Bearer {}", token))
-        .send()
-        .unwrap()
+    let updated: serde_json::Value = api_get(&token, &format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id))
         .json()
         .unwrap();
     assert_eq!(updated["name"].as_str().unwrap(), "Updated");
@@ -742,12 +699,7 @@ fn test_apply_creates_group_from_stdin() {
             group_id
         )));
 
-    let client = reqwest::blocking::Client::new();
-    let resp = client
-        .get(format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id))
-        .header("Authorization", format!("Bearer {}", token))
-        .send()
-        .unwrap();
+    let resp = api_get(&token, &format!("{}/api/v1/global/groups/{}", BACKEND_URL, group_id));
     assert_eq!(resp.status().as_u16(), 200);
 
     delete_group(&token, &group_id);
@@ -781,13 +733,8 @@ fn test_apply_multi_document_file() {
         .stdout(predicate::str::contains(format!("group/{} applied", id_b)));
 
     // Verify both groups exist
-    let client = reqwest::blocking::Client::new();
     for gid in [&id_a, &id_b] {
-        let resp = client
-            .get(format!("{}/api/v1/global/groups/{}", BACKEND_URL, gid))
-            .header("Authorization", format!("Bearer {}", token))
-            .send()
-            .unwrap();
+        let resp = api_get(&token, &format!("{}/api/v1/global/groups/{}", BACKEND_URL, gid));
         assert_eq!(resp.status().as_u16(), 200, "group {} should exist", gid);
     }
 
@@ -903,7 +850,7 @@ fn test_apply_scoped_missing_project_fails() {
 fn test_ticketgroups_list_empty() {
     let home = TempDir::new().unwrap();
     // Use admin (godmode) to create a project — regular users need USR_CREATE_PROJECTS.
-    let admin_token = login_user("admin", "admin123");
+    let admin_token = login_user("root", "changeme");
     let project_id = format!("tgtest_{}", &unique_user()[8..]);
 
     create_project(&admin_token, &project_id, "TG Test Project");
@@ -922,7 +869,7 @@ fn test_ticketgroups_list_empty() {
 #[ignore]
 fn test_ticketgroups_list_with_data() {
     let home = TempDir::new().unwrap();
-    let admin_token = login_user("admin", "admin123");
+    let admin_token = login_user("root", "changeme");
     let project_id = format!("tgdata_{}", &unique_user()[8..]);
     let tg_id = "BUG";
     let tg_name = "Bug Tracking";
@@ -945,7 +892,7 @@ fn test_ticketgroups_list_with_data() {
 #[ignore]
 fn test_ticketgroups_list_yaml_output() {
     let home = TempDir::new().unwrap();
-    let admin_token = login_user("admin", "admin123");
+    let admin_token = login_user("root", "changeme");
     let project_id = format!("tgyaml_{}", &unique_user()[8..]);
     let tg_id = "TASK";
 
@@ -967,7 +914,7 @@ fn test_ticketgroups_list_yaml_output() {
 #[ignore]
 fn test_ticketgroups_describe() {
     let home = TempDir::new().unwrap();
-    let admin_token = login_user("admin", "admin123");
+    let admin_token = login_user("root", "changeme");
     let project_id = format!("tgdesc_{}", &unique_user()[8..]);
     let tg_id = "FEAT";
 
@@ -990,7 +937,7 @@ fn test_ticketgroups_describe() {
 #[ignore]
 fn test_ticketgroups_describe_not_found() {
     let home = TempDir::new().unwrap();
-    let admin_token = login_user("admin", "admin123");
+    let admin_token = login_user("root", "changeme");
     let project_id = format!("tg404_{}", &unique_user()[8..]);
 
     create_project(&admin_token, &project_id, "TG 404 Project");
@@ -1009,7 +956,7 @@ fn test_ticketgroups_describe_not_found() {
 #[ignore]
 fn test_apply_creates_ticketgroup() {
     let home = TempDir::new().unwrap();
-    let admin_token = login_user("admin", "admin123");
+    let admin_token = login_user("root", "changeme");
     let project_id = format!("tgapply_{}", &unique_user()[8..]);
     let tg_id = "CR";
 

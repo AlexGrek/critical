@@ -13,6 +13,7 @@ use crate::{
     middleware::auth::AuthenticatedUser,
     state::AppState,
 };
+use crit_shared::compute_value_hash;
 use crit_shared::event_models::EventPriority;
 use crit_shared::util_models::Permissions;
 
@@ -118,9 +119,10 @@ pub async fn get_scoped_object(
         )));
     }
 
+    let db_key = ctrl.scoped_db_key(&project_id, &id);
     let doc = state
         .db
-        .generic_get_scoped(&kind, &project_id, &id)
+        .generic_get_scoped(&kind, &project_id, &db_key)
         .await?;
     match doc {
         Some(d) => {
@@ -190,21 +192,32 @@ pub async fn create_scoped_object(
     ctrl.prepare_create(&mut body, &user_id);
     state.db.ensure_collection(&kind).await?;
 
-    let doc = ctrl.to_internal(body, &state.auth)?;
+    let mut doc = ctrl.to_internal(body, &state.auth)?;
+    let hash = compute_value_hash(&doc);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("hash_code".to_string(), json!(hash));
+    }
+    // Use the _key from the doc (may be a composite key set by the controller).
+    let final_key = doc
+        .get("_key")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&id)
+        .to_string();
+    let doc_snapshot = doc.clone();
     state.db.generic_create(&kind, doc).await.map_err(|e| {
         let msg = e.to_string();
         if msg.contains("unique constraint") || msg.contains("1210") {
-            AppError::conflict(format!("{}/{} already exists", kind, id))
+            AppError::conflict(format!("{}/{} already exists", kind, final_key))
         } else {
             AppError::Internal(e)
         }
     })?;
 
-    ctrl.after_create(&id, &user_id, &state.db).await?;
+    ctrl.after_create(&final_key, &user_id, &state.db).await?;
 
     state.events.entity_lifecycle(EventPriority::Lifecycle, &user_id, &format!("{}/{}", kind, id), "created", None).await;
 
-    Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": id }))))
+    Ok((axum::http::StatusCode::CREATED, Json(ctrl.to_external(doc_snapshot))))
 }
 
 /// PUT /v1/projects/{project}/{kind}/{id}
@@ -225,9 +238,10 @@ pub async fn update_scoped_object(
         )));
     }
 
+    let db_key = ctrl.scoped_db_key(&project_id, &id);
     let existing = state
         .db
-        .generic_get_scoped(&kind, &project_id, &id)
+        .generic_get_scoped(&kind, &project_id, &db_key)
         .await?
         .ok_or_else(|| AppError::not_found(format!("{}/{}", kind, id)))?;
 
@@ -255,10 +269,15 @@ pub async fn update_scoped_object(
         );
     }
 
-    let doc = ctrl.to_internal(body, &state.auth)?;
+    let mut doc = ctrl.to_internal(body, &state.auth)?;
+    let hash = compute_value_hash(&doc);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("hash_code".to_string(), json!(hash));
+    }
+    let doc_snapshot = doc.clone();
     state
         .db
-        .generic_update(&kind, &id, doc)
+        .generic_update(&kind, &db_key, doc)
         .await
         .map_err(|e| {
             let msg = e.to_string();
@@ -269,11 +288,127 @@ pub async fn update_scoped_object(
             }
         })?;
 
-    ctrl.after_update(&id, &state.db).await?;
+    ctrl.after_update(&db_key, &state.db).await?;
 
     state.events.entity_lifecycle(EventPriority::Note, &user_id, &format!("{}/{}", kind, id), "updated", None).await;
 
-    Ok(Json(json!({ "id": id })))
+    Ok(Json(ctrl.to_external(doc_snapshot)))
+}
+
+/// POST /v1/projects/{project}/{kind}/{id} — upsert (create or update) a scoped resource.
+pub async fn upsert_scoped_object(
+    AuthenticatedUser(user_id): AuthenticatedUser,
+    Path((project_id, kind, id)): Path<(String, String, String)>,
+    State(state): State<Arc<AppState>>,
+    Json(mut body): Json<Value>,
+) -> Result<impl IntoResponse, AppError> {
+    log::debug!(
+        "[HANDLER] upsert_scoped_object: user={}, project={}, kind={}, id={}",
+        user_id,
+        project_id,
+        kind,
+        id
+    );
+    validate_kind(&kind)?;
+    let project_doc = validate_project(&state, &project_id).await?;
+
+    let ctrl = state.controller.for_kind(&kind);
+    if !ctrl.is_scoped() {
+        return Err(AppError::bad_request(format!(
+            "'{}' is not a project-scoped resource kind",
+            kind
+        )));
+    }
+
+    // Always set id and project in the body before processing
+    if let Some(obj) = body.as_object_mut() {
+        obj.insert("id".to_string(), Value::String(id.clone()));
+        obj.insert("project".to_string(), Value::String(project_id.clone()));
+    }
+
+    let db_key = ctrl.scoped_db_key(&project_id, &id);
+    let existing = state
+        .db
+        .generic_get_scoped(&kind, &project_id, &db_key)
+        .await?;
+    let is_update = existing.is_some();
+
+    let (principals, super_bypass) =
+        resolve_auth(&state, &user_id, ctrl.super_permission()).await?;
+
+    if !super_bypass {
+        if is_update {
+            let project_acl = parse_acl(&project_doc).ok();
+            if !ctrl.check_hybrid_acl(
+                existing.as_ref().unwrap(),
+                &principals,
+                Permissions::MODIFY,
+                project_acl.as_ref(),
+            ) {
+                log::debug!(
+                    "[HANDLER] upsert_scoped_object: MODIFY denied for user={}, kind={}, id={}",
+                    user_id,
+                    kind,
+                    id
+                );
+                return Err(AppError::not_found(format!("{}/{}", kind, id)));
+            }
+        } else {
+            // For creation, check project-level CREATE permission
+            let project_acl = parse_acl(&project_doc).ok();
+            let has_create = project_acl.as_ref().map_or(false, |acl| {
+                acl.check_permission(&principals, Permissions::CREATE)
+            });
+            if !has_create {
+                log::debug!(
+                    "[HANDLER] upsert_scoped_object: CREATE denied for user={}, project={}, kind={}, id={}",
+                    user_id,
+                    project_id,
+                    kind,
+                    id
+                );
+                return Err(AppError::not_found(format!("{}/{}", kind, id)));
+            }
+        }
+    }
+
+    if !is_update {
+        ctrl.prepare_create(&mut body, &user_id);
+    }
+
+    state.db.ensure_collection(&kind).await?;
+
+    let mut doc = ctrl.to_internal(body, &state.auth)?;
+    let hash = compute_value_hash(&doc);
+    if let Some(obj) = doc.as_object_mut() {
+        obj.insert("hash_code".to_string(), json!(hash));
+    }
+
+    let doc_snapshot = doc.clone();
+    state.db.generic_upsert(&kind, &db_key, doc).await?;
+
+    if is_update {
+        if let Err(e) = ctrl.after_update(&db_key, &state.db).await {
+            log::error!(
+                "[HANDLER] upsert_scoped_object: after_update hook failed: kind={}, id={}, error={}",
+                kind, id, e
+            );
+            return Err(e);
+        }
+    } else if let Err(e) = ctrl.after_create(&db_key, &user_id, &state.db).await {
+        log::error!(
+            "[HANDLER] upsert_scoped_object: after_create hook failed: kind={}, id={}, error={}",
+            kind, id, e
+        );
+        return Err(e);
+    }
+
+    let action = if is_update { "updated" } else { "created" };
+    let priority = if is_update { EventPriority::Note } else { EventPriority::Lifecycle };
+    state.events.entity_lifecycle(priority, &user_id, &format!("{}/{}", kind, id), action, None).await;
+
+    let status = if is_update { axum::http::StatusCode::OK } else { axum::http::StatusCode::CREATED };
+    Ok((status, Json(ctrl.to_external(doc_snapshot))))
 }
 
 /// DELETE /v1/projects/{project}/{kind}/{id}
@@ -293,9 +428,10 @@ pub async fn delete_scoped_object(
         )));
     }
 
+    let db_key = ctrl.scoped_db_key(&project_id, &id);
     let existing = state
         .db
-        .generic_get_scoped(&kind, &project_id, &id)
+        .generic_get_scoped(&kind, &project_id, &db_key)
         .await?
         .ok_or_else(|| AppError::not_found(format!("{}/{}", kind, id)))?;
 
@@ -316,7 +452,7 @@ pub async fn delete_scoped_object(
 
     state
         .db
-        .generic_soft_delete(&kind, &id, &user_id)
+        .generic_soft_delete(&kind, &db_key, &user_id)
         .await
         .map_err(|e| {
             let msg = e.to_string();
@@ -327,7 +463,7 @@ pub async fn delete_scoped_object(
             }
         })?;
 
-    ctrl.after_delete(&id, &state.db).await?;
+    ctrl.after_delete(&db_key, &state.db).await?;
 
     state.events.entity_lifecycle(EventPriority::Lifecycle, &user_id, &format!("{}/{}", kind, id), "deleted", None).await;
 

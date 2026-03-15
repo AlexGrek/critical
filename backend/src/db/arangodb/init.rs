@@ -27,7 +27,7 @@ const VERTEX_COLLECTIONS: &[&str] = &[
     "persistent_files",
     "system_events",
     "crds",
-    "ticket_groups",
+    "ticketgroups",
 ];
 
 /// Edge collections created at startup.
@@ -45,7 +45,7 @@ pub const WRITE_COLLECTIONS: &[&str] = &[
     "resource_history",
     "resource_events",
     "crds",
-    "ticket_groups",
+    "ticketgroups",
 ];
 
 /// Cached collection handles opened from a database.
@@ -132,7 +132,7 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         .await
         .map_err(|e| anyhow!(e.to_string()))?;
     let ticket_groups = db
-        .collection("ticket_groups")
+        .collection("ticketgroups")
         .await
         .map_err(|e| anyhow!(e.to_string()))?;
 
@@ -212,7 +212,7 @@ async fn create_persistent_index(
 /// **Project-scoped collections** — composite index on `["project", "deletion"]`
 /// lets ArangoDB satisfy `FILTER doc.project == @id AND doc.deletion == null`
 /// without a full collection scan.  Add an entry here whenever a new scoped
-/// collection is introduced.  Current scoped collections: `ticket_groups`.
+/// collection is introduced.  Current scoped collections: `ticketgroups`.
 ///
 /// **`memberships`** — edge collection filtered by `group`, `principal`, and
 /// `deletion` in various queries; composite `["group", "deletion"]` covers the
@@ -234,7 +234,7 @@ pub async fn ensure_indexes(
 
     // Indexes for project-scoped collections: composite filter on project + deletion.
     // Add new scoped collections here as they are introduced.
-    create_persistent_index(base_url, db_name, user, password, "ticket_groups", &["project", "deletion"]).await?;
+    create_persistent_index(base_url, db_name, user, password, "ticketgroups", &["project", "deletion"]).await?;
 
     // memberships: most queries filter by group (+ deletion); principal-first lookups also common.
     create_persistent_index(base_url, db_name, user, password, "memberships", &["group", "deletion"]).await?;

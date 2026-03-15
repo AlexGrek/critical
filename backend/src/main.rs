@@ -123,6 +123,7 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                 .route(
                     "/projects/{project}/{kind}/{id}",
                     get(api::v1::scoped_gitops::get_scoped_object)
+                        .post(api::v1::scoped_gitops::upsert_scoped_object)
                         .put(api::v1::scoped_gitops::update_scoped_object)
                         .delete(api::v1::scoped_gitops::delete_scoped_object),
                 )

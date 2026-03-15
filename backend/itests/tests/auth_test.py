@@ -108,14 +108,21 @@ def test_1_register_user(test_user):
 
 
 def test_2_login_success(test_user):
-    """Test 2: Login with the registered user"""
+    """Test 2: Login with the registered user.
+
+    xdist may run this on a different worker than test_1_register_user, so we
+    register unconditionally here (accepting 201 or 409) to keep the test
+    self-contained.
+    """
     headers = {
         "Accept": "*/*",
         "User-Agent": "pytest-client",
         "Content-Type": "application/json",
     }
-    payload = {"user": test_user["username"], "password": test_user["password"]}
+    # Register first (idempotent — 201 new, 409 already exists)
+    requests.post(URL_REGISTER, json={"user": test_user["username"], "password": test_user["password"]}, headers=headers)
 
+    payload = {"user": test_user["username"], "password": test_user["password"]}
     resp = requests.post(URL_LOGIN, json=payload, headers=headers)
     assert resp.status_code == 200, resp.text
 

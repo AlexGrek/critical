@@ -113,6 +113,20 @@ pub trait KindController: Send + Sync {
         Ok(())
     }
 
+    /// Compute the ArangoDB `_key` for a scoped resource.
+    /// For most scoped resources the `_key` is just the resource id, but
+    /// kinds that need global uniqueness across projects (e.g. ticket groups
+    /// whose short code would collide) can override this to produce a
+    /// composite key like `"{project}__{code}"`.
+    ///
+    /// Called by scoped handlers before any DB operation so the correct key
+    /// is used consistently for create, get, update, upsert, delete.
+    ///
+    /// Default: returns `id` unchanged.
+    fn scoped_db_key(&self, _project_id: &str, id: &str) -> String {
+        id.to_string()
+    }
+
     /// Check hybrid ACL permission for a single document.
     /// Uses the resource's own ACL if non-empty, otherwise falls back to
     /// the project's full ACL (all entries, no scope filtering).

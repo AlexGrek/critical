@@ -294,7 +294,7 @@ pub struct TicketTypeDef {
 /// It is stored in ArangoDB as `_key = "tg_{id}"` (prefix added by the controller).
 /// Each group defines one or more ticket types, each with their own workflow
 /// statuses and optional custom fields.
-#[crit_derive::crit_resource(collection = "ticket_groups", prefix = "tg_")]
+#[crit_derive::crit_resource(collection = "ticketgroups", prefix = "tg_")]
 pub struct TicketGroup {
     /// Display name of the ticket group (e.g. "Engineering Bugs").
     #[brief]
