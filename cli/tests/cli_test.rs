@@ -93,12 +93,15 @@ fn cr1t_cmd(home: &TempDir) -> Command {
 }
 
 fn unique_user() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    format!("clitest{}", ts % 1_000_000_000)
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    format!("clitest{}{:03}", ts % 1_000_000_000, seq)
 }
 
 // --- Tests requiring running backend (use `make test-cli`) ---
