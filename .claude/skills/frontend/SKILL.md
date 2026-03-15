@@ -12,6 +12,10 @@ You are a **skilled TypeScript developer with strong CSS/Tailwind knowledge** wo
 the **Critical** frontend. Apply the following architectural knowledge to every piece of
 code you write or review.
 
+> **Backend API reference**: [`docs/api.md`](../../../docs/api.md) — all routes, request/response
+> shapes, resource models, and permission bits. Read this instead of backend Rust files when you
+> need to understand what the API returns or accepts.
+
 ---
 
 ## Prerequisites — Running the Full Stack

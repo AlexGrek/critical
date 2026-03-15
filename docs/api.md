@@ -1,156 +1,155 @@
-# API
+# API Reference
 
-## Routes
+> **For agents**: This file is the authoritative API reference. **Read this before opening any backend Rust files.**
+> Source files are only needed for implementation details not covered here.
 
-| Path | Auth | Description |
-|------|------|-------------|
-| `/health` | none | Health check |
-| `/register` | none | User registration |
-| `/login` | none | User login (returns JWT) |
-| `/v1/static/{*path}` | none | Serve processed images from object store |
-| `/v1/*` | JWT | Protected API routes |
-| `/v1/principals/resolve` | JWT | Batch-resolve principal IDs to identity cards |
-| `/v1/ws` | JWT | WebSocket endpoint |
-| `/swagger-ui` | none | OpenAPI documentation |
+## Table of Contents
 
-All routes are nested under `/api` when accessed through the gateway (nginx or ingress).
-
-## Scoped Gitops API (`/v1/projects/{project}/{kind}`)
-
-Project-namespaced CRUD for resources belonging to a project (e.g. tasks, pipelines). The project must exist and the caller must have appropriate project or resource-level ACL.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/v1/projects/{project}/{kind}` | List accessible objects in the project |
-| `GET` | `/v1/projects/{project}/{kind}/{id}` | Fetch a single scoped object |
-| `POST` | `/v1/projects/{project}/{kind}` | Create a new scoped object |
-| `PUT` | `/v1/projects/{project}/{kind}/{id}` | Update a scoped object (fails if not exists) |
-| `DELETE` | `/v1/projects/{project}/{kind}/{id}` | Delete a scoped object |
-
-`{kind}` must be registered as a project-scoped kind (i.e. its `KindController` returns `is_scoped() = true`). Passing a global kind (e.g. `users`) returns `400 Bad Request`.
-
-**Permission model**: Hybrid ACL — resource's own ACL if non-empty; otherwise the project's ACL filtered by `scope` matching the kind. See [access-control.md](access-control.md) for details.
-
-**Pagination**: same `limit` / `cursor` query parameters as the global list endpoint.
-
-**List response**: same brief/full document structure as the global API.
+- [Authentication Routes](#authentication-routes)
+- [Gitops API — Global](#gitops-api--global-v1globalkind)
+- [Gitops API — Project-Scoped](#gitops-api--project-scoped-v1projectsprojectkind)
+- [Principal Resolution](#principal-resolution)
+- [Permissions Management](#permissions-management)
+- [Media Upload](#media-upload)
+- [Static File Serving](#static-file-serving)
+- [Access Check](#access-check)
+- [Debug Endpoints](#debug-endpoints)
+- [WebSocket](#websocket)
+- [Resource Models](#resource-models)
+- [Request / Response Shapes](#request--response-shapes)
+- [Permission Model](#permission-model)
+- [Authentication](#authentication)
+- [Collections Reference](#collections-reference)
+- [Special Behaviors](#special-behaviors)
+- [Configuration](#configuration)
 
 ---
 
-## Gitops API (`/v1/global/{kind}`)
+## Authentication Routes
 
-A generic CRUD API for all resource kinds. `{kind}` maps to an ArangoDB collection name (e.g. `users`, `groups`, `projects`). Unknown kinds are auto-created on first access.
+No JWT required.
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/v1/global/{kind}` | List all accessible objects |
-| `GET` | `/v1/global/{kind}/{id}` | Fetch a single object |
-| `POST` | `/v1/global/{kind}` | Create a new object (id in body) |
-| `POST` | `/v1/global/{kind}/{id}` | Upsert (create or replace) |
-| `PUT` | `/v1/global/{kind}/{id}` | Update (fails if not exists) |
-| `DELETE` | `/v1/global/{kind}/{id}` | Delete an object |
+| Method | Path                 | Description                                 | Success                            |
+| ------ | -------------------- | ------------------------------------------- | ---------------------------------- |
+| `POST` | `/v1/register`       | Register a new user                         | `201` (empty body)                 |
+| `POST` | `/v1/login`          | Login (returns JWT + sets cookie)           | `200 { "token": "..." }`           |
+| `POST` | `/v1/logout`         | Logout                                      | `204`                              |
+| `GET`  | `/v1/static/{*path}` | Serve processed images (avatars/wallpapers) | Raw WebP bytes                     |
+| `GET`  | `/health`            | Health check                                | `200 { "status": "healthy", ... }` |
 
-### Pagination
+All routes are nested under `/api` when accessed through the gateway (nginx/ingress):
+`http://localhost:3742/api/v1/...`
 
-The list endpoint (`GET /v1/global/{kind}`) supports optional cursor-based pagination:
+### Register
 
 ```
-GET /v1/global/users?limit=10
-GET /v1/global/users?limit=10&cursor=u_alice
+POST /v1/register
+{ "user": "alice", "password": "secret" }
+→ 201 (empty body)
 ```
 
-**Query parameters:**
+### Login
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `limit` | integer | Number of items to return. If omitted, all items are returned (no pagination). |
-| `cursor` | string | Opaque cursor from the previous page's `next_cursor` field. Omit for the first page. |
-
-**Response without `limit`** (unchanged, backward-compatible):
-```json
-{ "items": [ ... ] }
+```
+POST /v1/login
+{ "user": "alice", "password": "secret" }
+→ 200 { "token": "<jwt>" }
 ```
 
-**Response with `limit`:**
-```json
-{
-  "items": [ ... ],
-  "has_more": true,
-  "next_cursor": "u_bob"
-}
-```
+Also sets `token` cookie (`HttpOnly; Secure; SameSite=Lax`).
 
-On the last page, `has_more` is `false` and `next_cursor` is omitted:
-```json
-{
-  "items": [ ... ],
-  "has_more": false
-}
-```
+---
 
-**Implementation notes:**
-- Pagination is cursor-based using `_key` (ArangoDB primary key), which is already indexed and sorted.
-- The DB query uses `SORT doc._key ASC` + `FILTER doc._key > @cursor`, making it efficient for millions of records.
-- Pages may contain **fewer items than `limit`** when per-document ACL filtering removes some results. Keep paginating until `has_more: false`.
+## Gitops API — Global (`/v1/global/{kind}`)
 
-### List Response Shape (Brief)
+JWT required. `{kind}` maps to an ArangoDB collection (e.g. `users`, `groups`, `projects`). Unknown kinds are auto-created on first access.
 
-List responses return a summary view of each resource (brief fields only), not the full document. Full documents are returned by the single-object GET endpoint.
+| Method   | Path                       | Description                                | Success        |
+| -------- | -------------------------- | ------------------------------------------ | -------------- |
+| `GET`    | `/v1/global/{kind}`        | List all accessible objects (brief)        | `200`          |
+| `GET`    | `/v1/global/{kind}/{id}`   | Fetch single object (full)                 | `200`          |
+| `GET`    | `/v1/global/{kind}/search` | Prefix search on `_key` (up to 15 results) | `200`          |
+| `POST`   | `/v1/global/{kind}`        | Create new object (id in body)             | `201` full doc |
+| `POST`   | `/v1/global/{kind}/{id}`   | Upsert (create or replace)                 | `201`/`200`    |
+| `PUT`    | `/v1/global/{kind}/{id}`   | Update (fails if not exists)               | `200` full doc |
+| `DELETE` | `/v1/global/{kind}/{id}`   | Soft-delete                                | `204`          |
 
-| Kind | Brief fields |
-|------|-------------|
-| `users` | `id`, `meta`, `personal` |
-| `groups` | `id`, `meta`, `name` |
-| `service_accounts` | `id`, `meta`, `name` |
-| `pipeline_accounts` | `id`, `meta`, `name` |
+**Query params:**
+- `?limit=N` — paginate; omit for all items (no pagination envelope)
+- `?cursor={opaque}` — next page cursor from previous response
+- `?with_history=true` — attach `_history` field with latest `HistoryEntry` (GET single only)
+- `?startwith={prefix}` — prefix search filter (search endpoint only)
 
-## Principal Resolution (`/v1/principals/resolve`)
+---
 
-Batch-resolve principal IDs (users, groups, service accounts, pipeline accounts) to lightweight identity cards. Designed for high-frequency use — results are cached per-principal with 10-minute TTL and a 2048-entry LRU bound.
+## Gitops API — Project-Scoped (`/v1/projects/{project}/{kind}`)
+
+JWT required. `{kind}` must be registered as project-scoped. Passing a global kind returns `400`.
+
+| Method   | Path                                 | Description                | Success        |
+| -------- | ------------------------------------ | -------------------------- | -------------- |
+| `GET`    | `/v1/projects/{project}/{kind}`      | List scoped objects        | `200`          |
+| `GET`    | `/v1/projects/{project}/{kind}/{id}` | Fetch single scoped object | `200`          |
+| `POST`   | `/v1/projects/{project}/{kind}`      | Create scoped object       | `201` full doc |
+| `POST`   | `/v1/projects/{project}/{kind}/{id}` | Upsert scoped object       | `201`/`200`    |
+| `PUT`    | `/v1/projects/{project}/{kind}/{id}` | Update scoped object       | `200` full doc |
+| `DELETE` | `/v1/projects/{project}/{kind}/{id}` | Delete scoped object       | `204`          |
+
+Same `?limit` / `?cursor` query params as global list.
+
+**Permission model**: Hybrid ACL — resource's own ACL if non-empty; otherwise the project's ACL filtered by `scope` matching the kind. See [access-control.md](access-control.md).
+
+---
+
+## Principal Resolution
 
 ```
 POST /v1/principals/resolve
-Content-Type: application/json
-
 { "ids": ["u_alice", "g_engineering", "sa_github", "nonexistent"] }
 ```
 
-**Query parameters:**
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `no-cache` | bool | `true` to bypass cache, force DB fetch and refresh cached entries. Default `false` |
+**Query params:**
+- `?no-cache=true` — bypass cache, force DB fetch and refresh entries
 
 **Response** `200 OK` (always — partial failures are inline):
 ```json
 {
-  "u_alice":        { "type": "user",            "name": "Alice",           "avatar_ulid": "01jz..." },
-  "g_engineering":  { "type": "group",           "name": "Engineering" },
-  "sa_github":      { "type": "service_account", "name": "GitHub Actions" },
-  "nonexistent":    { "error": "not_found" }
+  "u_alice":       { "type": "user",            "name": "Alice", "avatar_ulid": "01jz..." },
+  "g_engineering": { "type": "group",           "name": "Engineering" },
+  "sa_github":     { "type": "service_account", "name": "GitHub Actions" },
+  "nonexistent":   { "error": "not_found" }
 }
 ```
 
 **Contract:**
-- Every requested ID appears as a key in the output map — no exceptions
-- Found principals return `{ type, name, avatar_ulid? }` where `name` is the display name (`personal.name` for users, `name` for all others)
-- Not-found or soft-deleted principals return `{ "error": "not_found" }`
-- Maximum 500 IDs per request (returns `400` if exceeded)
-- Negative results (not_found) are also cached
-
-**Cache behavior:**
-- Per-principal TTL cache: 10-minute expiry, max 2048 entries (LRU eviction)
-- Cache hits are served without DB query; only misses trigger a batch AQL
-- `?no-cache=true` forces DB fetch for all requested IDs and refreshes their cache entries
-- Use `no-cache` sparingly — it's for cases where the frontend knows data just changed (e.g. after avatar upload or name edit)
+- Every requested ID appears as a key — no exceptions
+- Found: `{ type, name, avatar_ulid? }` (name = `personal.name` for users, `name` for all others)
+- Not found / soft-deleted: `{ "error": "not_found" }`
+- Max 500 IDs per request (`400` if exceeded)
+- Per-principal cache: 10-minute TTL, 2048-entry LRU; `?no-cache=true` bypasses
 
 ---
 
-## Media Upload (`/v1/global/{kind}/{id}/upload/{upload_type}`)
+## Permissions Management
 
-Upload an avatar or wallpaper image for a principal entity. The response is returned immediately after the raw file is stored; image processing (crop → resize → WebP encode) continues in a background task.
+JWT + `ADM_USER_MANAGER` or `ADM_GODMODE` required.
 
-Supported kinds: `users`, `groups`.
+```
+POST /v1/global/permissions/{key}/grant
+POST /v1/global/permissions/{key}/revoke
+{ "principals": ["u_alice", "g_admins"] }
+```
+
+**Response** `200 OK`:
+```json
+{ "permission": "adm_user_manager", "granted_to": ["u_alice", "g_admins"] }
+```
+
+---
+
+## Media Upload
+
+JWT required. Upload avatar or wallpaper for `users` or `groups`.
 
 ```
 POST /v1/global/users/{user_id}/upload/avatar
@@ -159,7 +158,7 @@ POST /v1/global/groups/{group_id}/upload/avatar
 POST /v1/global/groups/{group_id}/upload/wallpaper
 Content-Type: multipart/form-data
 
-file=<image bytes>   (JPEG / PNG / WebP, max 5 MB)
+file=<image bytes>  (JPEG / PNG / WebP, max 5 MB)
 ```
 
 **Response** `201 Created`:
@@ -167,33 +166,30 @@ file=<image bytes>   (JPEG / PNG / WebP, max 5 MB)
 { "ulid": "01jz0a9rp700000000000000000" }
 ```
 
-The returned ULID is immediately written to the user's `avatar_ulid` or `wallpaper_ulid` field. Once the background task completes, the processed WebP files are available at the static endpoint.
+ULID is immediately written to the resource's `avatar_ulid` / `wallpaper_ulid` field. Image processing (crop → resize → WebP) runs async in a background task.
 
 **Authorization:**
 
-| Kind | Allowed callers |
-|------|----------------|
-| `users` | Self-upload; `ADM_USER_MANAGER`; `ADM_GODMODE` |
+| Kind     | Allowed callers                                                          |
+| -------- | ------------------------------------------------------------------------ |
+| `users`  | Self; `ADM_USER_MANAGER`; `ADM_GODMODE`                                  |
 | `groups` | Caller with `MODIFY` ACL on the group; `ADM_USER_MANAGER`; `ADM_GODMODE` |
 
-Unauthorized callers receive `404` (to avoid leaking whether the target entity exists).
+Unauthorized → `404` (to avoid leaking entity existence).
 
-**Background processing:**
-1. Fetch raw bytes from `raw_uploads/`
-2. Center-crop to target aspect ratio (1:1 avatar, 21:9 wallpaper)
-3. Resize and encode two WebP variants (HD + thumbnail)
-4. Store in `user_avatars/` or `user_wallpapers/`
-5. Write a `persistent_files` record; delete the raw upload
+**Background processing steps:**
+1. Center-crop (1:1 avatar, 21:9 wallpaper)
+2. Resize + encode two WebP variants (HD + thumbnail)
+3. Store in `user_avatars/` or `user_wallpapers/`
+4. Write `persistent_files` record; delete raw upload
 
-Only one image conversion runs at a time (global `Semaphore(1)` in `AppState`). Additional uploads queue up and are processed in order.
-
-Currently `kind = "users"` and `kind = "groups"` are supported.
+Only one conversion runs at a time (global `Semaphore(1)`).
 
 ---
 
-## Static File Serving (`/v1/static/{*path}`)
+## Static File Serving
 
-Serves processed images from the object store without authentication. URLs are unguessable in practice because they are ULID-based.
+No auth required.
 
 ```
 GET /v1/static/user_avatars/{ulid}_hd.webp
@@ -206,65 +202,461 @@ GET /v1/static/group_wallpapers/{ulid}_hd.webp
 GET /v1/static/group_wallpapers/{ulid}_thumb.webp
 ```
 
-**Response:** raw WebP bytes with:
-- `Content-Type: image/webp`
-- `Cache-Control: public, max-age=31536000, immutable`
+**Response:** Raw WebP bytes with `Content-Type: image/webp`, `Cache-Control: public, max-age=31536000, immutable`.
 
-**Restrictions:**
-- Only `user_avatars/`, `user_wallpapers/`, `group_avatars/`, and `group_wallpapers/` directory prefixes are served — all other paths return `404`
-- Path traversal (`..`) is rejected
-- If the object store is not configured, returns `404`
+Allowed directory prefixes: `user_avatars/`, `user_wallpapers/`, `group_avatars/`, `group_wallpapers/` only. Path traversal (`..`) rejected. Returns `404` if object store not configured.
 
-Because each upload produces a new ULID, cached URLs never become stale — when a user re-uploads, the client fetches a new ULID from the user document and uses a new URL.
+---
+
+## Access Check
+
+JWT required.
+
+| Method | Path                                             | Description                          |
+| ------ | ------------------------------------------------ | ------------------------------------ |
+| `GET`  | `/v1/accesscheck/me/permissions`                 | Get caller's super-permissions       |
+| `GET`  | `/v1/accesscheck/global/{kind}/{id}`             | Check permissions on global resource |
+| `GET`  | `/v1/accesscheck/projects/{project}/{kind}/{id}` | Check permissions on scoped resource |
+
+**My permissions response:**
+```json
+{ "super_permissions": ["adm_godmode", "usr_create_groups"] }
+```
+
+**Resource access check response:**
+```json
+{
+  "kind": "groups",
+  "id": "g_engineering",
+  "effective_permissions": {
+    "bits": 15,
+    "flags": ["fetch", "list", "notify", "create"]
+  }
+}
+```
+
+---
+
+## Debug Endpoints
+
+JWT + `ADM_GODMODE` required.
+
+| Method | Path                           | Description                                                                       |
+| ------ | ------------------------------ | --------------------------------------------------------------------------------- |
+| `GET`  | `/v1/debug/collections`        | List all collections                                                              |
+| `GET`  | `/v1/debug/collections/{name}` | Dump all documents in collection (`400` for system collections starting with `_`) |
+| `GET`  | `/v1/debug/access`             | Inspect ACL resolution for user                                                   |
+| `GET`  | `/v1/debug/events`             | List system events (supports `?kind=`, `?priority=`, `?limit=`, `?cursor=`)       |
+| `GET`  | `/v1/debug/history`            | List change history                                                               |
+
+**Collections list response:**
+```json
+{ "collections": [{ "name": "users" }, { "name": "groups" }, ...] }
+```
+
+**Collection dump response:**
+```json
+{ "collection": "users", "count": 3, "documents": [ /* raw ArangoDB docs */ ] }
+```
+
+**Events response:**
+```json
+{ "events": [...], "has_more": true, "next_cursor": "...", "count": 50 }
+```
+
+---
+
+## WebSocket
+
+JWT required.
+
+```
+WS /v1/ws
+```
+
+Real-time event subscription for the authenticated user.
+
+---
+
+## Resource Models
+
+All models use the **`#[crit_derive::crit_resource]`** proc macro which injects these standard fields:
+
+| Field         | Type                      | Description                                                            |
+| ------------- | ------------------------- | ---------------------------------------------------------------------- |
+| `id`          | `String`                  | Resource key (maps to ArangoDB `_key`)                                 |
+| `labels`      | `HashMap<String, String>` | Queryable key-value metadata (desired state)                           |
+| `annotations` | `HashMap<String, String>` | Non-queryable freeform strings (desired state)                         |
+| `state`       | `ResourceState`           | Server-managed: `created_at`, `created_by`, `updated_at`, `updated_by` |
+| `acl`         | `AccessControlStore`      | Per-document ACL (unless `no_acl` specified)                           |
+| `deletion`    | `Option<DeletionInfo>`    | Soft-delete marker (null = alive)                                      |
+| `hash_code`   | `String`                  | FNV-1a 64-bit hash of desired state (16-char hex)                      |
+
+### `users` (collection: `users`, prefix: `u_`, **no ACL**)
+
+```
+id: String
+personal:
+  name: String
+  gender: String
+  job_title: String
+  manager: Option<String>      # manager user ID
+avatar_ulid: Option<String>
+wallpaper_ulid: Option<String>
+password_hash: String          # bcrypt — NEVER returned in API
+```
+
+**Brief fields (list queries):** `id`, `labels`, `annotations`, `personal`, `avatar_ulid`
+
+Access controlled by super-permissions only (no per-resource ACL).
+
+### `groups` (collection: `groups`, prefix: `g_`)
+
+```
+id: String
+name: String
+description: Option<String>
+avatar_ulid: Option<String>
+wallpaper_ulid: Option<String>
+```
+
+**Brief fields:** `id`, `labels`, `annotations`, `name`, `avatar_ulid`
+
+### `service_accounts` (collection: `service_accounts`, prefix: `sa_`)
+
+```
+id: String
+name: String
+description: Option<String>
+avatar_ulid: Option<String>
+wallpaper_ulid: Option<String>
+token_hash: String             # bcrypt — NEVER returned in API
+```
+
+**Brief fields:** `id`, `labels`, `annotations`, `name`, `avatar_ulid`
+
+### `pipeline_accounts` (collection: `pipeline_accounts`, prefix: `pa_`)
+
+```
+id: String
+name: String
+description: Option<String>
+scope: Option<String>          # scoped to pipeline/project
+avatar_ulid: Option<String>
+wallpaper_ulid: Option<String>
+token_hash: String             # bcrypt — NEVER returned in API
+```
+
+**Brief fields:** `id`, `labels`, `annotations`, `name`, `avatar_ulid`
+
+### `projects` (collection: `projects`, no prefix)
+
+```
+id: String
+name: String
+description: Option<String>
+repositories: Vec<RepoLink>
+  url: String
+  provider: RepoProvider       # git | github | gitlab | bitbucket | svn | mercurial | custom
+  name: Option<String>
+  default_branch: Option<String>
+enabled_services: Vec<ProjectService>
+  # integrations | pipelines | deployments | secrets | wikis | apps
+  # tasks | talks | releases | environments | insights
+```
+
+**Brief fields:** `id`, `labels`, `annotations`, `name`
+
+### `ticketgroups` (collection: `ticketgroups`, prefix: `tg_`, **project-scoped**)
+
+```
+id: String
+name: String
+description: Option<String>
+project: String                # injected by scoped handler
+ticket_types: Vec<TicketTypeDef>
+  name: String
+  description: Option<String>
+  statuses: Vec<TicketStatus>
+    name: String
+    category: StatusCategory   # todo | in_progress | done
+  fields: Vec<TicketFieldDef>
+    name: String
+    field_type: TicketFieldType  # text | number | boolean | date | user | single_select | multi_select
+    required: bool
+    description: Option<String>
+    options: Vec<String>         # for select types
+```
+
+**Brief fields:** `id`, `labels`, `annotations`, `name` (ticket_types excluded from list queries)
+
+### `crds` (collection: `crds`, no ACL, all authenticated users can read)
+
+```
+id: String
+scope: CrdScope                # global | project
+acl_mode: CrdAclMode           # special | inherit | custom
+nouns:
+  singular: String             # e.g. "deployment"
+  plural: String               # e.g. "deployments"
+relations: Vec<CrdRelation>
+  edge_collection: String
+  direction: RelationDirection  # outbound | inbound
+  target_kind: String
+  label: Option<String>
+fields: HashMap<String, FieldDef>
+id_prefix: String              # e.g. "dep_"
+super_permission: Option<String>
+description: Option<String>
+```
+
+### `memberships` (edge collection — no `#[crit_resource]` macro)
+
+```
+id: String                     # "{principal_id}::{group_id}"
+_from: String                  # e.g. "users/u_alice", "groups/g_eng"
+_to: String                    # e.g. "groups/g_admins"
+principal: String              # denormalized principal ID
+group: String                  # denormalized group ID
+```
+
+---
+
+## Request / Response Shapes
+
+### List (no `?limit`)
+
+```json
+{ "items": [ /* brief objects */ ] }
+```
+
+### Paginated list (`?limit=N`)
+
+```json
+{
+  "items": [ /* brief objects */ ],
+  "has_more": true,
+  "next_cursor": "opaque-cursor-string"
+}
+```
+
+Last page: `has_more: false`, **no** `next_cursor` key.
+
+Pages may contain fewer items than `limit` — ACL filtering removes some results. Continue until `has_more: false`.
+
+### Brief field reference
+
+| Kind                | Brief fields                                             |
+| ------------------- | -------------------------------------------------------- |
+| `users`             | `id`, `labels`, `annotations`, `personal`, `avatar_ulid` |
+| `groups`            | `id`, `labels`, `annotations`, `name`, `avatar_ulid`     |
+| `service_accounts`  | `id`, `labels`, `annotations`, `name`, `avatar_ulid`     |
+| `pipeline_accounts` | `id`, `labels`, `annotations`, `name`, `avatar_ulid`     |
+| `projects`          | `id`, `labels`, `annotations`, `name`                    |
+| `ticketgroups`      | `id`, `labels`, `annotations`, `name`                    |
+
+### Single resource (GET `/{id}`, POST create, PUT update)
+
+POST create and PUT update both return the **full document** — read `hash_code` directly from the write response; no follow-up GET needed.
+
+```json
+{
+  "id": "u_alice",
+  "labels": {},
+  "annotations": {},
+  "state": {
+    "created_at": "2026-03-15T12:00:00Z",
+    "created_by": "u_root",
+    "updated_at": "2026-03-15T12:00:00Z",
+    "updated_by": null
+  },
+  "acl": { "list": [...], "last_mod_date": "..." },
+  "hash_code": "a1b2c3d4e5f6g7h8",
+  "personal": { "name": "Alice", "gender": "", "job_title": "", "manager": null },
+  "avatar_ulid": null
+}
+```
+
+### Create request body
+
+```json
+{
+  "id": "resource_id",
+  "field1": "value",
+  "labels": { "env": "prod" },
+  "annotations": { "note": "..." },
+  "acl": {
+    "list": [
+      { "permissions": 127, "principals": ["u_alice"] },
+      { "permissions": 7,   "principals": ["g_viewers"] }
+    ],
+    "last_mod_date": "2026-03-15T12:00:00Z"
+  }
+}
+```
+
+**Status codes:**
+- `201 Created` — POST create, POST upsert to non-existent
+- `200 OK` — PUT update, POST upsert to existing
+
+### Error response
+
+```json
+{
+  "error": {
+    "message": "Authorization failed: Unauthorized",
+    "status": 401,
+    "type": "authorization_error"
+  }
+}
+```
+
+**ACL denial returns `404` (not `403`)** to avoid leaking resource existence.
+
+---
+
+## Permission Model
+
+### Permission bits (`u8` bitmask)
+
+```
+FETCH   = 1   (0x01)  # Read single object
+LIST    = 2   (0x02)  # List objects
+NOTIFY  = 4   (0x04)  # Receive notifications
+CREATE  = 8   (0x08)  # Create new objects
+MODIFY  = 16  (0x10)  # Update / delete
+
+READ    = FETCH | LIST | NOTIFY    = 7
+WRITE   = CREATE | MODIFY | READ   = 31
+ROOT    = WRITE | CUSTOM1 | CUSTOM2 = 127
+```
+
+### Per-resource ACL entry
+
+```json
+{ "permissions": 31, "principals": ["u_alice", "g_engineering"], "scope": null }
+```
+
+`scope` — optional; restricts the entry to one resource kind (e.g. `"ticketgroups"`). Absent or `"*"` matches all kinds. Only used in project ACL entries.
+
+### Super-permissions (bypass per-resource ACL)
+
+| Key                   | Grants                                                  |
+| --------------------- | ------------------------------------------------------- |
+| `adm_godmode`         | Full bypass of all ACLs; full access to debug endpoints |
+| `adm_user_manager`    | Full CRUD on users/groups; auto-granted to `u_root`     |
+| `adm_config_editor`   | Edit global config and projects                         |
+| `usr_create_groups`   | Create new groups (granted on registration)             |
+| `usr_create_projects` | Create new projects                                     |
+
+Stored in the `permissions` collection (key = permission name, value = `{ "principals": [...] }`).
+
+### Godmode
+
+Users with `ADM_GODMODE` bypass all ACL checks and receive `ROOT` (127) permissions on every resource.
+
+### Principal caching
+
+- Group membership cached with 5-second TTL (no invalidation)
+- Changes propagate with up to 5-second latency
 
 ---
 
 ## Authentication
 
-Three auth strategies:
+Three strategies:
 
-| Strategy | Description |
-|----------|-------------|
-| **JWT** | Primary method. Issued on `/login`, required for `/v1/*` routes |
-| **API key** | For service-to-service calls (`CLIENT_API_KEYS` env var) |
+| Strategy    | Description                                                                              |
+| ----------- | ---------------------------------------------------------------------------------------- |
+| **JWT**     | Primary. Issued on `/login`, passed as `Authorization: Bearer <token>` or `token` cookie |
+| **API key** | Service-to-service. Set via `CLIENT_API_KEYS` env var (comma-separated)                  |
 
-JWT middleware is applied to all `/v1` routes via the `Auth` struct initialized with `JWT_SECRET`.
+JWT middleware applied to all `/v1/*` routes.
 
-### Login
+---
 
-```
-POST /login
-Content-Type: application/json
+## Collections Reference
 
-{ "user": "alice", "password": "secret" }
-```
+### Vertex collections
 
-Response:
-```json
-{ "token": "<jwt>" }
-```
+| Collection           | Prefix   | Notes                     |
+| -------------------- | -------- | ------------------------- |
+| `users`              | `u_`     | No ACL                    |
+| `groups`             | `g_`     |                           |
+| `service_accounts`   | `sa_`    |                           |
+| `pipeline_accounts`  | `pa_`    |                           |
+| `projects`           | *(none)* |                           |
+| `crds`               | *(none)* | No ACL                    |
+| `ticketgroups`       | `tg_`    | Project-scoped            |
+| `permissions`        | *(none)* | Super-permissions store   |
+| `resource_history`   |          | Immutable snapshots       |
+| `resource_events`    |          | Per-resource events       |
+| `system_events`      |          | Server lifecycle events   |
+| `unprocessed_images` |          | Temporary, pre-processing |
+| `persistent_files`   |          | Processed image metadata  |
 
-### Registration
+### Edge collections
 
-```
-POST /register
-Content-Type: application/json
+| Collection    | Direction                           | Notes            |
+| ------------- | ----------------------------------- | ---------------- |
+| `memberships` | `_from` (principal) → `_to` (group) | Group membership |
 
-{ "id": "u_alice", "password": "secret", ... }
-```
+### Dynamic collections
+
+Ad-hoc collections created on first access to `/v1/global/{kind}` or `/v1/projects/{project}/{kind}`. Kind must match `[a-z0-9_]+`.
+
+---
+
+## Special Behaviors
+
+### Soft delete
+
+When a resource is deleted:
+1. `deletion` field set to `{ deleted_at, deleted_by, disconnected_edges }`
+2. All connected edges captured in `disconnected_edges`
+3. All list/get queries filter `doc.deletion == null`
+4. Document persists in history and events
+
+### Hash code (conflict detection)
+
+- FNV-1a 64-bit hash of desired-state fields (excludes `hash_code`, `deletion`, `_id`, `_rev`)
+- Returned as 16-character hex string in all responses
+- Used for optimistic locking on upsert/update
+
+### Pagination
+
+- Cursor-based using `_key` (already indexed and sorted in ArangoDB)
+- Query: `SORT doc._key ASC` + `FILTER doc._key > @cursor`
+- Efficient for millions of records
+
+### The `doc_snapshot` pattern
+
+In handlers, the fully-prepared internal doc is cloned **before** passing to `generic_create`/`generic_update`, then used for both history recording and the response. **Never** issue a follow-up `generic_get` to build the response — it fails silently under load.
+
+---
 
 ## Configuration
 
-Environment variables loaded via `dotenvy` from `backend/.env`:
+Environment variables (loaded from `backend/.env`):
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DB_CONNECTION_STRING` | *(required)* | ArangoDB URL (e.g. `http://localhost:8529`) |
-| `DB_NAME` | `unnamed` | Database name |
-| `DB_USER` | `root` | ArangoDB user |
-| `DB_PASSWORD` | *(empty)* | ArangoDB password |
-| `PORT` | `3742` | Server port |
-| `HOST` | `0.0.0.0` | Bind address |
-| `JWT_SECRET` | *(required)* | JWT signing secret |
-| `JWT_LIFETIME_SECS` | *(see config)* | JWT token lifetime in seconds |
-| `CLIENT_API_KEYS` | *(optional)* | Comma-separated API keys |
+| Variable               | Default        | Description                                 |
+| ---------------------- | -------------- | ------------------------------------------- |
+| `DB_CONNECTION_STRING` | *(required)*   | ArangoDB URL (e.g. `http://localhost:8529`) |
+| `DB_NAME`              | `unnamed`      | Database name                               |
+| `DB_USER`              | `root`         | ArangoDB user                               |
+| `DB_PASSWORD`          | *(empty)*      | ArangoDB password                           |
+| `PORT`                 | `3742`         | Server port                                 |
+| `HOST`                 | `0.0.0.0`      | Bind address                                |
+| `JWT_SECRET`           | *(required)*   | JWT signing secret                          |
+| `JWT_LIFETIME_SECS`    | *(see config)* | JWT token lifetime in seconds               |
+| `CLIENT_API_KEYS`      | *(optional)*   | Comma-separated API keys                    |
+| `OBJECT_STORE_BACKEND` | *(optional)*   | `local` / `s3` / `webdav`                   |
+| `OBJECT_STORE_PATH`    | `./data`       | Path for local object store                 |
+| `OBJECT_STORE_BUCKET`  |                | S3 bucket name                              |
+| `OBJECT_STORE_KEY`     |                | S3 access key                               |
+| `OBJECT_STORE_SECRET`  |                | S3 secret key                               |
+| `OBJECT_STORE_REGION`  |                | S3 region                                   |
+| `OBJECT_STORE_URL`     |                | S3 custom endpoint or WebDAV URL            |
+| `CRITICAL_EVENTS_TTL`  | `30`           | Event retention in days                     |
+
+**Dev defaults** (from test fixtures): `root` / `changeme`, database `devdb`, port `8529`.

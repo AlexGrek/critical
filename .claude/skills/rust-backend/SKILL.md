@@ -7,6 +7,11 @@ user-invokable: true
 You are working on the **Critical (crit-cli)** Rust backend. Apply the following
 architectural knowledge to every piece of code you write or review.
 
+> **Before opening any backend Rust source files**: check [`docs/api.md`](../../../docs/api.md) first.
+> It contains the complete API reference — all routes, request/response shapes, resource models,
+> permission bits, collections, and special behaviors. Reading Rust files is only needed for
+> implementation details not covered there.
+
 ---
 
 ## Cargo Workspace

@@ -11,6 +11,9 @@ user-invocable: true
 You are working on the **Critical (crit-cli)** Python integration test suite.
 Apply the following knowledge to every test you write or review.
 
+> **API reference**: [`docs/api.md`](../../../docs/api.md) contains all routes, response shapes,
+> resource model fields, permission bits, and ID conventions. Check it before reading any Rust files.
+
 ---
 
 ## Location & Commands

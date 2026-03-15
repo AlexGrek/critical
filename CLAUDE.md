@@ -110,7 +110,9 @@ See [`docs/architecture.md`](docs/architecture.md) for the `KindController` trai
 
 ### API Routes
 
-See [`docs/api.md`](docs/api.md) for full route documentation.
+See [`docs/api.md`](docs/api.md) for the **complete API reference** — all routes, request/response
+shapes, resource model fields, permission bits, collections, and special behaviors.
+**Read `docs/api.md` before opening any backend Rust source files.**
 
 ### Gitops Handler Lifecycle & Response Contracts
 

@@ -12,6 +12,9 @@ You are working on the **cr1t CLI** (`cli/` crate, binary name `cr1t`).
 Apply the following architectural knowledge to every piece of code you write or review.
 **Always run CLI tests after making changes** — see the Testing section.
 
+> **API reference**: [`docs/api.md`](../../../docs/api.md) contains all backend routes, request/response
+> shapes, resource models, and permission bits. Check it before reading any backend Rust files.
+
 ---
 
 ## Overview
