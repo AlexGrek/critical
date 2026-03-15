@@ -24,7 +24,7 @@ function TopBarLogo({ onToggle, compact }: { onToggle: () => void; compact: bool
       style={{ color: "var(--color-topbar-text)" }}
       onClick={onToggle}
       aria-label="Toggle navigation menu"
-      initial="rest"
+      initial={false}
       whileHover="hover"
       variants={{ rest: {}, hover: {} }}
       data-testid="topbar-logo-toggle"
@@ -181,6 +181,7 @@ function UserMenu({ user, scrolled }: { user: AuthUser | null; scrolled: boolean
 export function TopBar({ isOpen: _, onToggle, scrolled, isAuthenticated, user }: TopBarProps) {
   return (
     <motion.header
+      initial={false}
       animate={{ height: scrolled ? 40 : 56 }}
       transition={{ duration: 0.2, ease: "easeInOut" }}
       className={cn(

@@ -1,7 +1,7 @@
 import type { Route } from "./+types/user-detail";
 import { useLoaderData } from "react-router";
 import { Link } from "react-router";
-import { H1, Paragraph, Card, CardContent, Tabs, YamlEditor } from "~/components";
+import { H1, Paragraph, Card, CardContent, Tabs, YamlEditorDrawer, Button } from "~/components";
 import { AlertCircle, ArrowLeft, Briefcase, User2, Users2 } from "lucide-react";
 import React, { useMemo } from "react";
 import { cn, formatDate } from "~/lib/utils";
@@ -90,13 +90,12 @@ export function meta({ data }: Route.MetaArgs) {
 // Loader
 // ---------------------------------------------------------------------------
 
-export async function loader({ request, params }: Route.LoaderArgs) {
-  const cookie = request.headers.get("Cookie") || "";
+export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const userId = params.user_id;
 
   const res = await fetch(
-    `http://localhost:3742/api/v1/global/users/${userId}`,
-    { headers: { Cookie: cookie } }
+    `/api/v1/global/users/${userId}`,
+    { credentials: "include" }
   );
 
   if (!res.ok) {
@@ -118,10 +117,21 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 // ---------------------------------------------------------------------------
 
 export default function UserDetailPage() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user } = useLoaderData<typeof clientLoader>();
   const name = user.personal?.name?.trim() || "";
   const letters = initials(name);
   const color = avatarColor(user.id);
+
+  const yamlValue = useMemo<Record<string, unknown>>(() => ({
+    id: user.id,
+    personal: user.personal,
+    ...(user.labels && Object.keys(user.labels).length > 0
+      ? { labels: user.labels }
+      : {}),
+    ...(user.annotations && Object.keys(user.annotations).length > 0
+      ? { annotations: user.annotations }
+      : {}),
+  }), [user]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 py-8">
@@ -192,10 +202,18 @@ export default function UserDetailPage() {
           {/* Right column — details with tabs */}
           <Card className="flex-1 min-w-0">
             <Tabs.Root defaultValue="profile" className="flex flex-col">
-              <Tabs.List className="px-4 pt-2">
-                <Tabs.Trigger value="profile" data-testid="user-tab-profile">Profile</Tabs.Trigger>
-                <Tabs.Trigger value="yaml" data-testid="user-tab-yaml">YAML</Tabs.Trigger>
-              </Tabs.List>
+              <div className="px-4 pt-2 flex items-center justify-between">
+                <Tabs.List className="px-0">
+                  <Tabs.Trigger value="profile" data-testid="user-tab-profile">Profile</Tabs.Trigger>
+                </Tabs.List>
+                <YamlEditorDrawer
+                  value={yamlValue}
+                  triggerLabel="YAML"
+                  drawerTitle="View User YAML"
+                  data-testid="user-yaml-drawer"
+                  disabled
+                />
+              </div>
 
               {/* ── Profile tab ── */}
               <Tabs.Content value="profile">
@@ -275,40 +293,11 @@ export default function UserDetailPage() {
                 </CardContent>
               </Tabs.Content>
 
-              {/* ── YAML tab ── */}
-              <Tabs.Content value="yaml" className="p-4 flex flex-col min-h-80">
-                <UserYamlTab user={user} />
-              </Tabs.Content>
             </Tabs.Root>
           </Card>
         </div>
       </div>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// UserYamlTab — read-only YAML view of user resource
-// ---------------------------------------------------------------------------
-
-function UserYamlTab({ user }: { user: UserFull }) {
-  const yamlValue = useMemo<Record<string, unknown>>(() => ({
-    id: user.id,
-    personal: user.personal,
-    ...(user.labels && Object.keys(user.labels).length > 0
-      ? { labels: user.labels }
-      : {}),
-    ...(user.annotations && Object.keys(user.annotations).length > 0
-      ? { annotations: user.annotations }
-      : {}),
-  }), [user]);
-
-  return (
-    <YamlEditor
-      value={yamlValue}
-      disabled
-      data-testid="user-yaml-editor"
-    />
   );
 }
 

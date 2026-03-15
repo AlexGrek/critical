@@ -70,7 +70,8 @@
       "Bash(cargo run --bin cr1t -- edit --help)",
       "Bash(cargo run --bin cr1t)",
       "Bash(ls /Users/vedmedik/dev/critical/*.env)",
-      "Bash(ls /Users/vedmedik/dev/critical/.env*)"
+      "Bash(ls /Users/vedmedik/dev/critical/.env*)",
+      "Bash(find /Users/vedmedik/dev/critical/frontend -type f \\\\\\(-name *ticket* -o -name *projects* \\\\\\))"
     ],
     "additionalDirectories": [
       "/Users/vedmedik/dev/critical/.claude/skills"

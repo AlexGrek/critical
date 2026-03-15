@@ -86,14 +86,13 @@ export function meta({}: Route.MetaArgs) {
 // Loader
 // ---------------------------------------------------------------------------
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get("Cookie") || "";
-  const userId = getUserIdFromCookieHeader(cookie);
+export async function clientLoader() {
+  const userId = getUserIdFromCookieHeader(document.cookie || "");
   if (!userId) throw redirect("/sign-in");
 
   const res = await fetch(
-    `http://localhost:3742/api/v1/global/users/${userId}`,
-    { headers: { Cookie: cookie } }
+    `/api/v1/global/users/${userId}`,
+    { credentials: "include" }
   );
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) throw redirect("/sign-in");
@@ -101,7 +100,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
 
   const user: UserFull = await res.json();
-  return { user, cookie };
+  return { user };
 }
 
 // ---------------------------------------------------------------------------
@@ -112,9 +111,8 @@ type ActionResult =
   | { success: true; intent: string }
   | { error: string; intent: string };
 
-export async function action({ request }: Route.ActionArgs): Promise<ActionResult> {
-  const cookie = request.headers.get("Cookie") || "";
-  const userId = getUserIdFromCookieHeader(cookie);
+export async function clientAction({ request }: Route.ClientActionArgs): Promise<ActionResult> {
+  const userId = getUserIdFromCookieHeader(document.cookie || "");
   if (!userId) return { error: "Not authenticated", intent: "update_profile" };
 
   const form = await request.formData();
@@ -122,10 +120,11 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
 
   if (intent === "update_profile") {
     const res = await fetch(
-      `http://localhost:3742/api/v1/global/users/${userId}`,
+      `/api/v1/global/users/${userId}`,
       {
         method: "PUT",
-        headers: { "Content-Type": "application/json", Cookie: cookie },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           id: userId,
           personal: {
@@ -181,7 +180,7 @@ function initials(name: string): string | null {
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user } = useLoaderData<typeof clientLoader>();
   const revalidator = useRevalidator();
 
   return (

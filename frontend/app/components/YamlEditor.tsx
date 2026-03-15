@@ -6,7 +6,7 @@
  * change, and reports parse errors inline. Server-managed fields (state,
  * hash_code, deletion) can be hidden via `readOnlyFields`.
  */
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, forwardRef, useImperativeHandle } from "react";
 import { stringify, parse, YAMLParseError } from "yaml";
 import { Copy, Check, Lock } from "lucide-react";
 import { cn } from "~/lib/utils";
@@ -22,6 +22,11 @@ type PrismType = typeof import("prismjs");
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+export interface YamlEditorHandle {
+  /** Trigger a save programmatically. Returns the parsed object if valid, or null if invalid. */
+  save(): Promise<Record<string, unknown> | null>;
+}
 
 export interface YamlEditorProps {
   /** The resource object to display/edit as YAML. */
@@ -47,6 +52,8 @@ export interface YamlEditorProps {
   className?: string;
   "data-testid"?: string;
   disabled?: boolean;
+  /** Hide the footer with Save/Copy buttons. Useful when using a wrapper component. */
+  hideFooter?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,15 +93,20 @@ function escapeHtml(str: string): string {
 // Component
 // ---------------------------------------------------------------------------
 
-export function YamlEditor({
-  value,
-  onSave,
-  readOnlyFields = [],
-  allowedTopLevelKeys,
-  className,
-  disabled = false,
-  "data-testid": testId,
-}: YamlEditorProps) {
+export const YamlEditor = forwardRef<YamlEditorHandle, YamlEditorProps>(
+  (
+    {
+      value,
+      onSave,
+      readOnlyFields = [],
+      allowedTopLevelKeys,
+      className,
+      disabled = false,
+      hideFooter = false,
+      "data-testid": testId,
+    },
+    ref
+  ) => {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -209,6 +221,31 @@ export function YamlEditor({
       setIsSaving(false);
     }
   }, [onSave]);
+
+  /** Expose save method via ref for parent components to trigger saves. */
+  useImperativeHandle(
+    ref,
+    () => ({
+      async save() {
+        if (!onSave || !parsedRef.current) return null;
+        setIsSaving(true);
+        setSaveError(null);
+        try {
+          await onSave(parsedRef.current);
+          dirty.current = false;
+          return parsedRef.current;
+        } catch (err) {
+          setSaveError(
+            err instanceof Error ? err.message : "Save failed"
+          );
+          throw err;
+        } finally {
+          setIsSaving(false);
+        }
+      },
+    }),
+    [onSave]
+  );
 
   /** Reset dirty flag when the user explicitly syncs (e.g. parent re-renders
    *  after a save). We detect this via value identity change. */
@@ -346,13 +383,13 @@ export function YamlEditor({
           {saveError}
         </div>
       )}
-      {onSave && (
+      {onSave && !hideFooter && (
         <div className="flex justify-end shrink-0">
           <button
             type="button"
             onClick={handleSave}
             disabled={disabled || isSaving || !!error || !parsedRef.current}
-            data-testid="yaml-save-button"
+            data-testid="yaml-editor-save"
             className={cn(
               "px-3 py-1.5 text-xs font-medium rounded-(--radius-component)",
               "bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600",
@@ -366,4 +403,7 @@ export function YamlEditor({
       )}
     </div>
   );
-}
+  }
+);
+
+YamlEditor.displayName = "YamlEditor";

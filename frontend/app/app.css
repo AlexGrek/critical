@@ -578,6 +578,15 @@ html.lime {
   }
 }
 
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(10px);
@@ -620,9 +629,85 @@ html.lime {
   }
 }
 
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutToRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes slideInFromLeft {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutToLeft {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideOutToTop {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-100%);
+  }
+}
+
+@keyframes slideInFromBottom {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideOutToBottom {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
 @layer utilities {
   .animate-fade-in {
     animation: fadeIn var(--duration-fast) ease-out;
+  }
+
+  .animate-fade-out {
+    animation: fadeOut var(--duration-fast) ease-in;
   }
 
   .animate-scale-in {
@@ -631,6 +716,38 @@ html.lime {
 
   .animate-text-flash {
     animation: textFlash 0.6s ease-out;
+  }
+
+  .slide-in-from-right {
+    animation: slideInFromRight var(--duration-normal) ease-out;
+  }
+
+  .slide-out-to-right {
+    animation: slideOutToRight var(--duration-normal) ease-in;
+  }
+
+  .slide-in-from-left {
+    animation: slideInFromLeft var(--duration-normal) ease-out;
+  }
+
+  .slide-out-to-left {
+    animation: slideOutToLeft var(--duration-normal) ease-in;
+  }
+
+  .slide-in-from-top {
+    animation: slideInFromTop var(--duration-normal) ease-out;
+  }
+
+  .slide-out-to-top {
+    animation: slideOutToTop var(--duration-normal) ease-in;
+  }
+
+  .slide-in-from-bottom {
+    animation: slideInFromBottom var(--duration-normal) ease-out;
+  }
+
+  .slide-out-to-bottom {
+    animation: slideOutToBottom var(--duration-normal) ease-in;
   }
 }
 

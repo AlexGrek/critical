@@ -23,6 +23,8 @@ import {
   InlineCode,
   ScrollableLogWindow,
   YamlEditor,
+  YamlEditorDrawer,
+  Drawer,
   AppMenu,
 } from "~/components";
 import {
@@ -814,6 +816,184 @@ console.log(message);`}</CodeBlock>
                   data-testid="gallery-yaml-editor-readonly"
                 />
               </div>
+            </Card>
+          </div>
+        </section>
+
+        {/* Drawer */}
+        <section className="space-y-4">
+          <H2>Drawer</H2>
+          <Paragraph variant="muted" className="text-sm">
+            A slide-out panel from any edge (left, right, top, bottom). Built with
+            Radix UI Dialog. Includes header with close button, customizable body, and footer.
+          </Paragraph>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Right Drawer */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Right Drawer</CardTitle>
+                <CardDescription>Slides in from the right edge (default)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Drawer.Root>
+                  <Drawer.Trigger asChild>
+                    <Button variant="primary">Open Right Drawer</Button>
+                  </Drawer.Trigger>
+                  <Drawer.Content direction="right">
+                    <Drawer.Header>
+                      <Drawer.Title>Right Drawer</Drawer.Title>
+                      <Drawer.Description>
+                        This drawer slides in from the right edge
+                      </Drawer.Description>
+                    </Drawer.Header>
+                    <Drawer.Body className="space-y-4">
+                      <Paragraph>
+                        Drawers work well for side panels, filters, and editing forms.
+                      </Paragraph>
+                      <Paragraph variant="muted" size="sm">
+                        The body scrolls independently if content overflows.
+                      </Paragraph>
+                    </Drawer.Body>
+                    <Drawer.Footer>
+                      <Drawer.Close asChild>
+                        <Button variant="outline">Close</Button>
+                      </Drawer.Close>
+                      <Button variant="primary">Save</Button>
+                    </Drawer.Footer>
+                  </Drawer.Content>
+                </Drawer.Root>
+              </CardContent>
+            </Card>
+
+            {/* Left Drawer */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Left Drawer</CardTitle>
+                <CardDescription>Slides in from the left edge</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Drawer.Root>
+                  <Drawer.Trigger asChild>
+                    <Button variant="primary">Open Left Drawer</Button>
+                  </Drawer.Trigger>
+                  <Drawer.Content direction="left">
+                    <Drawer.Header>
+                      <Drawer.Title>Left Drawer</Drawer.Title>
+                    </Drawer.Header>
+                    <Drawer.Body>
+                      <Paragraph>Content from the left side.</Paragraph>
+                    </Drawer.Body>
+                    <Drawer.Footer>
+                      <Drawer.Close asChild>
+                        <Button variant="outline">Close</Button>
+                      </Drawer.Close>
+                    </Drawer.Footer>
+                  </Drawer.Content>
+                </Drawer.Root>
+              </CardContent>
+            </Card>
+
+            {/* Top Drawer */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Top Drawer</CardTitle>
+                <CardDescription>Slides in from the top (mobile sheet)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Drawer.Root>
+                  <Drawer.Trigger asChild>
+                    <Button variant="primary">Open Top Drawer</Button>
+                  </Drawer.Trigger>
+                  <Drawer.Content direction="top">
+                    <Drawer.Header>
+                      <Drawer.Title>Top Drawer</Drawer.Title>
+                    </Drawer.Header>
+                    <Drawer.Body>
+                      <Paragraph>Slides from the top — good for banners and notifications.</Paragraph>
+                    </Drawer.Body>
+                    <Drawer.Footer>
+                      <Drawer.Close asChild>
+                        <Button variant="outline">Close</Button>
+                      </Drawer.Close>
+                    </Drawer.Footer>
+                  </Drawer.Content>
+                </Drawer.Root>
+              </CardContent>
+            </Card>
+
+            {/* Bottom Drawer */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bottom Drawer</CardTitle>
+                <CardDescription>Slides in from the bottom (mobile sheet)</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Drawer.Root>
+                  <Drawer.Trigger asChild>
+                    <Button variant="primary">Open Bottom Drawer</Button>
+                  </Drawer.Trigger>
+                  <Drawer.Content direction="bottom">
+                    <Drawer.Header>
+                      <Drawer.Title>Bottom Drawer</Drawer.Title>
+                    </Drawer.Header>
+                    <Drawer.Body>
+                      <Paragraph>Mobile-style bottom sheet for actions and selections.</Paragraph>
+                    </Drawer.Body>
+                    <Drawer.Footer>
+                      <Drawer.Close asChild>
+                        <Button variant="outline">Close</Button>
+                      </Drawer.Close>
+                    </Drawer.Footer>
+                  </Drawer.Content>
+                </Drawer.Root>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+
+        {/* YAML Editor Drawer */}
+        <section className="space-y-4">
+          <H2>YAML Editor Drawer</H2>
+          <Paragraph variant="muted" className="text-sm">
+            A specialized drawer that wraps the YAML editor with Save/Cancel buttons
+            in the footer. Great for editing resource documents without tabs.
+          </Paragraph>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Editable YAML Drawer</CardTitle>
+                <CardDescription>
+                  Click to open a drawer with the YAML editor. Save applies changes.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <YamlEditorDrawer
+                  value={editableYamlValue}
+                  onSave={handleYamlSave}
+                  readOnlyFields={["state", "hash_code"]}
+                  triggerLabel="Edit YAML"
+                  drawerTitle="Edit Resource"
+                  showSaveSuccess={true}
+                  data-testid="gallery-yaml-drawer-editable"
+                />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Read-only YAML Drawer</CardTitle>
+                <CardDescription>
+                  View a resource document (no Save button).
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <YamlEditorDrawer
+                  value={readOnlyYamlValue}
+                  triggerLabel="View YAML"
+                  drawerTitle="View Resource"
+                  data-testid="gallery-yaml-drawer-readonly"
+                />
+              </CardContent>
             </Card>
           </div>
         </section>

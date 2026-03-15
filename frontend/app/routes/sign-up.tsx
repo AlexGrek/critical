@@ -16,7 +16,7 @@ export function meta({}: Route.MetaArgs) {
   ];
 }
 
-export async function action({ request }: Route.ActionArgs) {
+export async function clientAction({ request }: Route.ClientActionArgs) {
   const formData = await request.formData();
   const user = String(formData.get("user") ?? "");
   const password = String(formData.get("password") ?? "");
@@ -33,9 +33,10 @@ export async function action({ request }: Route.ActionArgs) {
   // Register
   let registerRes: Response;
   try {
-    registerRes = await fetch("http://localhost:3742/api/v1/register", {
+    registerRes = await fetch("/api/v1/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ user, password }),
     });
   } catch {
@@ -54,9 +55,10 @@ export async function action({ request }: Route.ActionArgs) {
   // Auto-login after successful registration
   let loginRes: Response;
   try {
-    loginRes = await fetch("http://localhost:3742/api/v1/login", {
+    loginRes = await fetch("/api/v1/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify({ user, password }),
     });
   } catch {
@@ -68,14 +70,11 @@ export async function action({ request }: Route.ActionArgs) {
     return redirect("/sign-in");
   }
 
-  const setCookie = loginRes.headers.get("set-cookie");
-  return redirect("/", {
-    headers: setCookie ? { "Set-Cookie": setCookie } : {},
-  });
+  return redirect("/");
 }
 
 export default function SignUp() {
-  const actionData = useActionData<typeof action>();
+  const actionData = useActionData<typeof clientAction>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 

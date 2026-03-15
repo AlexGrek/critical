@@ -151,11 +151,9 @@ export function meta({}: Route.MetaArgs) {
 // Loader
 // ---------------------------------------------------------------------------
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get("Cookie") || "";
-
-  const res = await fetch("http://localhost:3742/api/v1/global/projects", {
-    headers: { Cookie: cookie },
+export async function clientLoader() {
+  const res = await fetch("/api/v1/global/projects", {
+    credentials: "include",
   });
 
   if (!res.ok) {
@@ -172,8 +170,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const accessEntries = await Promise.all(
     projects.map(async (p) => {
       const r = await fetch(
-        `http://localhost:3742/api/v1/accesscheck/global/projects/${p.id}`,
-        { headers: { Cookie: cookie } }
+        `/api/v1/accesscheck/global/projects/${p.id}`,
+        { credentials: "include" }
       );
       if (!r.ok) {
         return [
@@ -204,10 +202,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 // Action
 // ---------------------------------------------------------------------------
 
-export async function action({ request }: Route.ActionArgs): Promise<ActionResult> {
+export async function clientAction({ request }: Route.ClientActionArgs): Promise<ActionResult> {
   const formData = await request.formData();
   const intent = (formData.get("intent") as string) ?? "";
-  const cookie = request.headers.get("Cookie") || "";
 
   switch (intent) {
     case "create": {
@@ -215,9 +212,10 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
       const id = formData.get("id") as string;
       if (!name || !id) return { error: "Name and ID are required", intent };
 
-      const res = await fetch("http://localhost:3742/api/v1/global/projects", {
+      const res = await fetch("/api/v1/global/projects", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Cookie: cookie },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name, id }),
       });
       if (!res.ok) return { error: await parseApiError(res), intent };
@@ -227,8 +225,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
     case "delete": {
       const projectId = formData.get("projectId") as string;
       const res = await fetch(
-        `http://localhost:3742/api/v1/global/projects/${projectId}`,
-        { method: "DELETE", headers: { Cookie: cookie } }
+        `/api/v1/global/projects/${projectId}`,
+        { method: "DELETE", credentials: "include" }
       );
       if (!res.ok) return { error: await parseApiError(res), intent };
       return { success: true, intent };
@@ -244,7 +242,7 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
 // ---------------------------------------------------------------------------
 
 export default function ProjectsListPage() {
-  const { projects, accessMap } = useLoaderData<typeof loader>();
+  const { projects, accessMap } = useLoaderData<typeof clientLoader>();
   const fetcher = useFetcher<ActionResult>();
   const revalidator = useRevalidator();
 

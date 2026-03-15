@@ -29,21 +29,20 @@ function getUserIdFromCookie(cookieHeader: string): string | null {
   }
 }
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get("Cookie") || "";
+export async function clientLoader() {
   try {
-    const res = await fetch("http://localhost:3742/api/v1/accesscheck/me/permissions", {
-      headers: { Cookie: cookie },
+    const res = await fetch("/api/v1/accesscheck/me/permissions", {
+      credentials: "include",
     });
     if (!res.ok) return { isAuthenticated: false, user: null };
 
     // Auth confirmed — fetch user details for avatar
-    const userId = getUserIdFromCookie(cookie);
+    const userId = getUserIdFromCookie(document.cookie || "");
     if (!userId) return { isAuthenticated: true, user: null };
 
     const userRes = await fetch(
-      `http://localhost:3742/api/v1/global/users/${userId}`,
-      { headers: { Cookie: cookie } }
+      `/api/v1/global/users/${userId}`,
+      { credentials: "include" }
     );
     if (!userRes.ok) return { isAuthenticated: true, user: null };
 

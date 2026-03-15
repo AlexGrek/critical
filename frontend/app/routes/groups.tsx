@@ -14,7 +14,7 @@ import {
   Table,
   Tabs,
   ResourcePicker,
-  YamlEditor,
+  YamlEditorDrawer,
   PrincipalChip,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
@@ -94,11 +94,9 @@ export function meta({}: Route.MetaArgs) {
 // Loader
 // ---------------------------------------------------------------------------
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get("Cookie") || "";
-
-  const res = await fetch("http://localhost:3742/api/v1/global/groups", {
-    headers: { Cookie: cookie },
+export async function clientLoader() {
+  const res = await fetch("/api/v1/global/groups", {
+    credentials: "include",
   });
 
   if (!res.ok) {
@@ -115,8 +113,8 @@ export async function loader({ request }: Route.LoaderArgs) {
   const accessEntries = await Promise.all(
     groups.map(async (g) => {
       const r = await fetch(
-        `http://localhost:3742/api/v1/accesscheck/global/groups/${g.id}`,
-        { headers: { Cookie: cookie } }
+        `/api/v1/accesscheck/global/groups/${g.id}`,
+        { credentials: "include" }
       );
       if (!r.ok) {
         // 404 or other error = no access
@@ -183,10 +181,9 @@ type ActionResult =
   | { success: true; intent: string }
   | { error: string; intent: string };
 
-export async function action({ request }: Route.ActionArgs): Promise<ActionResult> {
+export async function clientAction({ request }: Route.ClientActionArgs): Promise<ActionResult> {
   const formData = await request.formData();
   const intent = (formData.get("intent") as string) ?? "";
-  const cookie = request.headers.get("Cookie") || "";
 
   switch (intent) {
     case "create": {
@@ -194,9 +191,10 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
       const id = formData.get("id") as string;
       if (!name || !id) return { error: "Name and ID are required", intent };
 
-      const res = await fetch("http://localhost:3742/api/v1/global/groups", {
+      const res = await fetch("/api/v1/global/groups", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Cookie: cookie },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ name, id }),
       });
       if (!res.ok) return { error: await parseApiError(res), intent };
@@ -208,10 +206,11 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
       const groupJson = formData.get("groupJson") as string;
 
       const res = await fetch(
-        `http://localhost:3742/api/v1/global/groups/${groupId}`,
+        `/api/v1/global/groups/${groupId}`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json", Cookie: cookie },
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: groupJson,
         }
       );
@@ -224,8 +223,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
     case "delete-group": {
       const groupId = formData.get("groupId") as string;
       const res = await fetch(
-        `http://localhost:3742/api/v1/global/groups/${groupId}`,
-        { method: "DELETE", headers: { Cookie: cookie } }
+        `/api/v1/global/groups/${groupId}`,
+        { method: "DELETE", credentials: "include" }
       );
       if (!res.ok) return { error: await parseApiError(res), intent };
       return { success: true, intent };
@@ -236,10 +235,11 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
       const groupId = formData.get("groupId") as string;
       const key = `${principal}::${groupId}`;
       const res = await fetch(
-        `http://localhost:3742/api/v1/global/memberships/${key}`,
+        `/api/v1/global/memberships/${key}`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: cookie },
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ id: key, principal, group: groupId }),
         }
       );
@@ -250,8 +250,8 @@ export async function action({ request }: Route.ActionArgs): Promise<ActionResul
     case "remove-member": {
       const key = formData.get("membershipKey") as string;
       const res = await fetch(
-        `http://localhost:3742/api/v1/global/memberships/${key}`,
-        { method: "DELETE", headers: { Cookie: cookie } }
+        `/api/v1/global/memberships/${key}`,
+        { method: "DELETE", credentials: "include" }
       );
       if (!res.ok) return { error: await parseApiError(res), intent };
       return { success: true, intent };
@@ -309,7 +309,7 @@ function groupToEditForm(group: GroupFull): EditForm {
 // ---------------------------------------------------------------------------
 
 export default function Groups() {
-  const { groups, accessMap } = useLoaderData<typeof loader>();
+  const { groups, accessMap } = useLoaderData<typeof clientLoader>();
   const fetcher = useFetcher<ActionResult>();
   const revalidator = useRevalidator();
   const prevFetcherState = useRef<string>("idle");
@@ -959,15 +959,27 @@ function GroupEditor({
             {groupId}
           </span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onClose}
-          data-testid="close-editor"
-          className="shrink-0 ml-2"
-        >
-          <X className="w-4 h-4" />
-        </Button>
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {group && (
+            <YamlEditorDrawer
+              value={yamlValue}
+              onSave={onYamlSave}
+              readOnlyFields={["state", "hash_code", "deletion"]}
+              allowedTopLevelKeys={["id", "name", "description", "labels", "annotations", "acl", "state", "hash_code", "deletion"]}
+              triggerLabel="YAML"
+              drawerTitle="Edit Group YAML"
+              data-testid="yaml-drawer-trigger"
+            />
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            data-testid="close-editor"
+          >
+            <X className="w-4 h-4" />
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -1008,9 +1020,6 @@ function GroupEditor({
               {editAcl && (
                 <span className="ml-1.5 w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" />
               )}
-            </Tabs.Trigger>
-            <Tabs.Trigger value="yaml" data-testid="tab-yaml">
-              YAML
             </Tabs.Trigger>
           </Tabs.List>
 
@@ -1285,23 +1294,6 @@ function GroupEditor({
               ) : (
                 <Paragraph variant="subtle" className="text-xs">
                   Load a group to view its access control list.
-                </Paragraph>
-              )}
-            </Tabs.Content>
-
-            {/* ── YAML ── */}
-            <Tabs.Content value="yaml" className="p-4 flex flex-col flex-1 min-h-0">
-              {group ? (
-                <YamlEditor
-                  value={yamlValue}
-                  onSave={onYamlSave}
-                  readOnlyFields={["state", "hash_code", "deletion"]}
-                  allowedTopLevelKeys={["id", "name", "description", "labels", "annotations", "acl", "state", "hash_code", "deletion"]}
-                  data-testid="yaml-editor"
-                />
-              ) : (
-                <Paragraph variant="subtle" className="text-xs">
-                  Load a group to edit as YAML.
                 </Paragraph>
               )}
             </Tabs.Content>

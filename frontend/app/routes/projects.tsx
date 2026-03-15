@@ -1,5 +1,5 @@
 import type { Route } from "./+types/projects";
-import { useLoaderData, useRevalidator } from "react-router";
+import { useLoaderData, useRevalidator, Link } from "react-router";
 import {
   Button,
   Input,
@@ -14,15 +14,15 @@ import {
   PermissionBadge,
   AclEditor,
   Tabs,
-  YamlEditor,
+  YamlEditorDrawer,
   Modal,
   PrincipalChip,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
 import { AlertCircle, Lock, Settings, Plus, Github, GitBranch, Trash2, ExternalLink } from "lucide-react";
-import { formatDate } from "~/lib/utils";
+import { formatDate, cn } from "~/lib/utils";
 import { useState, useMemo, useCallback, useRef } from "react";
-import { resolvePrincipals } from "~/lib/principals";
+import { resolvePrincipalsClient } from "~/lib/principals";
 import type { PrincipalMap } from "~/lib/principals";
 
 // ---------------------------------------------------------------------------
@@ -86,7 +86,7 @@ export function meta({}: Route.MetaArgs) {
 // Loader
 // ---------------------------------------------------------------------------
 
-export async function loader({ request, params }: Route.LoaderArgs) {
+export async function clientLoader({ params }: Route.ClientLoaderArgs) {
   const { project_id } = params;
 
   if (!project_id) {
@@ -94,12 +94,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   const response = await fetch(
-    `http://localhost:3742/api/v1/global/projects/${project_id}`,
-    {
-      headers: {
-        Cookie: request.headers.get("Cookie") || "",
-      },
-    }
+    `/api/v1/global/projects/${project_id}`,
+    { credentials: "include" }
   );
 
   if (!response.ok) {
@@ -118,10 +114,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ...(project.acl?.list?.flatMap((e) => e.principals) ?? []),
   ].filter((id): id is string => !!id);
 
-  const principals = await resolvePrincipals(
-    principalIds,
-    request.headers.get("Cookie") || ""
-  );
+  const principals = await resolvePrincipalsClient(principalIds);
 
   return { project, principals };
 }
@@ -131,7 +124,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 // ---------------------------------------------------------------------------
 
 export default function ProjectPage() {
-  const { project, principals } = useLoaderData<typeof loader>();
+  const { project, principals } = useLoaderData<typeof clientLoader>();
   const [currentAcl, setCurrentAcl] = useState<AccessControlStore>(
     (project.acl as AccessControlStore) || { list: [], last_mod_date: new Date().toISOString() }
   );
@@ -142,13 +135,52 @@ export default function ProjectPage() {
   const [activeTab, setActiveTab] = useState<string>(
     (project.enabled_services?.[0]) || "overview"
   );
+  const [isSavingFeatures, setIsSavingFeatures] = useState(false);
+  const [featureError, setFeatureError] = useState("");
   const revalidator = useRevalidator();
+
+  const AVAILABLE_FEATURES = [
+    { id: "tickets", name: "Tickets", description: "Issue tracking and ticket management" },
+    { id: "pipelines", name: "Pipelines", description: "CI/CD pipeline management" },
+  ];
+
+  const handleToggleFeature = async (featureId: string) => {
+    setFeatureError("");
+    setIsSavingFeatures(true);
+    try {
+      const currentServices = project.enabled_services || [];
+      const isEnabled = currentServices.includes(featureId);
+      const newServices = isEnabled
+        ? currentServices.filter((s) => s !== featureId)
+        : [...currentServices, featureId];
+
+      const response = await fetch(
+        `/api/v1/global/projects/${project.id}`,
+        {
+          method: "PUT",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...project, enabled_services: newServices }),
+        }
+      );
+
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({})) as Record<string, unknown>;
+        throw new Error(String(body.message ?? body.error ?? `HTTP ${response.status}`));
+      }
+      revalidator.revalidate();
+    } catch (err) {
+      setFeatureError(err instanceof Error ? err.message : "Failed to save features");
+    } finally {
+      setIsSavingFeatures(false);
+    }
+  };
 
   const handleAclSave = async (newAcl: AccessControlStore) => {
     setIsSavingAcl(true);
     try {
       const response = await fetch(
-        `http://localhost:3742/api/v1/global/projects/${project.id}`,
+        `/api/v1/global/projects/${project.id}`,
         {
           method: "PUT",
           credentials: "include",
@@ -305,6 +337,17 @@ export default function ProjectPage() {
               >
                 <Lock className="w-4 h-4" />
               </Button>
+
+              <YamlEditorDrawer
+                value={yamlValue}
+                onSave={handleYamlSave}
+                readOnlyFields={["state", "hash_code", "deletion"]}
+                allowedTopLevelKeys={["id", "name", "description", "repositories", "enabled_services", "labels", "annotations", "acl", "state", "hash_code", "deletion"]}
+                triggerLabel="YAML"
+                drawerTitle="Edit Project YAML"
+                data-testid="project-yaml-drawer"
+              />
+
               <Button
                 variant="ghost"
                 size="icon"
@@ -334,7 +377,6 @@ export default function ProjectPage() {
                   {service}
                 </Tabs.Trigger>
               ))}
-              <Tabs.Trigger value="yaml" data-testid="project-tab-yaml">YAML</Tabs.Trigger>
             </Tabs.List>
             <Button
               variant="ghost"
@@ -667,27 +709,41 @@ export default function ProjectPage() {
           {/* ── Enabled Services tabs ── */}
           {enabledServices.map((service) => (
             <Tabs.Content key={service} value={service} className="pt-6">
-              <Card className="w-full py-12">
-                <div className="flex flex-col items-center gap-4 px-8">
-                  <H1>{service}</H1>
-                  <Paragraph className="text-center max-w-prose text-gray-600 dark:text-gray-400">
-                    Content for {service} feature will appear here
-                  </Paragraph>
-                </div>
-              </Card>
+              {service === "tickets" ? (
+                <Card className="w-full">
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle>Ticket Groups</CardTitle>
+                        <CardDescription>Manage issue types and workflows</CardDescription>
+                      </div>
+                      <Link to={`/p/${project.id}/tickets`}>
+                        <Button variant="primary" size="sm" data-testid="manage-tickets-button">
+                          Manage Ticket Groups
+                          <Plus className="w-3.5 h-3.5 ml-1.5" />
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <Paragraph variant="muted" size="sm">
+                      Define ticket types and their workflows. Click "Manage Ticket Groups" to configure issue types, statuses, and custom fields.
+                    </Paragraph>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="w-full py-12">
+                  <div className="flex flex-col items-center gap-4 px-8">
+                    <H1 className="capitalize">{service}</H1>
+                    <Paragraph className="text-center max-w-prose text-gray-600 dark:text-gray-400">
+                      {service === "pipelines" ? "CI/CD pipeline management coming soon" : "Content coming soon"}
+                    </Paragraph>
+                  </div>
+                </Card>
+              )}
             </Tabs.Content>
           ))}
 
-          {/* ── YAML tab ── */}
-          <Tabs.Content value="yaml" className="pt-6 flex flex-col min-h-100">
-            <YamlEditor
-              value={yamlValue}
-              onSave={handleYamlSave}
-              readOnlyFields={["state", "hash_code", "deletion"]}
-              allowedTopLevelKeys={["id", "name", "description", "repositories", "enabled_services", "labels", "annotations", "acl", "state", "hash_code", "deletion"]}
-              data-testid="project-yaml-editor"
-            />
-          </Tabs.Content>
         </Tabs.Root>
       </div>
 
@@ -799,24 +855,57 @@ export default function ProjectPage() {
           <Modal.Header>
             <Modal.Title className="flex items-center gap-2">
               <Plus className="w-5 h-5" />
-              Enable Feature
+              Enable Features
             </Modal.Title>
             <Modal.Description>
-              Add a new feature to this project
+              Select which features to enable for this project
             </Modal.Description>
           </Modal.Header>
 
           <div className="px-6 py-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Available Features</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <Paragraph variant="muted" className="text-sm">
-                  Feature selection will be available soon
-                </Paragraph>
-              </CardContent>
-            </Card>
+            {featureError && (
+              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-(--radius-component) text-red-700 dark:text-red-400 text-sm">
+                {featureError}
+              </div>
+            )}
+            <div className="space-y-3">
+              {AVAILABLE_FEATURES.map((feature) => {
+                const isEnabled = project.enabled_services?.includes(feature.id) ?? false;
+                return (
+                  <button
+                    key={feature.id}
+                    onClick={() => handleToggleFeature(feature.id)}
+                    disabled={isSavingFeatures}
+                    className={cn(
+                      "w-full px-4 py-3 rounded-(--radius-component) border-2 transition-colors text-left",
+                      isEnabled
+                        ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
+                        : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600",
+                      isSavingFeatures && "opacity-50 cursor-not-allowed"
+                    )}
+                    data-testid={`feature-toggle-${feature.id}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <p className={cn("font-medium text-sm", isEnabled ? "text-primary-700 dark:text-primary-300" : "text-gray-900 dark:text-gray-100")}>
+                          {feature.name}
+                        </p>
+                        <p className={cn("text-xs mt-0.5", isEnabled ? "text-primary-600 dark:text-primary-400" : "text-gray-600 dark:text-gray-400")}>
+                          {feature.description}
+                        </p>
+                      </div>
+                      <div className={cn("w-5 h-5 rounded-(--radius-component) border-2 flex items-center justify-center shrink-0 transition-colors", isEnabled ? "bg-primary-500 border-primary-500" : "border-gray-300 dark:border-gray-600")}>
+                        {isEnabled && (
+                          <svg className="w-3 h-3 text-white" viewBox="0 0 12 10" fill="none">
+                            <path d="M1 5L4 8L11 1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <Modal.Footer>

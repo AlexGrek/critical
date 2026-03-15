@@ -2,6 +2,7 @@
 export { Button, buttonVariants } from "./Button";
 export { Input } from "./Input";
 export { Modal } from "./Modal";
+export { Drawer } from "./Drawer";
 export { MorphModal } from "./MorphModal";
 export { default as LogoCritical, LogoCriticalAnimated } from "./LogoCritical";
 export { ThemeCombobox } from "./ThemeCombobox";
@@ -19,7 +20,9 @@ export type { ResourcePickerProps, PickerItem } from "./ResourcePicker";
 export { AclEditor, PermissionBadge } from "./AclEditor";
 export type { AclEditorProps, AccessControlList, AccessControlStore } from "./AclEditor";
 export { YamlEditor } from "./YamlEditor";
-export type { YamlEditorProps } from "./YamlEditor";
+export type { YamlEditorProps, YamlEditorHandle } from "./YamlEditor";
+export { YamlEditorDrawer } from "./YamlEditorDrawer";
+export type { YamlEditorDrawerProps } from "./YamlEditorDrawer";
 export { AppMenu } from "./AppMenu";
 export type { AppItem, AppMenuProps } from "./AppMenu";
 export { PrincipalChip } from "./PrincipalChip";

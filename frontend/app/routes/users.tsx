@@ -78,11 +78,9 @@ export function meta({}: Route.MetaArgs) {
 // Loader
 // ---------------------------------------------------------------------------
 
-export async function loader({ request }: Route.LoaderArgs) {
-  const cookie = request.headers.get("Cookie") || "";
-
-  const res = await fetch("http://localhost:3742/api/v1/global/users", {
-    headers: { Cookie: cookie },
+export async function clientLoader() {
+  const res = await fetch("/api/v1/global/users", {
+    credentials: "include",
   });
 
   if (!res.ok) {
@@ -101,7 +99,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 // ---------------------------------------------------------------------------
 
 export default function UsersPage() {
-  const { users } = useLoaderData<typeof loader>();
+  const { users } = useLoaderData<typeof clientLoader>();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 px-4 py-8">
