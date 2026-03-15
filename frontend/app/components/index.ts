@@ -12,6 +12,8 @@ export { Paragraph, paragraphVariants } from "./Paragraph";
 export { CodeBlock, InlineCode, codeBlockVariants } from "./CodeBlock";
 export { ScrollableLogWindow } from "./ScrollableLogWindow";
 export { TopBar } from "./TopBar";
+export { TopBarBreadcrumb } from "./TopBarBreadcrumb";
+export { ProjectLogo } from "./ProjectLogo";
 export { SideMenu } from "./SideMenu";
 export { Table } from "./Table";
 export { Tabs } from "./Tabs";

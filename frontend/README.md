@@ -14,14 +14,7 @@ npm start           # Serve production build
 
 ## Routes
 
-All routes are defined in [`app/routes.ts`](app/routes.ts):
-
-| Route         | Component                                   | Purpose                                                             |
-| ------------- | ------------------------------------------- | ------------------------------------------------------------------- |
-| `/`           | [home.tsx](app/routes/home.tsx)             | Welcome page with link to UI gallery                                |
-| `/sign-in`    | [sign-in.tsx](app/routes/sign-in.tsx)       | Login form (POST to `/api/login`)                                   |
-| `/sign-up`    | [sign-up.tsx](app/routes/sign-up.tsx)       | Registration form (POST to `/api/register`, auto-login on success)  |
-| `/ui-gallery` | [ui-gallery.tsx](app/routes/ui-gallery.tsx) | Component showcase (buttons, inputs, modals, logos, theme switcher) |
+All routes are defined in [`app/routes.ts`](app/routes.ts)
 
 Other routes also exist, but not listed.
 

@@ -4,7 +4,7 @@ description: >
   Expert TypeScript/React/CSS developer for this project's frontend. Use when writing,
   reviewing, or debugging frontend code — routes, components, styling, themes, API
   integration, or new pages. Enforces custom component usage, theme compliance, and
-  React Router 7 patterns specific to this codebase.
+  React Router 7 SPA mode patterns specific to this codebase.
 user-invocable: true
 ---
 
@@ -39,45 +39,29 @@ npm start                   # Serve production build via react-router-serve
 
 ## Toolchain
 
-| Tool              | Version   | Purpose                                        |
-| ----------------- | --------- | ---------------------------------------------- |
-| React             | 19        | UI framework                                   |
-| React Router      | 7.12      | Framework mode with SSR (NOT classic SPA mode, but SPA after hydration)  |
-| Vite              | 7         | Build tool + dev server                        |
-| TailwindCSS       | 4         | Utility-first CSS (v4 syntax, NOT v3)          |
-| TypeScript        | 5.9       | Strict mode enabled                            |
-| CVA               | 0.7       | `class-variance-authority` for component variants |
-| clsx + tw-merge   | latest    | `cn()` utility for class merging               |
-| Framer Motion     | 12        | Animations (MorphModal, logo)                  |
-| Radix UI          | latest    | Accessible primitives (Dialog, Select, etc.)   |
-| Headless UI       | 2         | ThemeCombobox (Listbox)                        |
-| Lucide React      | latest    | Icons                                          |
+| Tool            | Version | Purpose                                           |
+| --------------- | ------- | ------------------------------------------------- |
+| React           | 19      | UI framework                                      |
+| React Router    | 7.12    | Framework mode with no SSR (classic SPA mode)     |
+| Vite            | 7       | Build tool + dev server                           |
+| TailwindCSS     | 4       | Utility-first CSS (v4 syntax, NOT v3)             |
+| TypeScript      | 5.9     | Strict mode enabled                               |
+| CVA             | 0.7     | `class-variance-authority` for component variants |
+| clsx + tw-merge | latest  | `cn()` utility for class merging                  |
+| Framer Motion   | 12      | Animations (MorphModal, logo)                     |
+| Radix UI        | latest  | Accessible primitives (Dialog, Select, etc.)      |
+| Headless UI     | 2       | ThemeCombobox (Listbox)                           |
+| Lucide React    | latest  | Icons                                             |
 
 Path alias: `~/*` maps to `./app/*` (use `import { Button } from "~/components"`)
 
 ---
 
-## SSR + SPA Hybrid Architecture (CRITICAL — understand this)
+## SPA Hybrid Architecture (CRITICAL — understand this)
 
-This app runs in **React Router 7 framework mode with SSR enabled**.
-
-### How it works
-
-1. **Server render**: On first page load, the React Router server renders the full HTML
-   (loaders run server-side, component tree rendered to HTML string)
-2. **Hydration**: The client-side JS bundle hydrates the server-rendered HTML — React
-   attaches event listeners to the existing DOM without re-rendering
-3. **SPA after hydration**: Once hydrated, all subsequent navigations are client-side SPA
-   navigations — loaders run via `fetch()` from the browser, no full page reloads
-4. **Both must work**: Every page must render correctly both as server HTML AND as a
-   hydrated SPA. No `window`/`document`/`localStorage` access during SSR render —
-   guard with `typeof window !== "undefined"` or use `useEffect`
+This app runs in **React Router 7 framework mode with SSR disabled**.
 
 ### Production vs Dev
-
-- **Dev**: Vite dev server (`npm run dev`) on port 5173, proxies `/api/*` to `localhost:3742`
-- **Production**: `react-router-serve` on port 3000, nginx gateway routes `/api/*` to
-  backend and `/*` to the frontend SSR server
 
 ---
 
@@ -191,54 +175,30 @@ navigate("/groups");
 ## API Integration — Cookie-Based JWT Auth
 
 The backend sets an **HttpOnly cookie** containing the JWT. The browser automatically
-sends it on all requests. But in SSR loaders/actions, you must **forward the cookie
-explicitly** from the incoming request:
-
-```ts
-export async function loader({ request }: Route.LoaderArgs) {
-  const response = await fetch("http://localhost:3742/api/v1/global/groups", {
-    headers: {
-      Cookie: request.headers.get("Cookie") || "",
-    },
-  });
-  // handle response...
-}
-```
-
-For mutations (POST/PUT/DELETE):
-```ts
-const response = await fetch("http://localhost:3742/api/v1/global/groups", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Cookie: request.headers.get("Cookie") || "",
-  },
-  body: JSON.stringify({ name, id }),
-});
-```
+sends it on all requests.
 
 ### Auth Flow
 
 - **Sign-in**: POST to `/api/login` → backend returns `Set-Cookie` → action captures
   it and returns `redirect("/", { headers: { "Set-Cookie": setCookieValue } })`
 - **Sign-up**: POST to `/api/register`, then auto-login via `/api/login`
-- **Subsequent requests**: Cookie sent automatically by browser; SSR forwards it
+- **Subsequent requests**: Cookie sent automatically by browser; SSR forwards it (but is disabled)
 
 ### API Routes (Backend)
 
 All API calls go through `/api/` prefix:
 
-| Endpoint | Method | Auth | Purpose |
-| -------- | ------ | ---- | ------- |
-| `/api/login` | POST | No | Login (returns JWT cookie) |
-| `/api/register` | POST | No | Register new user |
-| `/api/health` | GET | No | Health check |
-| `/api/v1/global/{kind}` | GET | JWT | List resources of a kind |
-| `/api/v1/global/{kind}` | POST | JWT | Create resource |
-| `/api/v1/global/{kind}/{id}` | GET | JWT | Get single resource |
-| `/api/v1/global/{kind}/{id}` | PUT | JWT | Update resource |
-| `/api/v1/global/{kind}/{id}` | DELETE | JWT | Soft-delete resource |
-| `/api/v1/ws` | WS | JWT | WebSocket |
+| Endpoint                     | Method | Auth | Purpose                    |
+| ---------------------------- | ------ | ---- | -------------------------- |
+| `/api/login`                 | POST   | No   | Login (returns JWT cookie) |
+| `/api/register`              | POST   | No   | Register new user          |
+| `/api/health`                | GET    | No   | Health check               |
+| `/api/v1/global/{kind}`      | GET    | JWT  | List resources of a kind   |
+| `/api/v1/global/{kind}`      | POST   | JWT  | Create resource            |
+| `/api/v1/global/{kind}/{id}` | GET    | JWT  | Get single resource        |
+| `/api/v1/global/{kind}/{id}` | PUT    | JWT  | Update resource            |
+| `/api/v1/global/{kind}/{id}` | DELETE | JWT  | Soft-delete resource       |
+| `/api/v1/ws`                 | WS     | JWT  | WebSocket                  |
 
 **Resource kinds**: `users`, `groups`, `projects`, `memberships`, `service_accounts`,
 `pipeline_accounts`, `permissions`, `resource_history`, `resource_events`
@@ -258,23 +218,25 @@ Always use the project's custom components instead.
 
 ### Available Components
 
-| Component | Import | Use for |
-| --------- | ------ | ------- |
-| `Button` | `~/components` | All buttons. Variants: `primary`, `secondary`, `destructive`, `outline`, `ghost`, `link`. Sizes: `sm`, `default`, `lg`, `icon` |
-| `Input` | `~/components` | All text inputs. Props: `monospace`, `copyable` (clipboard icon) |
-| `Modal` | `~/components` | Dialogs. Namespace pattern: `Modal.Root`, `.Trigger`, `.Content`, `.Header`, `.Title`, `.Description`, `.Footer`, `.Close` |
-| `MorphModal` | `~/components` | Animated modal that morphs from trigger element. Children can be `(close) => ReactNode` |
-| `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter` | `~/components` | Content containers |
-| `Header`, `H1`-`H6` | `~/components` | Headings with CVA variants (`level`, `weight`, `align`) |
-| `Paragraph` | `~/components` | Text blocks. Variants: `default`, `muted`, `subtle`, `primary`, `success`, `warning`, `danger` |
-| `CodeBlock`, `InlineCode` | `~/components` | Code display (block and inline) |
-| `ScrollableLogWindow` | `~/components` | Terminal-style log viewer with auto-scroll |
-| `YamlEditor` | `~/components` | Textarea-based YAML editor for resource documents. Props: `value` (object), `onChange(parsed)`, `readOnlyFields?` (strips server-managed keys like `state`, `hash_code`, `deletion` from display). Use `useMemo` for `value` to avoid spurious re-serialization. |
-| `LogoCritical`, `LogoCriticalAnimated` | `~/components` | `{!}` branding logo |
-| `ThemeCombobox` | `~/components` | Theme picker dropdown |
-| `TopBar` | `~/components` | Fixed app header (h-14, z-50) with animated logo toggle and user button. Props: `isOpen`, `onToggle` |
-| `SideMenu` | `~/components` | Collapsible nav sidebar (w-64) with sections, active-link detection, theme picker at bottom. Props: `isOpen`, `isDesktop`, `onClose` |
-| `PrincipalChip` | `~/components` | Inline avatar + display name for any principal (user/group/SA/PA). Props: `id` (raw principal ID), `info` (resolved `PrincipalInfo`), `size` (`xs`\|`sm`\|`md`). Falls back to monospace ID when info is not yet resolved. **Always use this — never display raw principal IDs.** |
+| Component                                                                         | Import         | Use for                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------- | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Button`                                                                          | `~/components` | All buttons. Variants: `primary`, `secondary`, `destructive`, `outline`, `ghost`, `link`. Sizes: `sm`, `default`, `lg`, `icon`                                                                                                                                                    |
+| `Input`                                                                           | `~/components` | All text inputs. Props: `monospace`, `copyable` (clipboard icon)                                                                                                                                                                                                                  |
+| `Modal`                                                                           | `~/components` | Dialogs. Namespace pattern: `Modal.Root`, `.Trigger`, `.Content`, `.Header`, `.Title`, `.Description`, `.Footer`, `.Close`                                                                                                                                                        |
+| `MorphModal`                                                                      | `~/components` | Animated modal that morphs from trigger element. Children can be `(close) => ReactNode`                                                                                                                                                                                           |
+| `Card`, `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter` | `~/components` | Content containers                                                                                                                                                                                                                                                                |
+| `Header`, `H1`-`H6`                                                               | `~/components` | Headings with CVA variants (`level`, `weight`, `align`)                                                                                                                                                                                                                           |
+| `Paragraph`                                                                       | `~/components` | Text blocks. Variants: `default`, `muted`, `subtle`, `primary`, `success`, `warning`, `danger`                                                                                                                                                                                    |
+| `CodeBlock`, `InlineCode`                                                         | `~/components` | Code display (block and inline)                                                                                                                                                                                                                                                   |
+| `ScrollableLogWindow`                                                             | `~/components` | Terminal-style log viewer with auto-scroll                                                                                                                                                                                                                                        |
+| `YamlEditor`                                                                      | `~/components` | Textarea-based YAML editor for resource documents. Props: `value` (object), `onChange(parsed)`, `readOnlyFields?` (strips server-managed keys like `state`, `hash_code`, `deletion` from display). Use `useMemo` for `value` to avoid spurious re-serialization.                  |
+| `LogoCritical`, `LogoCriticalAnimated`                                            | `~/components` | `{!}` branding logo                                                                                                                                                                                                                                                               |
+| `ThemeCombobox`                                                                   | `~/components` | Theme picker dropdown                                                                                                                                                                                                                                                             |
+| `TopBar`                                                                          | `~/components` | Fixed app header (h-14, z-50) with animated logo toggle and user button. Props: `isOpen`, `onToggle`                                                                                                                                                                              |
+| `TopBarBreadcrumb`                                                                | `~/components` | Smart breadcrumb in top bar that auto-detects project context from URL. Shows squircle icon + project name (clickable popover for project list) + sub-resource path (e.g., `/ tickets`). Semi-transparent slashes in Space Grotesk small-caps. Returns null when not in project context. Props: `compact` (boolean for compact sizing on scroll) |
+| `ProjectLogo`                                                                     | `~/components` | Reusable project context indicator with squircle icon + name. Auto-detects project from URL. Returns null when not in project context. Props: `size` (`sm`\|`md`\|`lg`), `className`, `data-testid`                                                                               |
+| `SideMenu`                                                                        | `~/components` | Collapsible nav sidebar (w-64) with sections, active-link detection, project logo context (via `ProjectLogo`), and theme picker at bottom. Props: `isOpen`, `isDesktop`, `onClose`, `topOffset`, `isAuthenticated`                                                                  |
+| `PrincipalChip`                                                                   | `~/components` | Inline avatar + display name for any principal (user/group/SA/PA). Props: `id` (raw principal ID), `info` (resolved `PrincipalInfo`), `size` (`xs`\|`sm`\|`md`). Falls back to monospace ID when info is not yet resolved. **Always use this — never display raw principal IDs.** |
 
 ### Component Patterns
 
@@ -357,17 +319,6 @@ copy-paste CSS template and step-by-step instructions for all 3 files you must t
 The single most common mistake: **forgetting to override `--color-primary-*`**. The
 global default is green. If your theme block doesn't include all 11 `--color-primary-*`
 variables (50–950), your theme will have green buttons, badges, and links everywhere.
-
-### Current Themes
-
-| Theme | Base | Colors | Roundness |
-| ----- | ---- | ------ | --------- |
-| `light` | light | White bg, dark text, green primary | Standard (md/lg/xl) |
-| `dark` | dark | Near-black green-tinted bg, green primary | Standard (md/lg/xl) |
-| `barbie` | light | Pink bg, hot pink primary | **Very round** (2xl/full/2xl) — pill-shaped |
-| `fusion` | light | Light blue bg, sky blue primary | Slightly rounder (lg/xl/xl) |
-| `orange` | dark | Dark warm bg, orange primary | **Very minimal** (sm/sm/sm) — sharp |
-| `grayscale` | dark | True black bg + `grayscale(100%)` filter | **Zero** (0.125rem) — brutalist |
 
 ### Roundness — CSS Variable Tokens (MANDATORY)
 
@@ -475,7 +426,9 @@ frontend/
 │   │   ├── LogoCritical.tsx
 │   │   ├── ThemeCombobox.tsx
 │   │   ├── TopBar.tsx             # Fixed top bar; uses --color-topbar-* CSS vars
-│   │   ├── SideMenu.tsx           # Collapsible sidebar; uses --color-nav-* CSS vars
+│   │   ├── TopBarBreadcrumb.tsx   # Smart breadcrumb in top bar; project name + path (Space Grotesk)
+│   │   ├── ProjectLogo.tsx        # Reusable project context indicator (squircle + name)
+│   │   ├── SideMenu.tsx           # Collapsible sidebar; uses --color-nav-* CSS vars; includes ProjectLogo
 │   │   ├── AclEditor.tsx          # ACL modal editor (AccessControlStore)
 │   │   ├── ResourcePicker.tsx     # Async search-as-you-type dropdown for any kind
 │   │   ├── YamlEditor.tsx         # Textarea YAML editor for resource documents

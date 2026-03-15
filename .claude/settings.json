@@ -72,10 +72,12 @@
       "Bash(ls /Users/vedmedik/dev/critical/*.env)",
       "Bash(ls /Users/vedmedik/dev/critical/.env*)",
       "Bash(find /Users/vedmedik/dev/critical/frontend -type f \\\\\\(-name *ticket* -o -name *projects* \\\\\\))",
-      "Bash(npx tailwindcss:*)"
+      "Bash(npx tailwindcss:*)",
+      "Bash(npm ls:*)"
     ],
     "additionalDirectories": [
-      "/Users/vedmedik/dev/critical/.claude/skills"
+      "/Users/vedmedik/dev/critical/.claude/skills",
+      "/Users/vedmedik/.claude/projects/-Users-vedmedik-dev-critical/memory"
     ]
   }
 }

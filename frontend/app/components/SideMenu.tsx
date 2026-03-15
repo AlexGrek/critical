@@ -3,7 +3,7 @@ import { Link, useLocation } from "react-router";
 import {
   Home,
   LayoutDashboard,
-  Folder,
+  Squircle,
   Users,
   Ticket,
   GitBranch,
@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { ThemeCombobox } from "~/components/ThemeCombobox";
+import { ProjectLogo } from "~/components/ProjectLogo";
 
 interface SideMenuProps {
   isOpen: boolean;
@@ -44,7 +45,7 @@ const authenticatedSections: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "Resources",
     items: [
-      { icon: Folder, label: "Projects", href: "/projects", kind: "link" },
+      { icon: Squircle, label: "Projects", href: "/projects", kind: "link" },
       { icon: Users, label: "Groups", href: "/groups", kind: "link" },
       { icon: UserCog, label: "Users", href: "/users", kind: "link" },
       { icon: Ticket, label: "Tickets", kind: "button" },
@@ -189,6 +190,9 @@ export function SideMenu({ isOpen, isDesktop, onClose, topOffset, isAuthenticate
       >
         {/* Scrollable nav area */}
         <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-5">
+          {/* Project logo (if in project context) */}
+          <ProjectLogo size="sm" className="px-1 py-1.5" data-testid="sidemenu-project-logo" />
+
           {navSections.map((section) => (
             <div key={section.title}>
               <div className="px-3 pb-1.5 text-xs font-semibold uppercase tracking-wider text-(--color-nav-text-muted)">

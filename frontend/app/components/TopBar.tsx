@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "~/lib/utils";
 import type { AuthUser } from "~/layouts/app-layout";
+import { TopBarBreadcrumb } from "./TopBarBreadcrumb";
 
 interface TopBarProps {
   isOpen: boolean;
@@ -195,6 +196,8 @@ export function TopBar({ isOpen: _, onToggle, scrolled, isAuthenticated, user }:
       data-testid="topbar"
     >
       <TopBarLogo onToggle={onToggle} compact={scrolled} />
+
+      <TopBarBreadcrumb compact={scrolled} />
 
       <div className="flex-1" />
 
