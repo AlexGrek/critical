@@ -1,11 +1,13 @@
 import { motion } from "framer-motion";
-import { User } from "lucide-react";
+import { LogIn, User } from "lucide-react";
+import { Link } from "react-router";
 import { cn } from "~/lib/utils";
 
 interface TopBarProps {
   isOpen: boolean;
   onToggle: () => void;
   scrolled: boolean;
+  isAuthenticated: boolean;
 }
 
 function TopBarLogo({ onToggle, compact }: { onToggle: () => void; compact: boolean }) {
@@ -52,7 +54,7 @@ function TopBarLogo({ onToggle, compact }: { onToggle: () => void; compact: bool
   );
 }
 
-export function TopBar({ isOpen: _, onToggle, scrolled }: TopBarProps) {
+export function TopBar({ isOpen: _, onToggle, scrolled, isAuthenticated }: TopBarProps) {
   return (
     <motion.header
       animate={{ height: scrolled ? 40 : 56 }}
@@ -71,25 +73,42 @@ export function TopBar({ isOpen: _, onToggle, scrolled }: TopBarProps) {
 
       <div className="flex-1" />
 
-      <motion.button
-        animate={{ padding: scrolled ? "0.375rem" : "0.5rem" }}
-        transition={{ duration: 0.2, ease: "easeInOut" }}
-        className={cn(
-          "flex items-center justify-center",
-          "rounded-(--radius-component) transition-colors",
-          "hover:bg-(--color-topbar-item-hover)"
-        )}
-        style={{ color: "var(--color-topbar-text)" }}
-        aria-label="User account"
-        data-testid="topbar-user-button"
-      >
-        <motion.div
-          animate={{ width: scrolled ? "1rem" : "1.25rem", height: scrolled ? "1rem" : "1.25rem" }}
+      {isAuthenticated ? (
+        <motion.button
+          animate={{ padding: scrolled ? "0.375rem" : "0.5rem" }}
           transition={{ duration: 0.2, ease: "easeInOut" }}
+          className={cn(
+            "flex items-center justify-center",
+            "rounded-(--radius-component) transition-colors",
+            "hover:bg-(--color-topbar-item-hover)"
+          )}
+          style={{ color: "var(--color-topbar-text)" }}
+          aria-label="User account"
+          data-testid="topbar-user-button"
         >
-          <User className="w-full h-full" />
-        </motion.div>
-      </motion.button>
+          <motion.div
+            animate={{ width: scrolled ? "1rem" : "1.25rem", height: scrolled ? "1rem" : "1.25rem" }}
+            transition={{ duration: 0.2, ease: "easeInOut" }}
+          >
+            <User className="w-full h-full" />
+          </motion.div>
+        </motion.button>
+      ) : (
+        <Link
+          to="/sign-in"
+          className={cn(
+            "flex items-center gap-1.5",
+            "px-3 py-1.5 text-sm font-medium",
+            "rounded-(--radius-component) transition-colors",
+            "hover:bg-(--color-topbar-item-hover)"
+          )}
+          style={{ color: "var(--color-topbar-text)" }}
+          data-testid="topbar-sign-in-button"
+        >
+          <LogIn className="w-4 h-4" />
+          <span className="hidden sm:inline">Sign in</span>
+        </Link>
+      )}
     </motion.header>
   );
 }

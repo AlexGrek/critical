@@ -158,6 +158,9 @@ pub async fn create_object(
     // Validate ACL principals (e.g. group members check) before writing
     ctrl.validate_acl_principals(&doc, &state.db).await?;
 
+    // Snapshot the fully-prepared internal document before it is consumed by
+    // the DB call — used for history recording and the create response.
+    let doc_snapshot = doc.clone();
     state
         .db
         .generic_create(&kind, doc)
@@ -176,16 +179,13 @@ pub async fn create_object(
         return Err(e);
     }
 
-    // Write initial history entry — non-fatal
-    if let Ok(Some(snap)) = state.db.generic_get(&kind, &final_id).await {
-        if let Err(e) = state.db.write_history_entry(&kind, &final_id, snap, &user_id).await {
-            log::error!("[HANDLER] create_object: write_history_entry failed: kind={}, id={}, error={}", kind, final_id, e);
-        }
+    if let Err(e) = state.db.write_history_entry(&kind, &final_id, doc_snapshot.clone(), &user_id).await {
+        log::error!("[HANDLER] create_object: write_history_entry failed: kind={}, id={}, error={}", kind, final_id, e);
     }
 
     state.events.entity_lifecycle(EventPriority::Lifecycle, &user_id, &format!("{}/{}", kind, final_id), "created", None).await;
 
-    Ok((axum::http::StatusCode::CREATED, Json(json!({ "id": final_id }))))
+    Ok((axum::http::StatusCode::CREATED, Json(ctrl.to_external(doc_snapshot))))
 }
 
 /// GET /global/{kind}/{id} — get a single object.
@@ -364,6 +364,7 @@ pub async fn update_object(
     // Validate ACL principals (e.g. group members check) before writing
     ctrl.validate_acl_principals(&doc, &state.db).await?;
 
+    let doc_snapshot = doc.clone();
     state
         .db
         .generic_update(&kind, &id, doc)
@@ -382,16 +383,13 @@ pub async fn update_object(
         return Err(e);
     }
 
-    // Write history entry on update — non-fatal
-    if let Ok(Some(snap)) = state.db.generic_get(&kind, &id).await {
-        if let Err(e) = state.db.write_history_entry(&kind, &id, snap, &user_id).await {
-            log::error!("[HANDLER] update_object: write_history_entry failed: kind={}, id={}, error={}", kind, id, e);
-        }
+    if let Err(e) = state.db.write_history_entry(&kind, &id, doc_snapshot.clone(), &user_id).await {
+        log::error!("[HANDLER] update_object: write_history_entry failed: kind={}, id={}, error={}", kind, id, e);
     }
 
     state.events.entity_lifecycle(EventPriority::Note, &user_id, &format!("{}/{}", kind, id), "updated", None).await;
 
-    Ok(Json(json!({ "id": id })))
+    Ok(Json(ctrl.to_external(doc_snapshot)))
 }
 
 /// DELETE /global/{kind}/{id} — delete an object.

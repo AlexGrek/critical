@@ -3,11 +3,27 @@ import { Outlet, useLocation } from "react-router";
 import { motion } from "framer-motion";
 import { TopBar } from "~/components/TopBar";
 import { SideMenu } from "~/components/SideMenu";
+import type { Route } from "./+types/app-layout";
 
 const TOPBAR_FULL = 56;
 const TOPBAR_COMPACT = 40;
 
-export default function AppLayout() {
+export async function loader({ request }: Route.LoaderArgs) {
+  try {
+    const res = await fetch("http://localhost:3742/api/v1/accesscheck/me/permissions", {
+      headers: { Cookie: request.headers.get("Cookie") || "" },
+    });
+    if (res.ok) {
+      return { isAuthenticated: true };
+    }
+  } catch {
+    // Server unreachable — treat as not authenticated
+  }
+  return { isAuthenticated: false };
+}
+
+export default function AppLayout({ loaderData }: Route.ComponentProps) {
+  const { isAuthenticated } = loaderData;
   const [isOpen, setIsOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -44,13 +60,14 @@ export default function AppLayout() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900">
-      <TopBar isOpen={isOpen} onToggle={() => setIsOpen((v) => !v)} scrolled={scrolled} />
+      <TopBar isOpen={isOpen} onToggle={() => setIsOpen((v) => !v)} scrolled={scrolled} isAuthenticated={isAuthenticated} />
 
       <SideMenu
         isOpen={isOpen}
         isDesktop={isDesktop}
         onClose={() => setIsOpen(false)}
         topOffset={topbarHeight}
+        isAuthenticated={isAuthenticated}
       />
 
       {/* Main content — shifts right on desktop when sidebar is open */}

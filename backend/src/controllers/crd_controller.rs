@@ -84,6 +84,15 @@ impl KindController for CrdController {
         standard_to_external(doc)
     }
 
+    fn to_list_external(&self, doc: Value) -> Value {
+        let mut doc = standard_to_external(doc);
+        if let Some(obj) = doc.as_object_mut() {
+            obj.remove("hash_code");
+            obj.remove("annotations");
+        }
+        doc
+    }
+
     fn super_permission(&self) -> Option<&str> {
         Some(super_permissions::ADM_GODMODE)
     }

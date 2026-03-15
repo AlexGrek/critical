@@ -112,6 +112,15 @@ See [`docs/architecture.md`](docs/architecture.md) for the `KindController` trai
 
 See [`docs/api.md`](docs/api.md) for full route documentation.
 
+### Gitops Handler Lifecycle & Response Contracts
+
+See [`docs/gitops-controller.md`](docs/gitops-controller.md) for:
+- Per-operation handler lifecycle (create / update / list / fetch / delete)
+- **Response shapes**: POST create and PUT update return the **full document** (not just `{"id": ...}`) — callers can read `hash_code` directly from the write response
+- The `doc_snapshot` pattern — why we clone before the DB call instead of issuing a follow-up GET
+- How to implement `to_external` and `to_list_external` for new kinds
+- Brief field control: `list_projection_fields()` (DB-level KEEP) + `to_list_external()` (Rust filter)
+
 ### Models & Resources
 
 See [`docs/models.md`](docs/models.md) for the `#[crit_resource]` proc macro, model contracts, and brief structs.

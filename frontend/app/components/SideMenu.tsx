@@ -14,6 +14,8 @@ import {
   BookOpen,
   MessageSquare,
   ShieldAlert,
+  LogIn,
+  UserPlus,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
@@ -24,13 +26,14 @@ interface SideMenuProps {
   isDesktop: boolean;
   onClose: () => void;
   topOffset: number;
+  isAuthenticated: boolean;
 }
 
 type NavItem =
   | { icon: LucideIcon; label: string; href: string; kind: "link" }
   | { icon: LucideIcon; label: string; kind: "button" };
 
-const navSections: Array<{ title: string; items: NavItem[] }> = [
+const authenticatedSections: Array<{ title: string; items: NavItem[] }> = [
   {
     title: "Navigate",
     items: [
@@ -56,6 +59,29 @@ const navSections: Array<{ title: string; items: NavItem[] }> = [
       { icon: Key, label: "API Keys", kind: "button" },
       { icon: UserCog, label: "Team", kind: "button" },
       { icon: ClipboardList, label: "Audit Log", kind: "button" },
+    ],
+  },
+  {
+    title: "Help",
+    items: [
+      { icon: BookOpen, label: "Documentation", kind: "button" },
+      { icon: MessageSquare, label: "Support", kind: "button" },
+    ],
+  },
+];
+
+const guestSections: Array<{ title: string; items: NavItem[] }> = [
+  {
+    title: "Navigate",
+    items: [
+      { icon: Home, label: "Home", href: "/", kind: "link" },
+    ],
+  },
+  {
+    title: "Account",
+    items: [
+      { icon: LogIn, label: "Sign in", href: "/sign-in", kind: "link" },
+      { icon: UserPlus, label: "Sign up", href: "/sign-up", kind: "link" },
     ],
   },
   {
@@ -124,8 +150,9 @@ function NavLink({
   );
 }
 
-export function SideMenu({ isOpen, isDesktop, onClose, topOffset }: SideMenuProps) {
+export function SideMenu({ isOpen, isDesktop, onClose, topOffset, isAuthenticated }: SideMenuProps) {
   const location = useLocation();
+  const navSections = isAuthenticated ? authenticatedSections : guestSections;
 
   return (
     <>

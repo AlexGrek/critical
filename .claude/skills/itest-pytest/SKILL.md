@@ -48,6 +48,7 @@ pdm run pytest tests/ -v --tb=long     # full tracebacks
 **CRITICAL — stale backend problem**: `make test-api` starts a fresh backend on port 3742. If a dev backend from `make run` is already on that port, the new binary fails to start with `Address already in use`, the health check passes on the OLD process, and tests silently run against a stale binary. Symptoms:
 - Debug routes return 404 (routes added after the old binary was compiled)
 - Brief-field filtering is wrong (e.g. `annotations` appears in list responses)
+- **Create (POST) and update (PUT) responses return `{"id": "..."}` only** instead of the full document — this happens when running against a pre-March-2026 binary that returned only the id; the current backend always returns the full document from these endpoints
 - Other subtle mismatches between test expectations and actual behavior
 
 **Always check and kill before running tests**:
@@ -115,7 +116,14 @@ System collections (names starting with `_`) are rejected with `400`.
 
 ## Response Shapes
 
+See [`docs/gitops-controller.md`](../../../docs/gitops-controller.md) for the full
+handler lifecycle and response contract details.
+
 ### Single resource (GET /{id}, POST create, PUT)
+
+POST create and PUT update both return the **full document** — callers can read
+`hash_code` directly from the write response without a follow-up GET.
+
 ```json
 {
   "id": "u_alice",

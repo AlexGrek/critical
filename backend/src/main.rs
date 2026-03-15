@@ -26,7 +26,7 @@ use names::{Generator, Name};
 use serde_json::{Value, json};
 use tokio::net::TcpListener;
 use tower_http::{
-    cors::{Any, CorsLayer},
+    cors::CorsLayer,
     trace::TraceLayer,
 };
 use utoipa::OpenApi;

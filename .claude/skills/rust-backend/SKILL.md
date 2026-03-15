@@ -109,6 +109,21 @@ fn super_permission(&self) -> Option<&str>
 **NEVER** add kind-specific `match kind { ... }` logic in route handlers.
 All kind-specific behavior lives in controllers.
 
+**Handler response contracts** (see `docs/gitops-controller.md` for full lifecycle):
+- **POST create** → 201 + full document via `ctrl.to_external(doc_snapshot)`
+- **PUT update** → 200 + full document via `ctrl.to_external(doc_snapshot)`
+- **GET single** → 200 + full document via `ctrl.to_external(doc)`
+- **GET list** → 200 `{ "items": [...] }` via `ctrl.to_list_external(doc)` (brief view)
+- **DELETE** → 204 No Content
+
+The `doc_snapshot` pattern: clone the fully-prepared internal doc (`_key`, `hash_code`, all fields) **before** moving it into `generic_create`/`generic_update`, then use the clone for both history recording and the response. Never issue a follow-up `generic_get` to build the response — it fails silently under load.
+
+**Brief field control** (two-layered):
+1. `list_projection_fields()` — AQL `KEEP()` projection at DB level; return `None` to fetch all
+2. `to_list_external()` — Rust-side filter; default delegates to `to_external()`
+
+Override `to_list_external()` to strip `hash_code`, `annotations`, and other full-only fields from list items.
+
 ---
 
 ## Shared Helpers (use these, don't duplicate)
