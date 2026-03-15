@@ -305,6 +305,43 @@ These Radix UI primitives are installed and available for building new component
 When you need these, wrap them as project components in `app/components/` following the
 existing CVA + `cn()` + `forwardRef` pattern, add to the barrel export, then use them.
 
+### Radix UI Animation Gotcha (CRITICAL)
+
+Radix `Dialog.Portal` (used by Drawer, Modal, etc.) **unmounts the DOM on close**. It
+listens for `animationend` before unmounting, but only when the browser actually applies
+a CSS `animation` property to the element.
+
+**Tailwind `data-[state=closed]:` variants DO NOT work with custom utility classes.**
+`data-[state=closed]:slide-out-to-right` will NOT generate any CSS output because
+Tailwind's variant system only scopes standard Tailwind utilities — custom classes
+defined in `@layer utilities` are ignored by variant modifiers.
+
+**Solution — use plain CSS selectors in `app.css`:**
+
+```css
+/* Target Radix's data-state attribute directly */
+.drawer-overlay[data-state="open"] {
+  animation: fadeIn var(--duration-fast) ease-out;
+}
+.drawer-overlay[data-state="closed"] {
+  animation: fadeOut var(--duration-fast) ease-in;
+}
+.drawer-content-right[data-state="open"] {
+  animation: slideInFromRight var(--duration-normal) ease-out;
+}
+.drawer-content-right[data-state="closed"] {
+  animation: slideOutToRight var(--duration-normal) ease-in;
+}
+```
+
+Then apply the marker class (e.g., `drawer-content-right`) in the component, and let
+the CSS rule handle the state-based animation. **Never use `transition-*` for Radix
+open/close** — transitions require the element to stay in the DOM, which Radix doesn't
+guarantee.
+
+The keyframe animations and duration variables (`--duration-fast`, `--duration-normal`)
+are defined in `app.css`.
+
 ---
 
 ## Theme System (CRITICAL — all elements must support all themes)

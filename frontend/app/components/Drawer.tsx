@@ -11,8 +11,7 @@ const DrawerOverlay = React.forwardRef<
   <Dialog.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-50 bg-black/40 backdrop-blur-sm",
-      "data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out",
+      "drawer-overlay fixed inset-0 z-50 bg-black/40 backdrop-blur-sm",
       className
     )}
     {...props}
@@ -26,13 +25,13 @@ const drawerContentVariants = cva(
     variants: {
       direction: {
         right:
-          "right-0 top-0 h-screen w-full sm:max-w-[640px] border-l data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right",
+          "drawer-content-right right-0 top-0 h-screen w-full sm:max-w-[640px] border-l",
         left:
-          "left-0 top-0 h-screen w-full sm:max-w-[640px] border-r data-[state=open]:slide-in-from-left data-[state=closed]:slide-out-to-left",
+          "drawer-content-left left-0 top-0 h-screen w-full sm:max-w-[640px] border-r",
         top:
-          "top-0 left-0 right-0 w-screen h-auto max-h-[80vh] border-b rounded-b-(--radius-component-lg) data-[state=open]:slide-in-from-top data-[state=closed]:slide-out-to-top",
+          "drawer-content-top top-0 left-0 right-0 w-screen h-auto max-h-[80vh] border-b rounded-b-(--radius-component-lg)",
         bottom:
-          "bottom-0 left-0 right-0 w-screen h-auto max-h-[80vh] border-t rounded-t-(--radius-component-lg) data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom",
+          "drawer-content-bottom bottom-0 left-0 right-0 w-screen h-auto max-h-[80vh] border-t rounded-t-(--radius-component-lg)",
       },
     },
     defaultVariants: {

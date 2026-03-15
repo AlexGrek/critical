@@ -751,6 +751,42 @@ html.lime {
   }
 }
 
+/* Drawer animations — Radix data-state driven */
+.drawer-overlay[data-state="open"] {
+  animation: fadeIn var(--duration-fast) ease-out;
+}
+.drawer-overlay[data-state="closed"] {
+  animation: fadeOut var(--duration-fast) ease-in;
+}
+
+.drawer-content-right[data-state="open"] {
+  animation: slideInFromRight var(--duration-normal) ease-out;
+}
+.drawer-content-right[data-state="closed"] {
+  animation: slideOutToRight var(--duration-normal) ease-in;
+}
+
+.drawer-content-left[data-state="open"] {
+  animation: slideInFromLeft var(--duration-normal) ease-out;
+}
+.drawer-content-left[data-state="closed"] {
+  animation: slideOutToLeft var(--duration-normal) ease-in;
+}
+
+.drawer-content-top[data-state="open"] {
+  animation: slideInFromTop var(--duration-normal) ease-out;
+}
+.drawer-content-top[data-state="closed"] {
+  animation: slideOutToTop var(--duration-normal) ease-in;
+}
+
+.drawer-content-bottom[data-state="open"] {
+  animation: slideInFromBottom var(--duration-normal) ease-out;
+}
+.drawer-content-bottom[data-state="closed"] {
+  animation: slideOutToBottom var(--duration-normal) ease-in;
+}
+
 html.nostalgic-xp {
   background-color: #f0f0f0;   /* page background */
   color: #000080;               /* default text color */
