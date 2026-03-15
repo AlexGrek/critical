@@ -74,6 +74,10 @@ body {
   font-family: var(--font-sans);
 }
 
+button {
+  cursor: pointer;
+}
+
 /* Theme-specific styles */
 html.light,
 html:not(.dark):not(.grayscale):not(.barbie):not(.orange):not(.fusion):not(.nostalgic95):not(.itheme):not(.lime) {

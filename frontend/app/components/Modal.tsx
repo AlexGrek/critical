@@ -28,9 +28,16 @@ const ModalContent = React.forwardRef<
     <Dialog.Content
       ref={ref}
       className={cn(
-        "fixed z-50 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
-        "w-full max-w-lg min-w-96 flex flex-col max-h-96",
-        "rounded-(--radius-component-xl) border border-gray-200 bg-white shadow-xl",
+        "fixed z-50 flex flex-col",
+        // Always centered via transform
+        "top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2",
+        // Mobile: fullscreen (top:50% - translateY:50% = 0; same for left)
+        "w-screen h-dvh rounded-none border-0",
+        // sm+: floating dialog — numeric max-w avoids Tailwind v4 named-container-var issues
+        "sm:h-auto sm:w-[90vw] sm:max-w-168 sm:max-h-[85vh]",
+        "sm:rounded-(--radius-component-xl) sm:border",
+        // Shared styles
+        "bg-white border-gray-200 shadow-xl",
         "dark:border-gray-800 dark:bg-gray-900",
         "focus:outline-none",
         "data-[state=open]:animate-scale-in",
@@ -39,10 +46,6 @@ const ModalContent = React.forwardRef<
       {...props}
     >
       {children}
-      <Dialog.Close className="absolute top-3 right-3 rounded-(--radius-component) opacity-70 ring-offset-white transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none dark:ring-offset-gray-950">
-        <X className="h-4 w-4 text-gray-500 dark:text-gray-400" />
-        <span className="sr-only">Close</span>
-      </Dialog.Close>
     </Dialog.Content>
   </Dialog.Portal>
 ));
@@ -50,9 +53,22 @@ ModalContent.displayName = Dialog.Content.displayName;
 
 const ModalHeader = ({
   className,
+  children,
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-800 shrink-0", className)} {...props} />
+  <div
+    className={cn(
+      "flex items-start justify-between gap-3 px-4 py-3 border-b border-gray-200 dark:border-gray-800 shrink-0",
+      className
+    )}
+    {...props}
+  >
+    <div className="flex flex-col gap-0.5 min-w-0">{children}</div>
+    <Dialog.Close className="shrink-0 mt-0.5 p-1.5 rounded-(--radius-component) opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ring-offset-white dark:ring-offset-gray-950 disabled:cursor-not-allowed disabled:opacity-50 disabled:pointer-events-none">
+      <X className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+      <span className="sr-only">Close</span>
+    </Dialog.Close>
+  </div>
 );
 ModalHeader.displayName = "ModalHeader";
 

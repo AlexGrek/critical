@@ -1,9 +1,20 @@
 import * as Popover from "@radix-ui/react-popover";
 import { useRef, useState } from "react";
-import { User2, Users, Cpu, GitBranch } from "lucide-react";
+import { Link } from "react-router";
+import { User2, Users, Cpu, GitBranch, ExternalLink } from "lucide-react";
 import { principalAvatarUrl, principalInitials } from "~/lib/principals";
 import type { PrincipalInfo } from "~/lib/principals";
 import { cn } from "~/lib/utils";
+
+/** Returns the app route for a principal, or null if no dedicated page exists. */
+function principalPageUrl(type: string, id: string): string | null {
+  switch (type) {
+    case "user":
+      return `/u/${id}`;
+    default:
+      return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -129,6 +140,7 @@ function PopupCard({
   onLeave: () => void;
 }) {
   const displayName = info && !info.error && info.name?.trim() ? info.name : null;
+  const pageUrl = info && !info.error ? principalPageUrl(info.type, id) : null;
 
   return (
     <div
@@ -144,9 +156,20 @@ function PopupCard({
         initialsClass="text-sm"
       />
       <div className="min-w-0 flex flex-col gap-0.5">
-        <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
-          {displayName ?? id}
-        </span>
+        <div className="flex items-center gap-1 min-w-0">
+          <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+            {displayName ?? id}
+          </span>
+          {pageUrl && (
+            <Link
+              to={pageUrl}
+              className="shrink-0 text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+              title="Open profile"
+            >
+              <ExternalLink className="w-3 h-3" />
+            </Link>
+          )}
+        </div>
         {/* Always show the ID in mono so power users can copy it */}
         <span className="font-mono text-xs text-gray-400 dark:text-gray-500 truncate">
           {id}

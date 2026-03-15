@@ -289,7 +289,6 @@ export function AclEditor({ acl, onSave, trigger }: AclEditorProps) {
       <Modal.Trigger asChild>{trigger}</Modal.Trigger>
 
       <Modal.Content
-        className="max-w-xl max-h-[90vh] flex flex-col"
         data-testid="acl-editor-modal"
         onPointerDownOutside={(e) => {
           const target = e.target as Element;
