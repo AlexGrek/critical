@@ -43,7 +43,17 @@ pub fn config_path_for(home: &std::path::Path) -> PathBuf {
 }
 
 fn config_path() -> Result<PathBuf> {
-    let home = dirs::home_dir().context("could not determine home directory")?;
+    let home = std::env::var_os("HOME")
+        .and_then(|h| {
+            let p = std::path::PathBuf::from(h);
+            if p.is_absolute() {
+                Some(p)
+            } else {
+                None
+            }
+        })
+        .or_else(|| dirs::home_dir())
+        .context("could not determine home directory")?;
     Ok(config_path_for(&home))
 }
 

@@ -811,6 +811,108 @@ fn test_apply_nonexistent_file_fails() {
         .stderr(predicate::str::contains("failed to read"));
 }
 
+// --- Edit command (requires backend) ---
+
+#[test]
+#[ignore]
+fn test_edit_group_basic() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpass_edit";
+    let group_id = format!(
+        "g_edit{}",
+        unique_user().chars().rev().take(4).collect::<String>()
+    );
+    let group_name = "Edit Test Group";
+    let new_name = "Edited Group Name";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, group_name);
+    write_context(&home, &token);
+
+    // Create a shell script that modifies the file in place
+    let editor_sh = home.path().join("editor.sh");
+    let editor_content = format!(
+        "#!/bin/bash\nsed -i 's/name: {}/name: {}/' \"$1\"\n",
+        group_name, new_name
+    );
+    std::fs::write(&editor_sh, editor_content).unwrap();
+
+    // Make it executable on Unix
+    #[cfg(unix)]
+    {
+        use std::fs;
+        use std::os::unix::fs::PermissionsExt;
+        let perms = fs::Permissions::from_mode(0o755);
+        fs::set_permissions(&editor_sh, perms).unwrap();
+    }
+
+    cr1t_cmd(&home)
+        .env("CR1T_EDITOR", editor_sh.to_string_lossy().to_string())
+        .args(["edit", "group", &group_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(format!("group/{} edited", group_id)));
+
+    // Verify the change was applied
+    cr1t_cmd(&home)
+        .args(["groups", "describe", &group_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(new_name));
+
+    delete_group(&token, &group_id);
+}
+
+#[test]
+#[ignore]
+fn test_edit_group_no_changes() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpass_noedit";
+    let group_id = format!(
+        "g_noedit{}",
+        unique_user().chars().rev().take(4).collect::<String>()
+    );
+    let group_name = "No Changes Group";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    create_group(&token, &group_id, group_name);
+    write_context(&home, &token);
+
+    // Use 'true' command which exits 0 without modifying the file
+    cr1t_cmd(&home)
+        .env("CR1T_EDITOR", "true")
+        .args(["edit", "group", &group_id])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("no changes"));
+
+    delete_group(&token, &group_id);
+}
+
+#[test]
+#[ignore]
+fn test_edit_resource_not_found() {
+    let home = TempDir::new().unwrap();
+    let user = unique_user();
+    let pass = "testpass_nofound";
+
+    register_user(&user, pass);
+    let token = login_user(&user, pass);
+    write_context(&home, &token);
+
+    // Try to edit a non-existent group
+    cr1t_cmd(&home)
+        .env("CR1T_EDITOR", "true")
+        .args(["edit", "group", "g_nonexistent_12345"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("404").or(predicate::str::contains("not found")));
+}
+
 // --- Debug commands (godmode required) ---
 
 #[test]
