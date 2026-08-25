@@ -56,15 +56,19 @@ pub async fn resolve_principals(
     Json(body): Json<ResolveBody>,
 ) -> Result<Json<Value>, AppError> {
     let no_cache = query.no_cache.unwrap_or(false);
-    let requested_ids = body.ids;
-
-    if requested_ids.is_empty() {
-        return Ok(Json(json!({})));
-    }
+    let mut requested_ids = body.ids;
 
     // Cap at a reasonable limit to prevent abuse
     if requested_ids.len() > 500 {
         return Err(AppError::bad_request("Maximum 500 IDs per request"));
+    }
+
+    // Deduplicate requested IDs to prevent cache poisoning
+    requested_ids.sort_unstable();
+    requested_ids.dedup();
+
+    if requested_ids.is_empty() {
+        return Ok(Json(json!({})));
     }
 
     let mut result_map = serde_json::Map::with_capacity(requested_ids.len());
