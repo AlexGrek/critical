@@ -219,9 +219,11 @@ JWT required.
 | `GET`  | `/v1/accesscheck/global/{kind}/{id}`             | Check permissions on global resource |
 | `GET`  | `/v1/accesscheck/projects/{project}/{kind}/{id}` | Check permissions on scoped resource |
 
-**My permissions response:**
+**My permissions response** — also the app's lightweight "whoami": the auth cookie is
+HttpOnly, so the frontend cannot decode its own user ID client-side and reads `user_id`
+from this response instead:
 ```json
-{ "super_permissions": ["adm_godmode", "usr_create_groups"] }
+{ "user_id": "u_alice", "super_permissions": ["adm_godmode", "usr_create_groups"] }
 ```
 
 **My ACLs response** — everything the caller can see about their own access. Reports

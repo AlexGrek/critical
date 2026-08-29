@@ -54,7 +54,10 @@ pub async fn check_scoped_access(
 ///
 /// Used by the UI to decide whether to show "create group", "create project",
 /// and similar action buttons that are gated on super-permissions rather than
-/// per-resource ACLs. Always returns 200 for authenticated users.
+/// per-resource ACLs. Also doubles as the app's lightweight "whoami" check —
+/// the auth cookie is HttpOnly, so the frontend cannot decode its own user ID
+/// client-side and instead reads `user_id` from this response. Always returns
+/// 200 for authenticated users.
 pub async fn get_my_permissions(
     State(state): State<Arc<AppState>>,
     AuthenticatedUser(user_id): AuthenticatedUser,
@@ -64,7 +67,7 @@ pub async fn get_my_permissions(
         .get_user_permissions(&user_id)
         .await
         .map_err(AppError::Internal)?;
-    Ok(Json(json!({ "super_permissions": perms })))
+    Ok(Json(json!({ "user_id": user_id, "super_permissions": perms })))
 }
 
 /// Return a detailed report of the calling user's own access: super-permissions,

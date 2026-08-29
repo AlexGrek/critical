@@ -14,30 +14,17 @@ export interface AuthUser {
   avatarUrl: string | null;
 }
 
-function getUserIdFromCookie(cookieHeader: string): string | null {
-  const match = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
-  if (!match) return null;
-  const parts = match[1].split(".");
-  if (parts.length < 2) return null;
-  try {
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const json = atob(b64);
-    const payload = JSON.parse(json) as { sub?: string };
-    return payload.sub ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export async function clientLoader() {
   try {
+    // The auth cookie is HttpOnly, so the frontend cannot decode its own user
+    // ID from document.cookie — /accesscheck/me/permissions doubles as a
+    // lightweight "whoami" and echoes back `user_id` for authenticated callers.
     const res = await fetch("/api/v1/accesscheck/me/permissions", {
       credentials: "include",
     });
     if (!res.ok) return { isAuthenticated: false, user: null };
 
-    // Auth confirmed — fetch user details for avatar
-    const userId = getUserIdFromCookie(document.cookie || "");
+    const { user_id: userId } = (await res.json()) as { user_id?: string };
     if (!userId) return { isAuthenticated: true, user: null };
 
     const userRes = await fetch(

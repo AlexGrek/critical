@@ -104,22 +104,18 @@ interface MyAclsReport {
 }
 
 // ---------------------------------------------------------------------------
-// JWT decode helper (no verification — just reads the sub claim for routing)
+// Identity helper — the auth cookie is HttpOnly, so the frontend cannot decode
+// its own user ID from document.cookie. /accesscheck/me/permissions doubles as
+// a lightweight "whoami" and echoes back `user_id` for authenticated callers.
 // ---------------------------------------------------------------------------
 
-function getUserIdFromCookieHeader(cookieHeader: string): string | null {
-  const match = cookieHeader.match(/(?:^|;\s*)token=([^;]+)/);
-  if (!match) return null;
-  const parts = match[1].split(".");
-  if (parts.length < 2) return null;
-  try {
-    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/");
-    const json = atob(b64);
-    const payload = JSON.parse(json) as { sub?: string };
-    return payload.sub ?? null;
-  } catch {
-    return null;
-  }
+async function whoami(): Promise<string | null> {
+  const res = await fetch(`/api/v1/accesscheck/me/permissions`, {
+    credentials: "include",
+  });
+  if (!res.ok) return null;
+  const body = (await res.json()) as { user_id: string };
+  return body.user_id;
 }
 
 // ---------------------------------------------------------------------------
@@ -138,13 +134,13 @@ export function meta({}: Route.MetaArgs) {
 // ---------------------------------------------------------------------------
 
 export async function clientLoader() {
-  const userId = getUserIdFromCookieHeader(document.cookie || "");
-  if (!userId) throw redirect("/sign-in");
-
-  const [res, aclsRes] = await Promise.all([
-    fetch(`/api/v1/global/users/${userId}`, { credentials: "include" }),
+  const [userId, aclsRes] = await Promise.all([
+    whoami(),
     fetch(`/api/v1/accesscheck/me/acls`, { credentials: "include" }),
   ]);
+  if (!userId) throw redirect("/sign-in");
+
+  const res = await fetch(`/api/v1/global/users/${userId}`, { credentials: "include" });
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) throw redirect("/sign-in");
     throw new Response("Failed to load user", { status: res.status });
@@ -164,7 +160,7 @@ type ActionResult =
   | { error: string; intent: string };
 
 export async function clientAction({ request }: Route.ClientActionArgs): Promise<ActionResult> {
-  const userId = getUserIdFromCookieHeader(document.cookie || "");
+  const userId = await whoami();
   if (!userId) return { error: "Not authenticated", intent: "update_profile" };
 
   const form = await request.formData();
