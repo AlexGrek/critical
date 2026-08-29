@@ -1,0 +1,645 @@
+version: '3'
+
+vars:
+  # Container runtime — docker preferred, podman-compose as fallback
+  COMPOSE:
+    sh: (command -v docker >/dev/null 2>&1 && echo "docker compose") || echo podman-compose
+
+  BACKEND_DIR: backend
+  FRONTEND_DIR: frontend
+  ITESTS_DIR: backend/itests
+  E2E_DIR: e2e-tests
+  DIST_DIR: dist
+
+  BACKEND_PORT: '3742'
+  BACKEND_URL: http://localhost:3742
+  FRONTEND_PORT: '5173'
+  DB_URL: http://localhost:8529
+  DB_AUTH: root:devpassword
+
+  # Distribution images
+  API_IMAGE: grekodocker/cr1t-api
+  FRONT_IMAGE: grekodocker/cr1t-frontend
+  TAG: latest
+  PLATFORMS: linux/amd64,linux/arm64
+
+  # Helm
+  HELM_RELEASE: critical
+  HELM_NS: critical-dev
+  HELM_CHART: helm/critical
+  HELM_VALUES: helm/values-dev.yaml
+
+  # CLI cross-compilation — RUST_TARGET:ARCH:OS
+  CLI_BIN: cr1t
+  CLI_BUILD_DIR: build/crit-cli
+  CLI_TARGETS: >-
+    x86_64-unknown-linux-gnu:amd64:linux
+    i686-unknown-linux-gnu:386:linux
+    aarch64-unknown-linux-gnu:arm64:linux
+    armv7-unknown-linux-gnueabihf:arm:linux
+    x86_64-apple-darwin:amd64:darwin
+    aarch64-apple-darwin:arm64:darwin
+    x86_64-pc-windows-gnu:amd64:windows
+    i686-pc-windows-gnu:386:windows
+    aarch64-pc-windows-msvc:arm64:windows
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  GIT_COMMIT:
+    sh: git rev-parse --short HEAD 2>/dev/null || echo unknown
+
+tasks:
+  default:
+    desc: List available tasks
+    cmd: task --list
+
+  # ── Dev environment ───────────────────────────────────────────────────────────
+
+  dev:
+    desc: Start ArangoDB, backend (cargo watch) and frontend dev server together
+    deps: [db:up]
+    cmd: |
+      #!/usr/bin/env bash
+      set -e
+
+      cleanup() {
+        echo ""
+        echo ">>> Shutting down dev servers..."
+        kill "$BACKEND_PID" 2>/dev/null || true
+        wait 2>/dev/null || true
+        echo ">>> Development environment stopped."
+      }
+      trap cleanup EXIT INT TERM
+
+      echo ">>> Starting backend (cargo watch)..."
+      (cd {{.BACKEND_DIR}} && cargo watch --ignore 'itests/**' -x run) &
+      BACKEND_PID=$!
+
+      echo ">>> Starting frontend dev server..."
+      (cd {{.FRONTEND_DIR}} && npm run dev)
+
+  dev:api:
+    desc: Run the backend under cargo watch (assumes ArangoDB is up)
+    dir: '{{.BACKEND_DIR}}'
+    cmd: cargo watch --ignore 'itests/**' -x run
+
+  dev:frontend:
+    desc: Run the frontend Vite dev server (port 5173, proxies API to :3742)
+    dir: '{{.FRONTEND_DIR}}'
+    cmd: npm run dev
+
+  run:
+    desc: Start ArangoDB (persistent) and run the backend; stops the container on exit
+    deps: [db:up]
+    cmds:
+      - defer: '{{.COMPOSE}} stop && echo ">>> ArangoDB stopped."'
+      - task: backend:run
+
+  run:fresh:
+    desc: Reset DB volumes, then start ArangoDB + backend (clean slate)
+    cmds:
+      - task: db:reset
+      - task: run
+
+  kill:
+    desc: Kill stalled backend (axum-api, port 3742) and frontend (port 5173) processes
+    cmd: |
+      #!/usr/bin/env bash
+      echo ">>> Killing stalled axum-api processes..."
+      pkill -f axum-api 2>/dev/null || true
+      lsof -ti :{{.BACKEND_PORT}} 2>/dev/null | xargs kill -9 2>/dev/null || true
+      echo ">>> Killing stalled frontend processes..."
+      lsof -ti :{{.FRONTEND_PORT}} 2>/dev/null | xargs kill -9 2>/dev/null || true
+      echo ">>> Done."
+
+  # ── Build ─────────────────────────────────────────────────────────────────────
+
+  build:
+    desc: Build all workspace crates (debug)
+    cmd: cargo build
+
+  build:api:
+    desc: Build the backend binary only
+    cmd: cargo build --bin axum-api
+
+  build:cli:
+    desc: Build the cr1t CLI binary only
+    cmd: cargo build --bin cr1t
+
+  build:frontend:
+    desc: Production build of the frontend
+    dir: '{{.FRONTEND_DIR}}'
+    cmd: npm run build
+
+  backend:run:
+    desc: Run the backend server (assumes ArangoDB is up)
+    dir: '{{.BACKEND_DIR}}'
+    cmd: cargo run
+
+  typecheck:
+    desc: Typecheck the frontend (react-router typegen && tsc)
+    dir: '{{.FRONTEND_DIR}}'
+    cmd: npm run typecheck
+
+  # ── Database ──────────────────────────────────────────────────────────────────
+
+  db:up:
+    desc: Start the ArangoDB dev container (port 8529) and wait for it to be ready
+    cmds:
+      - echo ">>> Starting ArangoDB dev instance..."
+      - '{{.COMPOSE}} up -d'
+      - task: db:wait
+
+  db:down:
+    desc: Stop the ArangoDB container (keeps volumes)
+    cmds:
+      - echo ">>> Stopping ArangoDB..."
+      - '{{.COMPOSE}} down'
+
+  db:reset:
+    desc: Stop ArangoDB and delete its volumes
+    cmds:
+      - echo ">>> Resetting ArangoDB (deleting volumes)..."
+      - '{{.COMPOSE}} down -v'
+
+  db:logs:
+    desc: Tail ArangoDB container logs
+    cmds:
+      - echo ">>> Tailing ArangoDB logs"
+      - '{{.COMPOSE}} logs -f arangodb'
+
+  db:wait:
+    desc: Block until ArangoDB answers on port 8529
+    cmd: |
+      #!/usr/bin/env bash
+      echo ">>> Waiting for ArangoDB to be ready..."
+      for i in $(seq 1 30); do
+        curl -sf -u {{.DB_AUTH}} {{.DB_URL}}/_api/version >/dev/null 2>&1 && break
+        sleep 1
+      done
+      curl -sf -u {{.DB_AUTH}} {{.DB_URL}}/_api/version >/dev/null 2>&1 || {
+        echo ">>> ArangoDB failed to start"
+        exit 1
+      }
+      echo ">>> ArangoDB is ready"
+
+  db:populate:
+    desc: Populate the dev database with test users, groups and projects (needs a running backend)
+    deps: [backend:wait]
+    cmd: bash test-db/populate.sh
+
+  db:show:
+    desc: Dump all data in the dev database as admin (needs a running backend)
+    deps: [backend:wait]
+    cmd: bash test-db/show.sh
+
+  backend:wait:
+    desc: Block until the backend answers on /health
+    cmd: |
+      #!/usr/bin/env bash
+      echo ">>> Waiting for backend to be ready..."
+      for i in $(seq 1 30); do
+        curl -sf {{.BACKEND_URL}}/health >/dev/null 2>&1 && break
+        sleep 1
+      done
+      curl -sf {{.BACKEND_URL}}/health >/dev/null 2>&1 || {
+        echo ">>> Backend failed to start"
+        exit 1
+      }
+      echo ">>> Backend is ready"
+
+  # ── Tests ─────────────────────────────────────────────────────────────────────
+
+  test:
+    desc: Run every suite — Rust, CLI, Python API and Playwright E2E — on an ephemeral DB
+    cmds:
+      - echo ">>> Building backend binary..."
+      - cargo build --bin axum-api
+      - task: db:up
+      - defer:
+          task: db:reset
+      - echo ">>> [1/4] Running Rust unit & backend integration tests..."
+      - cargo test -p axum-api -p crit-cli
+      - task: _with-backend
+        vars:
+          CMD: |
+            echo ">>> [2/4] Running CLI integration tests..."
+            cargo test -p crit-cli --test cli_test -- --include-ignored
+            echo ">>> [3/4] Running Python API integration tests (parallel)..."
+            (cd backend/itests && pdm run pytest tests/ -n auto)
+            echo ">>> [4/4] Running E2E tests (Playwright)..."
+            (cd e2e-tests && npm install --silent && CI=true npx playwright test)
+            echo ">>> All tests passed."
+
+  test:unit:
+    desc: Rust unit + backend integration tests (axum-test, no backend process needed)
+    cmds:
+      - task: db:up
+      - defer:
+          task: db:reset
+      - echo ">>> Running Rust tests..."
+      - cargo test -p axum-api -p crit-cli
+
+  test:cli:
+    desc: CLI integration tests against an ephemeral DB + backend
+    cmds:
+      - task: db:up
+      - defer:
+          task: db:reset
+      - task: _with-backend
+        vars:
+          CMD: |
+            echo ">>> Running CLI integration tests..."
+            cargo test -p crit-cli --test cli_test -- --include-ignored --test-threads=1
+            echo ">>> CLI tests passed."
+
+  test:api:
+    desc: Python API integration tests against an ephemeral DB + backend
+    cmds:
+      - task: db:up
+      - defer:
+          task: db:reset
+      - task: _with-backend
+        vars:
+          CMD: |
+            echo ">>> Running Python API tests (parallel)..."
+            (cd backend/itests && pdm run pytest tests/ -n auto)
+            echo ">>> API tests passed."
+
+  test:e2e:
+    desc: Playwright E2E tests — starts ephemeral DB + backend, Playwright starts the frontend
+    cmds:
+      - task: db:up
+      - defer:
+          task: db:reset
+      - task: _with-backend
+        vars:
+          CMD: |
+            echo ">>> Running E2E tests (Playwright)..."
+            (cd e2e-tests && npm install --silent && npx playwright test)
+            echo ">>> E2E tests passed."
+
+  test:loop:
+    desc: Run `task test` in a loop until it fails, then dump the failing log
+    cmd: ./test_loop.sh
+
+  # ── Python integration tests (against an already-running backend) ─────────────
+
+  itest:
+    desc: Run Python integration tests in parallel against a running backend
+    aliases: [itest:parallel]
+    dir: '{{.ITESTS_DIR}}'
+    cmds:
+      - echo ">>> Running integration tests (parallel with -n auto)..."
+      - pdm run pytest tests/ -n auto
+
+  itest:seq:
+    desc: Run Python integration tests sequentially against a running backend
+    dir: '{{.ITESTS_DIR}}'
+    cmds:
+      - echo ">>> Running integration tests (sequential)..."
+      - pdm run pytest tests/ -v
+
+  itest:install:
+    desc: Install PDM dependencies for the Python integration tests
+    dir: '{{.ITESTS_DIR}}'
+    cmds:
+      - echo ">>> Installing integration test dependencies with PDM..."
+      - pdm install
+
+  # ── Distribution images ───────────────────────────────────────────────────────
+
+  docker:build:
+    desc: Build both distribution images locally (current arch)
+    cmds:
+      - task: docker:build:api
+      - task: docker:build:frontend
+
+  docker:build:api:
+    desc: Build the API image locally
+    cmds:
+      - echo ">>> Building API image..."
+      - docker build -t {{.API_IMAGE}}:{{.TAG}} -f {{.BACKEND_DIR}}/Dockerfile .
+
+  docker:build:frontend:
+    desc: Build the frontend image locally
+    cmds:
+      - echo ">>> Building frontend image..."
+      - docker build -t {{.FRONT_IMAGE}}:{{.TAG}} -f {{.FRONTEND_DIR}}/Dockerfile {{.FRONTEND_DIR}}
+
+  docker:push:
+    desc: Build and push both images multi-arch ({{.PLATFORMS}})
+    cmds:
+      - task: docker:push:api
+      - task: docker:push:frontend
+
+  docker:push:api:
+    desc: Build and push the API image ({{.PLATFORMS}})
+    cmds:
+      - echo ">>> Building + pushing API image ({{.PLATFORMS}})..."
+      - |
+        docker buildx build \
+          --platform {{.PLATFORMS}} \
+          -t {{.API_IMAGE}}:{{.TAG}} \
+          -f {{.BACKEND_DIR}}/Dockerfile \
+          --push .
+
+  docker:push:frontend:
+    desc: Build and push the frontend image ({{.PLATFORMS}})
+    cmds:
+      - echo ">>> Building + pushing frontend image ({{.PLATFORMS}})..."
+      - |
+        docker buildx build \
+          --platform {{.PLATFORMS}} \
+          -t {{.FRONT_IMAGE}}:{{.TAG}} \
+          -f {{.FRONTEND_DIR}}/Dockerfile \
+          --push {{.FRONTEND_DIR}}
+
+  # ── Distribution stack (dist/docker-compose.yml) ──────────────────────────────
+
+  stack:up:
+    desc: Start the prod-like Compose stack and wait for health checks
+    dir: '{{.DIST_DIR}}'
+    cmds:
+      - echo ">>> Starting stack..."
+      - '{{.COMPOSE}} up -d'
+      - task: stack:wait
+      - echo ">>> Stack is ready at http://localhost:${GATEWAY_PORT:-8080}"
+
+  stack:down:
+    desc: Stop the prod-like Compose stack
+    dir: '{{.DIST_DIR}}'
+    cmds:
+      - echo ">>> Stopping stack..."
+      - '{{.COMPOSE}} down'
+
+  stack:logs:
+    desc: Tail logs from all stack services
+    dir: '{{.DIST_DIR}}'
+    cmd: '{{.COMPOSE}} logs -f'
+
+  stack:status:
+    desc: Show running stack containers
+    dir: '{{.DIST_DIR}}'
+    cmd: '{{.COMPOSE}} ps'
+
+  stack:reset:
+    desc: Tear down the stack and remove its volumes (clean slate)
+    dir: '{{.DIST_DIR}}'
+    cmds:
+      - echo ">>> Tearing down stack and removing volumes..."
+      - '{{.COMPOSE}} down -v'
+
+  stack:wait:
+    desc: Block until the stack gateway answers on /health
+    cmd: |
+      #!/usr/bin/env bash
+      echo ">>> Waiting for services..."
+      for i in $(seq 1 30); do
+        curl -sf "http://localhost:${GATEWAY_PORT:-8080}/health" >/dev/null 2>&1 && break
+        sleep 2
+      done
+      curl -sf "http://localhost:${GATEWAY_PORT:-8080}/health" >/dev/null 2>&1 || {
+        echo ">>> Services failed to start"
+        exit 1
+      }
+      echo ">>> All services healthy"
+
+  # ── Helm / Kubernetes ─────────────────────────────────────────────────────────
+
+  helm:deploy:
+    desc: Install or upgrade the Helm release in {{.HELM_NS}}
+    dir: '{{.DIST_DIR}}'
+    cmds:
+      - echo ">>> Deploying {{.HELM_RELEASE}} to namespace {{.HELM_NS}}..."
+      - |
+        helm upgrade --install {{.HELM_RELEASE}} {{.HELM_CHART}} \
+          --namespace {{.HELM_NS}} --create-namespace \
+          -f {{.HELM_VALUES}}
+
+  helm:status:
+    desc: Show Helm release status
+    dir: '{{.DIST_DIR}}'
+    cmd: helm status {{.HELM_RELEASE}} -n {{.HELM_NS}}
+
+  helm:uninstall:
+    desc: Uninstall the Helm release
+    dir: '{{.DIST_DIR}}'
+    cmd: helm uninstall {{.HELM_RELEASE}} -n {{.HELM_NS}}
+
+  helm:template:
+    desc: Render Helm manifests locally without deploying
+    dir: '{{.DIST_DIR}}'
+    cmd: helm template {{.HELM_RELEASE}} {{.HELM_CHART}} -f {{.HELM_VALUES}}
+
+  # ── CLI cross-compilation ─────────────────────────────────────────────────────
+
+  cli:info:
+    desc: Show cross-compilation build information and target list
+    cmd: |
+      #!/usr/bin/env bash
+      echo "Build Information:"
+      echo "  Version:      {{.VERSION}}"
+      echo "  Git Commit:   {{.GIT_COMMIT}}"
+      echo "  Build Dir:    {{.CLI_BUILD_DIR}}"
+      echo "  Binary Name:  {{.CLI_BIN}}"
+      echo ""
+      echo "Available Targets:"
+      for entry in {{.CLI_TARGETS}}; do
+        rust_target="${entry%%:*}"; rest="${entry#*:}"
+        arch="${rest%%:*}"; os="${rest#*:}"
+        echo "  $arch/$os ($rust_target)"
+      done
+
+  cli:check-deps:
+    desc: Check cross-compilation prerequisites (cargo, docker, git)
+    cmd: |
+      #!/usr/bin/env bash
+      echo ">>> Checking build dependencies..."
+      command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Please install Rust."; exit 1; }
+      command -v docker >/dev/null 2>&1 || { echo "ERROR: docker not found. Please install Docker."; exit 1; }
+      command -v git >/dev/null 2>&1 || echo "WARN: git not found. Version info will be limited."
+      echo ">>> All dependencies found"
+
+  cli:install-cross:
+    desc: Install the `cross` cross-compilation tool
+    cmds:
+      - echo ">>> Installing cross-compilation tools..."
+      - cargo install cross --git https://github.com/cross-rs/cross 2>/dev/null || true
+
+  cli:targets:
+    desc: Add every required Rust target via rustup
+    cmd: |
+      #!/usr/bin/env bash
+      echo ">>> Adding Rust targets..."
+      for entry in {{.CLI_TARGETS}}; do
+        rust_target="${entry%%:*}"
+        echo ">>> Adding target: $rust_target"
+        rustup target add "$rust_target" 2>/dev/null || true
+      done
+      echo ">>> All targets added"
+
+  cli:build:
+    desc: 'Cross-build the CLI (OS_FILTER=linux|darwin|windows, default: every target)'
+    cmd: |
+      #!/usr/bin/env bash
+      set -e
+      for entry in {{.CLI_TARGETS}}; do
+        rust_target="${entry%%:*}"; rest="${entry#*:}"
+        arch="${rest%%:*}"; os="${rest#*:}"
+        if [ -n "{{.OS_FILTER}}" ] && [ "$os" != "{{.OS_FILTER}}" ]; then
+          continue
+        fi
+
+        echo ">>> Building for $arch/$os ($rust_target)..."
+        mkdir -p "{{.CLI_BUILD_DIR}}/$arch/$os"
+
+        if [ "$os" = "darwin" ] && [ "$(uname)" = "Darwin" ]; then
+          cargo build --release --bin {{.CLI_BIN}} --target "$rust_target"
+        else
+          cross build --release --bin {{.CLI_BIN}} --target "$rust_target"
+        fi
+
+        if [ "$os" = "windows" ]; then
+          cp "target/$rust_target/release/{{.CLI_BIN}}.exe" "{{.CLI_BUILD_DIR}}/$arch/$os/{{.CLI_BIN}}.exe"
+        else
+          cp "target/$rust_target/release/{{.CLI_BIN}}" "{{.CLI_BUILD_DIR}}/$arch/$os/{{.CLI_BIN}}"
+        fi
+        echo ">>> Built $arch/$os -> {{.CLI_BUILD_DIR}}/$arch/$os/{{.CLI_BIN}}"
+      done
+
+  cli:build:linux:
+    desc: Cross-build the CLI for all Linux targets (amd64, 386, arm64, arm)
+    cmds:
+      - task: cli:build
+        vars: {OS_FILTER: linux}
+
+  cli:build:darwin:
+    desc: Cross-build the CLI for all macOS targets (amd64, arm64)
+    cmds:
+      - task: cli:build
+        vars: {OS_FILTER: darwin}
+
+  cli:build:windows:
+    desc: Cross-build the CLI for all Windows targets (amd64, 386, arm64)
+    cmds:
+      - task: cli:build
+        vars: {OS_FILTER: windows}
+
+  cli:build:all:
+    desc: Cross-build the CLI for all 9 platforms
+    cmds:
+      - task: cli:check-deps
+      - task: cli:install-cross
+      - task: cli:targets
+      - task: cli:build
+      - task: cli:verify
+
+  cli:verify:
+    desc: Verify which cross-compiled CLI binaries are present
+    cmd: |
+      #!/usr/bin/env bash
+      echo ">>> Verifying built binaries..."
+      for entry in {{.CLI_TARGETS}}; do
+        rest="${entry#*:}"; arch="${rest%%:*}"; os="${rest#*:}"
+        if [ "$os" = "windows" ]; then
+          binary="{{.CLI_BUILD_DIR}}/$arch/$os/{{.CLI_BIN}}.exe"
+        else
+          binary="{{.CLI_BUILD_DIR}}/$arch/$os/{{.CLI_BIN}}"
+        fi
+        if [ -f "$binary" ]; then
+          echo "  [OK]      $arch/$os ($(du -h "$binary" | cut -f1))"
+        else
+          echo "  [MISSING] $arch/$os"
+        fi
+      done
+
+  cli:archive:
+    desc: Package the cross-compiled CLI binaries into release archives
+    cmd: |
+      #!/usr/bin/env bash
+      set -e
+      echo ">>> Creating release archives..."
+      mkdir -p "{{.CLI_BUILD_DIR}}/releases"
+      for entry in {{.CLI_TARGETS}}; do
+        rest="${entry#*:}"; arch="${rest%%:*}"; os="${rest#*:}"
+        dir="{{.CLI_BUILD_DIR}}/$arch/$os"
+        if [ "$os" = "windows" ]; then
+          [ -f "$dir/{{.CLI_BIN}}.exe" ] || continue
+          (cd "$dir" && zip -q "../../releases/{{.CLI_BIN}}-{{.VERSION}}-$arch-$os.zip" "{{.CLI_BIN}}.exe")
+        else
+          [ -f "$dir/{{.CLI_BIN}}" ] || continue
+          (cd "$dir" && tar -czf "../../releases/{{.CLI_BIN}}-{{.VERSION}}-$arch-$os.tar.gz" "{{.CLI_BIN}}")
+        fi
+      done
+      echo ">>> Archives created in {{.CLI_BUILD_DIR}}/releases/"
+
+  cli:release:
+    desc: Clean, cross-build every platform, verify and archive
+    cmds:
+      - task: cli:clean
+      - task: cli:build:all
+      - task: cli:archive
+      - echo ">>> Release {{.VERSION}} ({{.GIT_COMMIT}}) built in {{.CLI_BUILD_DIR}}/"
+
+  cli:clean:
+    desc: Remove the cross-compilation build directory and cargo artifacts
+    cmds:
+      - echo ">>> Cleaning build directory..."
+      - rm -rf {{.CLI_BUILD_DIR}}
+      - cargo clean
+
+  # ── Internal ──────────────────────────────────────────────────────────────────
+
+  _with-backend:
+    internal: true
+    desc: Start the backend binary, run {{.CMD}} against it, then shut it down
+    cmd: |
+      #!/usr/bin/env bash
+      set -e
+
+      # Fail loudly on a busy port. Otherwise the new binary cannot bind, the
+      # health check below succeeds against the *stale* process still holding
+      # {{.BACKEND_PORT}}, and the suite silently runs against the wrong build.
+      if lsof -ti :{{.BACKEND_PORT}} >/dev/null 2>&1; then
+        echo ">>> ERROR: port {{.BACKEND_PORT}} is already in use — a stale backend would"
+        echo ">>>        silently serve these tests. Run 'task kill' first."
+        exit 1
+      fi
+
+      SCRIPT=$(mktemp /tmp/crit-task-XXXXXX.sh)
+      cat > "$SCRIPT" <<'CRIT_TASK_EOF'
+      {{.CMD}}
+      CRIT_TASK_EOF
+
+      # Run the binary directly (not `cargo run`) so BACKEND_PID is the real
+      # axum-api process — killing cargo does not reliably kill its child, which
+      # leaves orphaned backends holding port {{.BACKEND_PORT}}.
+      cargo build --bin axum-api
+      BACKEND_LOG=$(mktemp /tmp/axum-api-XXXXXX)
+      echo ">>> Backend log: $BACKEND_LOG"
+      # `exec` matters: without it the subshell stays alive as axum-api's parent,
+      # $! is the subshell PID, and cleanup kills the wrapper while the backend
+      # survives as an orphan still holding port {{.BACKEND_PORT}}.
+      (cd {{.BACKEND_DIR}} && exec ../target/debug/axum-api) > "$BACKEND_LOG" 2>&1 &
+      BACKEND_PID=$!
+
+      cleanup() {
+        kill "$BACKEND_PID" 2>/dev/null || true
+        wait "$BACKEND_PID" 2>/dev/null || true
+        rm -f "$SCRIPT"
+        echo ">>> Backend stopped. Log: $BACKEND_LOG"
+      }
+      trap cleanup EXIT
+
+      echo ">>> Waiting for backend..."
+      for i in $(seq 1 30); do
+        curl -sf {{.BACKEND_URL}}/health >/dev/null 2>&1 && break
+        sleep 1
+      done
+      curl -sf {{.BACKEND_URL}}/health >/dev/null 2>&1 || {
+        echo ">>> Backend failed to start"
+        exit 1
+      }
+      echo ">>> Backend is ready"
+
+      bash -e "$SCRIPT"

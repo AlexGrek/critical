@@ -3,7 +3,7 @@
     "allow": [
       "Bash(cargo build:*)",
       "Bash(cargo test:*)",
-      "Bash(make test:*)",
+      "Bash(task test:*)",
       "Bash(command -v docker:*)",
       "Bash(docker info:*)",
       "Bash(docker compose up:*)",
@@ -25,7 +25,7 @@
       "Bash(npm run test:headed:*)",
       "Bash(npm run test:*)",
       "Bash(git add:*)",
-      "Bash(make:*)",
+      "Bash(task:*)",
       "Read(//Users/vedmedik/dev/critical/**)",
       "Bash(git -C /Users/vedmedik/dev/critical log:*)",
       "Bash(git -C /Users/vedmedik/dev/critical diff HEAD backend/src/api/v1/gitops.rs)",

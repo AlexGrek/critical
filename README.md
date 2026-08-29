@@ -70,10 +70,11 @@ cargo build --bin cr1t      # Development build
 All test targets start an ephemeral ArangoDB container and clean up on exit.
 
 ```bash
-make test                   # Run ALL tests (Rust + CLI + Python API)
-make test-unit              # Rust unit & backend integration tests only
-make test-cli               # CLI integration tests (starts backend automatically)
-make test-api               # Python API integration tests (starts backend automatically)
+task test                   # Run ALL tests (Rust + CLI + Python API + E2E)
+task test:unit              # Rust unit & backend integration tests only
+task test:cli               # CLI integration tests (starts backend automatically)
+task test:api               # Python API integration tests (starts backend automatically)
+task test:e2e               # Playwright E2E tests (starts backend automatically)
 ```
 
 | Type | Location | What it tests |
@@ -87,7 +88,8 @@ make test-api               # Python API integration tests (starts backend autom
 ### Prerequisites
 
 - [Rust](https://rustup.rs/) (latest stable version)
-- [Docker](https://www.docker.com/) (for cross-compilation)
+- [Task](https://taskfile.dev) (`brew install go-task` — runs everything in `Taskfile.yml`)
+- [Docker](https://www.docker.com/) (for the dev database and cross-compilation)
 - [Git](https://git-scm.com/) (for version information)
 
 ### Project Structure
@@ -97,20 +99,20 @@ make test-api               # Python API integration tests (starts backend autom
 ├── backend/           # Axum API server (axum-api)
 ├── cli/               # CLI tool (cr1t)
 ├── frontend/          # React Router 7 + Vite frontend (SSR)
-├── dist/              # Docker deployment (compose, nginx, Makefile)
+├── dist/              # Docker deployment (compose, nginx, helm chart)
 │   └── cli/           # CLI installer script
 ├── build/             # Cross-compiled CLI binaries (gitignored)
-├── Makefile           # Dev/test orchestration
-├── Makefile.xplatform # Cross-compilation for CLI
+├── Taskfile.yml       # Dev/test/build/deploy orchestration
 └── docker-compose.yml # Dev-only ArangoDB
 ```
 
 ### Development Build
 
 ```bash
-make dev                    # Quick development build (all crates)
-make run                    # Start ArangoDB + run backend
-cd frontend && npm run dev  # Frontend dev server (port 5173, proxies API)
+task                        # List every available task
+task build                  # Quick development build (all crates)
+task dev                    # ArangoDB + backend (cargo watch) + frontend dev server
+task run                    # Start ArangoDB + run backend only
 ```
 
 ## Docker Deployment
@@ -131,11 +133,10 @@ The `dist/` directory contains a prod-like Docker Compose stack.
 ```
 
 ```bash
-cd dist
-make build                  # Build images locally
-make up                     # Start full stack at http://localhost:8080
-make down                   # Stop
-make build-push             # Build multi-arch (amd64+arm64) + push to Docker Hub
+task docker:build           # Build images locally
+task stack:up               # Start full stack at http://localhost:8080
+task stack:down             # Stop
+task docker:push            # Build multi-arch (amd64+arm64) + push to Docker Hub
 ```
 
 Images: `grekodocker/cr1t-api`, `grekodocker/cr1t-frontend`
@@ -145,8 +146,8 @@ See [`dist/README.md`](dist/README.md) for environment variables and configurati
 ## Cross-Compilation (CLI)
 
 ```bash
-make -f Makefile.xplatform build-all    # Build cr1t for all 9 platforms
-make -f Makefile.xplatform release      # Full release with archives
+task cli:build:all          # Build cr1t for all 9 platforms
+task cli:release            # Full release with archives
 ```
 
 CLI installer: `dist/cli/crit-cli-installer.sh`

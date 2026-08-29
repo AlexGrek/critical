@@ -92,7 +92,7 @@ Tests are designed to run in parallel by using unique identifiers:
 ### Tests fail with "Connection refused"
 Ensure the backend is running on `localhost:3742`:
 ```bash
-make run  # From project root
+task run  # From project root
 ```
 
 ### Tests fail with database errors

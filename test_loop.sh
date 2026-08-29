@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LOG_FILE=$(mktemp /tmp/make_test_run_XXXXXX.log)
+LOG_FILE=$(mktemp /tmp/task_test_run_XXXXXX.log)
 RUN=0
 
 cleanup() {
@@ -29,7 +29,7 @@ while true; do
     echo -n "Run #$RUN ... "
 
     > "$LOG_FILE"
-    if make test >> "$LOG_FILE" 2>&1; then
+    if task test >> "$LOG_FILE" 2>&1; then
         echo "OK"
         > "$LOG_FILE"
     fi

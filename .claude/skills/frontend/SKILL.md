@@ -23,11 +23,11 @@ code you write or review.
 The frontend requires the backend and ArangoDB to be running for API calls.
 
 ```bash
-make run                    # Terminal 1: Start ArangoDB + backend (port 3742)
+task run                    # Terminal 1: Start ArangoDB + backend (port 3742)
 cd frontend && npm run dev  # Terminal 2: Vite dev server (port 5173)
 ```
 
-After `make reset-db` or `make run-fresh`, you **must restart the backend** — it creates
+After `task db:reset` or `task run:fresh`, you **must restart the backend** — it creates
 collections on startup. If ArangoDB wasn't running when the backend started, all API
 calls will 500.
 

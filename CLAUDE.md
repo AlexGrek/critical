@@ -26,15 +26,19 @@ cargo build --bin cr1t      # Build CLI only
 cargo build --bin axum-api  # Build backend only
 cargo test                  # Run all Rust tests (requires ArangoDB running)
 cargo test test_name        # Run a single test
-make dev                    # Quick dev build (all crates)
+task build                  # Quick dev build (all crates)
 ```
+
+Task orchestration lives in [`Taskfile.yml`](Taskfile.yml) ([Task](https://taskfile.dev) — `brew install go-task`).
+Run `task` with no arguments to list every task.
 
 ### Running
 ```bash
-make run                    # Start ArangoDB + run backend (persistent DB, stops container on exit)
-make run-fresh              # Reset DB volumes, then run (clean slate)
-make populate-db            # Populate dev DB with test users, groups, projects (requires backend running)
-make kill                   # Kill any stalled axum-api backend processes (by name + port 3742)
+task dev                    # ArangoDB + backend (cargo watch) + frontend dev server
+task run                    # Start ArangoDB + run backend (persistent DB, stops container on exit)
+task run:fresh              # Reset DB volumes, then run (clean slate)
+task db:populate            # Populate dev DB with test users, groups, projects (requires backend running)
+task kill                   # Kill any stalled axum-api backend processes (by name + port 3742)
 ```
 
 ### Frontend
@@ -47,19 +51,20 @@ npm run typecheck           # react-router typegen && tsc
 
 ### Database
 ```bash
-make run-db                 # Start ArangoDB container (port 8529)
-make stop-db                # Stop container
-make reset-db               # Stop and delete volumes
+task db:up                  # Start ArangoDB container (port 8529), wait for readiness
+task db:down                # Stop container
+task db:reset               # Stop and delete volumes
 ```
 
 > **IMPORTANT**: After resetting or restarting the dev database, you **must restart the backend**. The backend creates all collections on startup via `connect_basic` — if ArangoDB was not running when the backend started, all API calls will fail with 500 errors.
 
 ### Testing
 ```bash
-make test                   # Run ALL test types (DB + backend started automatically)
-make test-unit              # Rust unit + backend tests only (starts ephemeral DB)
-make test-cli               # CLI integration tests (starts DB + backend)
-make test-api               # Python API tests (starts DB + backend)
+task test                   # Run ALL test types (DB + backend started automatically)
+task test:unit              # Rust unit + backend tests only (starts ephemeral DB)
+task test:cli               # CLI integration tests (starts DB + backend)
+task test:api               # Python API tests (starts DB + backend)
+task test:e2e               # Playwright E2E tests (starts DB + backend)
 ```
 
 Playwright E2E tests: `cd e2e-tests && npm run test` (requires backend + frontend dev server running).
@@ -68,7 +73,7 @@ See [`docs/development.md`](docs/development.md) for full development and testin
 
 ### Test Database Seed Data (`test-db/`)
 
-`make populate-db` imports test data using `cr1t apply`. Idempotent. All test user passwords are `{username}123`.
+`task db:populate` imports test data using `cr1t apply`. Idempotent. All test user passwords are `{username}123`.
 
 | User  | Role |
 |-------|------|

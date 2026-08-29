@@ -14,8 +14,7 @@ Cargo workspace with three crates plus a frontend:
 ├── dist/              # Docker deployment (compose, nginx, Helm chart)
 │   ├── cli/           # CLI installer script
 │   └── helm/          # Kubernetes Helm chart
-├── Makefile           # Dev/test orchestration
-└── Makefile.xplatform # Cross-compilation for CLI
+└── Taskfile.yml       # Dev/test/build/deploy orchestration
 ```
 
 ## Component Overview

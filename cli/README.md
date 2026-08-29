@@ -82,7 +82,7 @@ cargo build --bin cr1t
 
 1. **Start the backend** (if running locally):
    ```bash
-   make run  # from project root
+   task run  # from project root
    ```
 
 2. **Log in to a server** (interactive or non-interactive):
@@ -297,7 +297,7 @@ Total: 2 event(s)
 Run CLI integration tests:
 
 ```bash
-make test-cli  # from project root
+task test:cli  # from project root
 ```
 
 This automatically:
@@ -323,7 +323,7 @@ To run tests manually:
 
 ```bash
 # Start backend and database separately
-make run-fresh  # Terminal 1
+task run:fresh  # Terminal 1
 
 # Run tests in another terminal
 cargo test -p crit-cli --test cli_test -- --include-ignored --test-threads=1

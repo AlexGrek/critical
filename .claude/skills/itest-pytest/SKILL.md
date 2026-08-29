@@ -34,8 +34,8 @@ backend/itests/
 # ALWAYS kill any stale axum-api process BEFORE running tests:
 pkill -x axum-api 2>/dev/null; sleep 1   # kill stale backend if running
 
-# ALWAYS use the Makefile — it spawns an ephemeral ArangoDB and tears it down on exit:
-make test-api                           # run all Python integration tests
+# ALWAYS use the Taskfile — it spawns an ephemeral ArangoDB and tears it down on exit:
+task test:api                           # run all Python integration tests
 
 # Only use pdm directly when debugging specific cases that require an already-running
 # backend + database with specific state (e.g. inspecting leftover data after a failure):
@@ -46,9 +46,9 @@ pdm run pytest tests/ -k "test_creator_has_root_acl" -v  # single test
 pdm run pytest tests/ -v --tb=long     # full tracebacks
 ```
 
-**Default**: always use `make test-api` — it handles the full lifecycle (start DB → start backend → run tests → teardown).
+**Default**: always use `task test:api` — it handles the full lifecycle (start DB → start backend → run tests → teardown).
 
-**CRITICAL — stale backend problem**: `make test-api` starts a fresh backend on port 3742. If a dev backend from `make run` is already on that port, the new binary fails to start with `Address already in use`, the health check passes on the OLD process, and tests silently run against a stale binary. Symptoms:
+**CRITICAL — stale backend problem**: `task test:api` starts a fresh backend on port 3742. If a dev backend from `task run` is already on that port, the new binary fails to start with `Address already in use`, the health check passes on the OLD process, and tests silently run against a stale binary. Symptoms:
 - Debug routes return 404 (routes added after the old binary was compiled)
 - Brief-field filtering is wrong (e.g. `annotations` appears in list responses)
 - **Create (POST) and update (PUT) responses return `{"id": "..."}` only** instead of the full document — this happens when running against a pre-March-2026 binary that returned only the id; the current backend always returns the full document from these endpoints
@@ -60,7 +60,7 @@ pgrep -la axum-api          # check if stale backend is running
 pkill -x axum-api           # kill it
 ```
 
-**Direct `pdm run pytest` only when**: you need to inspect a specific DB state, replay a failure against a live backend, or iterate quickly on a single test while the stack is already running (`make run`).
+**Direct `pdm run pytest` only when**: you need to inspect a specific DB state, replay a failure against a live backend, or iterate quickly on a single test while the stack is already running (`task run`).
 
 Root credentials: `root` / `changeme`.
 

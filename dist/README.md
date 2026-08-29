@@ -29,27 +29,31 @@ All traffic enters through the **gateway** on port 8080.
 
 ```bash
 # Build images locally (current arch)
-make build
+task docker:build
 
 # Start the stack
-make up
+task stack:up
 
 # Open http://localhost:8080
 ```
 
-## Make Targets
+## Tasks
 
-| Target           | Description                                       |
-|------------------|---------------------------------------------------|
-| `make build`     | Build both images locally (current arch)          |
-| `make build-api` | Build API image only                              |
-| `make build-frontend` | Build frontend image only                    |
-| `make build-push`| Build multi-arch (amd64+arm64) and push to Docker Hub |
-| `make up`        | Start the stack, wait for health checks           |
-| `make down`      | Stop the stack                                    |
-| `make logs`      | Tail logs from all services                       |
-| `make status`    | Show running containers                           |
-| `make reset`     | Stop and remove all volumes (clean slate)         |
+Run from the repo root — every target below lives in [`../Taskfile.yml`](../Taskfile.yml).
+
+| Task                         | Description                                           |
+|------------------------------|-------------------------------------------------------|
+| `task docker:build`          | Build both images locally (current arch)              |
+| `task docker:build:api`      | Build API image only                                  |
+| `task docker:build:frontend` | Build frontend image only                             |
+| `task docker:push`           | Build multi-arch (amd64+arm64) and push to Docker Hub |
+| `task stack:up`              | Start the stack, wait for health checks               |
+| `task stack:down`            | Stop the stack                                        |
+| `task stack:logs`            | Tail logs from all services                           |
+| `task stack:status`          | Show running containers                               |
+| `task stack:reset`           | Stop and remove all volumes (clean slate)             |
+
+Override the image tag with `task docker:build TAG=v1.2.3`.
 
 ## Environment Variables
 

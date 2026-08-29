@@ -19,19 +19,21 @@ The `dist/` directory contains a prod-like Docker Compose stack.
 [ arangodb ]
 ```
 
-### Make Targets (from `dist/`)
+### Tasks (run from the repo root)
 
-| Target | Description |
-|--------|-------------|
-| `make build` | Build both images locally (current arch) |
-| `make build-api` | Build API image only |
-| `make build-frontend` | Build frontend image only |
-| `make build-push` | Build multi-arch (amd64+arm64) and push to Docker Hub |
-| `make up` | Start the stack, wait for health checks |
-| `make down` | Stop the stack |
-| `make logs` | Tail logs from all services |
-| `make status` | Show running containers |
-| `make reset` | Stop and remove all volumes (clean slate) |
+| Task | Description |
+|------|-------------|
+| `task docker:build` | Build both images locally (current arch) |
+| `task docker:build:api` | Build API image only |
+| `task docker:build:frontend` | Build frontend image only |
+| `task docker:push` | Build multi-arch (amd64+arm64) and push to Docker Hub |
+| `task stack:up` | Start the stack, wait for health checks |
+| `task stack:down` | Stop the stack |
+| `task stack:logs` | Tail logs from all services |
+| `task stack:status` | Show running containers |
+| `task stack:reset` | Stop and remove all volumes (clean slate) |
+
+Override the image tag with `task docker:build TAG=v1.2.3`.
 
 ### Environment Variables
 
@@ -60,11 +62,10 @@ Helm chart at `dist/helm/critical/`.
 ### Quick Start
 
 ```bash
-cd dist
-make helm-deploy          # Deploy to critical-dev namespace
-make helm-status          # Check deployment status
-make helm-uninstall       # Remove deployment
-make helm-template        # Render templates locally (dry run)
+task helm:deploy          # Deploy to critical-dev namespace
+task helm:status          # Check deployment status
+task helm:uninstall       # Remove deployment
+task helm:template        # Render templates locally (dry run)
 ```
 
 ### Chart Details
@@ -137,8 +138,10 @@ helm upgrade --install critical helm/critical -f helm/values-dev.yaml -n critica
 Build `cr1t` for all supported platforms:
 
 ```bash
-make -f Makefile.xplatform build-all    # Build for all 9 platforms
-make -f Makefile.xplatform release      # Full release with archives
+task cli:build:all        # Build for all 9 platforms
+task cli:release          # Full release with archives
+task cli:verify           # Show which platform binaries are present
+task cli:info             # Show version, commit and the target list
 ```
 
 ### Supported Platforms

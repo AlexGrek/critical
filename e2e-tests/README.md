@@ -18,7 +18,7 @@ npm install
 #### 1. Start the backend with ArangoDB:
 ```bash
 # From project root
-make run
+task run
 ```
 
 This starts the backend API on `http://localhost:3742` with a real ArangoDB instance.

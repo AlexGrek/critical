@@ -5,7 +5,7 @@
 #
 # Prerequisites:
 #   - Backend running on BACKEND_URL (default: http://localhost:3742)
-#   - Database populated (make populate-db)
+#   - Database populated (task db:populate)
 #
 # Usage:
 #   bash test-db/show.sh

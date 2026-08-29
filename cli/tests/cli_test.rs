@@ -1,7 +1,7 @@
 //! CLI integration tests.
 //!
 //! Tests marked `#[ignore]` require a running backend on localhost:3742 with ArangoDB.
-//! Run them via: `make test-cli` (which starts DB + backend automatically)
+//! Run them via: `task test:cli` (which starts DB + backend automatically)
 //! or: `cargo test -p crit-cli --test cli_test -- --include-ignored`
 //!
 //! Non-ignored tests only touch local context files and need no infrastructure.
@@ -104,7 +104,7 @@ fn unique_user() -> String {
     format!("clitest{}{:03}", ts % 1_000_000_000, seq)
 }
 
-// --- Tests requiring running backend (use `make test-cli`) ---
+// --- Tests requiring running backend (use `task test:cli`) ---
 
 #[test]
 #[ignore]
