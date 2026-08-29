@@ -68,7 +68,7 @@ tasks:
         wait 2>/dev/null || true
         echo ">>> Development environment stopped."
       }
-      trap cleanup EXIT INT TERM
+      trap cleanup EXIT
 
       echo ">>> Starting backend (cargo watch)..."
       (cd {{.BACKEND_DIR}} && cargo watch --ignore 'itests/**' -x run) &

@@ -67,7 +67,130 @@ pub async fn get_my_permissions(
     Ok(Json(json!({ "super_permissions": perms })))
 }
 
+/// Return a detailed report of the calling user's own access: super-permissions,
+/// the full resolved principal chain (self + transitive groups), direct group
+/// memberships, and every group/project whose ACL grants them something, along
+/// with which principal and permission bits earned that grant.
+///
+/// `GET /v1/accesscheck/me/acls`
+///
+/// This reports document-level ACL grants only — it does not fold in super-permission
+/// bypasses (e.g. a godmode user may see empty `groups`/`projects` here despite having
+/// full access via `is_godmode`/`super_permissions`). Always returns 200 for
+/// authenticated users.
+pub async fn get_my_acls(
+    State(state): State<Arc<AppState>>,
+    AuthenticatedUser(user_id): AuthenticatedUser,
+) -> Result<Json<Value>, AppError> {
+    let principals = state
+        .get_cached_principals(&user_id)
+        .await
+        .map_err(AppError::Internal)?;
+
+    let super_perms = state
+        .db
+        .get_user_permissions(&user_id)
+        .await
+        .map_err(AppError::Internal)?;
+
+    let is_godmode = super_perms
+        .iter()
+        .any(|p| p == super_permissions::ADM_GODMODE);
+
+    let direct_memberships = state
+        .db
+        .get_direct_memberships(&user_id)
+        .await
+        .map_err(AppError::Internal)?;
+
+    let group_grants = state
+        .db
+        .list_acl_grants("groups", &principals)
+        .await
+        .map_err(AppError::Internal)?;
+
+    let project_grants = state
+        .db
+        .list_acl_grants("projects", &principals)
+        .await
+        .map_err(AppError::Internal)?;
+
+    Ok(Json(json!({
+        "user_id": user_id,
+        "is_godmode": is_godmode,
+        "super_permissions": super_perms,
+        "principals": principals,
+        "direct_memberships": direct_memberships,
+        "groups": shape_grants(group_grants),
+        "projects": shape_grants(project_grants),
+    })))
+}
+
 // ─────────────────────────── internal helper ────────────────────────────────
+
+/// Reshape raw `list_acl_grants` rows into a UI-friendly form: permission bits
+/// resolved to named flags, split into the document-wide grant (unscoped entries)
+/// and any scope-restricted grants (e.g. project ACL entries scoped to `"tasks"`).
+fn shape_grants(raw: Vec<Value>) -> Vec<Value> {
+    raw.into_iter()
+        .map(|doc| {
+            let id = doc.get("id").and_then(|v| v.as_str()).unwrap_or_default();
+            let name = doc.get("name").and_then(|v| v.as_str());
+            let grants = doc.get("grants").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+
+            let mut unscoped_bits = Permissions::NONE;
+            let mut via = std::collections::BTreeSet::new();
+            let mut scoped_grants = Vec::new();
+
+            for grant in &grants {
+                let bits = grant
+                    .get("permissions")
+                    .and_then(|v| v.as_u64())
+                    .and_then(|b| Permissions::from_bits(b as u8))
+                    .unwrap_or(Permissions::NONE);
+                let scope = grant.get("scope").and_then(|v| v.as_str());
+                let entry_via: Vec<String> = grant
+                    .get("via")
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                    .unwrap_or_default();
+
+                match scope {
+                    None | Some("*") => {
+                        unscoped_bits |= bits;
+                        via.extend(entry_via);
+                    }
+                    Some(s) => {
+                        scoped_grants.push(json!({
+                            "scope": s,
+                            "permission": permission_flags(bits),
+                            "via_principals": entry_via,
+                        }));
+                    }
+                }
+            }
+
+            json!({
+                "id": id,
+                "name": name,
+                "permission": permission_flags(unscoped_bits),
+                "via_principals": via.into_iter().collect::<Vec<_>>(),
+                "scoped_grants": scoped_grants,
+            })
+        })
+        .collect()
+}
+
+fn permission_flags(bits: Permissions) -> Value {
+    json!({
+        "bits": bits.bits(),
+        "can_fetch": bits.contains(Permissions::FETCH),
+        "can_list": bits.contains(Permissions::LIST),
+        "can_notify": bits.contains(Permissions::NOTIFY),
+        "can_create": bits.contains(Permissions::CREATE),
+        "can_modify": bits.contains(Permissions::MODIFY),
+    })
+}
 
 async fn access_check(
     state: &AppState,

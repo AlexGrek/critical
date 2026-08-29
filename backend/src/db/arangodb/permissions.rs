@@ -255,4 +255,54 @@ impl ArangoDb {
 
         Ok(result)
     }
+
+    /// Group IDs the user is a *direct* member of (one hop, no transitive resolution).
+    pub async fn get_direct_memberships(&self, user_id: &str) -> Result<Vec<String>> {
+        let query = r#"
+            FOR m IN memberships
+                FILTER m.principal == @user
+                RETURN m.group
+        "#;
+
+        let vars = std::collections::HashMap::from([(
+            "user",
+            serde_json::Value::String(user_id.to_string()),
+        )]);
+
+        self.aql(query, vars).await
+    }
+
+    /// List every document in `collection` that has at least one ACL entry matching
+    /// one of `principals`, along with the matching entries themselves (permission
+    /// bits, the scope they apply to, and which of the caller's principals matched).
+    ///
+    /// Used to build a "here's everything you can access and why" report for a user
+    /// (`GET /v1/accesscheck/me/acls`). Entries with no ACL match are excluded — this
+    /// does not apply super-permission bypasses, it only reports document-level ACLs.
+    pub async fn list_acl_grants(
+        &self,
+        collection: &str,
+        principals: &[String],
+    ) -> Result<Vec<serde_json::Value>> {
+        let query = r#"
+            FOR doc IN @@col
+                FILTER doc.deletion == null
+                LET matches = (
+                    FOR entry IN (doc.acl.list || [])
+                        LET common = INTERSECTION(entry.principals, @principals)
+                        FILTER LENGTH(common) > 0
+                        RETURN { permissions: entry.permissions, scope: entry.scope, via: common }
+                )
+                FILTER LENGTH(matches) > 0
+                SORT doc._key ASC
+                RETURN { id: doc._key, name: doc.name, grants: matches }
+        "#;
+
+        let vars = std::collections::HashMap::from([
+            ("@col", serde_json::Value::String(collection.to_string())),
+            ("principals", serde_json::to_value(principals)?),
+        ]);
+
+        self.aql(query, vars).await
+    }
 }

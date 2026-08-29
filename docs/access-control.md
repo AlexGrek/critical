@@ -99,6 +99,8 @@ Membership access is controlled by the **target group's ACL**, not a separate pe
 | Create a membership      | `adm_user_manager`, OR user's principals have MODIFY on the target group's ACL |
 | Delete a membership      | `adm_user_manager`, OR user's principals have MODIFY on the target group's ACL |
 
+**On creation**: the new member is automatically granted a READ ACL entry on the target group (in addition to the membership edge) — joining a group always makes it at least visible/readable to the new member.
+
 **On deletion**: if removing a membership leaves the target group with zero members, the group is automatically deleted (with recursive cascade).
 
 ### Projects
@@ -147,6 +149,17 @@ The gitops API accepts any kind string as a collection name. Collections beyond 
 | Operation     | Who Can Do It          |
 | ------------- | ---------------------- |
 | Any operation | Any authenticated user |
+
+## Self-Inspection
+
+`GET /v1/accesscheck/me/permissions` and `GET /v1/accesscheck/me/acls` let a user inspect
+their own effective access — used by the frontend Settings → Access tab. The `/me/acls`
+report lists every group/project with an ACL entry matching the caller's principal chain
+(direct or via group), the resulting permission bits, and (for projects) any scope-restricted
+grants. It does not fold in super-permission bypasses (`adm_godmode`, `adm_user_manager`,
+`adm_config_editor`) — those are reported separately via `is_godmode`/`super_permissions` since
+they grant access regardless of ACL entries. See [`docs/api.md`](api.md#access-check) for the
+full response shape.
 
 ## Denial Behavior
 

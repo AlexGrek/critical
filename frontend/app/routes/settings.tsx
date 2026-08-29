@@ -1,17 +1,25 @@
 import type { Route } from "./+types/settings";
 import { useLoaderData, useRevalidator } from "react-router";
 import { redirect } from "react-router";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { Fragment, useState, useRef, useCallback, useEffect, useMemo } from "react";
+import type { ReactNode } from "react";
 import {
   Button,
   Input,
   Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
   CardContent,
   H1,
   H2,
   Paragraph,
   Tabs,
+  Table,
+  PermissionBadge,
+  PrincipalChip,
 } from "~/components";
+import { usePrincipals } from "~/lib/usePrincipals";
 import {
   User2,
   ImagePlus,
@@ -20,8 +28,14 @@ import {
   Loader2,
   Upload,
   X,
+  ShieldCheck,
+  Crown,
+  Users,
+  FolderKanban,
+  Info,
 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import type { PrincipalMap } from "~/lib/principals";
 
 // ---------------------------------------------------------------------------
 // API types
@@ -50,6 +64,43 @@ interface UserFull {
   avatar_ulid?: string | null;
   wallpaper_ulid?: string | null;
   hash_code?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Access-check API types (GET /v1/accesscheck/me/acls)
+// ---------------------------------------------------------------------------
+
+interface PermissionFlags {
+  bits: number;
+  can_fetch: boolean;
+  can_list: boolean;
+  can_notify: boolean;
+  can_create: boolean;
+  can_modify: boolean;
+}
+
+interface ScopedGrant {
+  scope: string;
+  permission: PermissionFlags;
+  via_principals: string[];
+}
+
+interface AclGrant {
+  id: string;
+  name: string | null;
+  permission: PermissionFlags;
+  via_principals: string[];
+  scoped_grants: ScopedGrant[];
+}
+
+interface MyAclsReport {
+  user_id: string;
+  is_godmode: boolean;
+  super_permissions: string[];
+  principals: string[];
+  direct_memberships: string[];
+  groups: AclGrant[];
+  projects: AclGrant[];
 }
 
 // ---------------------------------------------------------------------------
@@ -90,17 +141,18 @@ export async function clientLoader() {
   const userId = getUserIdFromCookieHeader(document.cookie || "");
   if (!userId) throw redirect("/sign-in");
 
-  const res = await fetch(
-    `/api/v1/global/users/${userId}`,
-    { credentials: "include" }
-  );
+  const [res, aclsRes] = await Promise.all([
+    fetch(`/api/v1/global/users/${userId}`, { credentials: "include" }),
+    fetch(`/api/v1/accesscheck/me/acls`, { credentials: "include" }),
+  ]);
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) throw redirect("/sign-in");
     throw new Response("Failed to load user", { status: res.status });
   }
 
   const user: UserFull = await res.json();
-  return { user };
+  const acls: MyAclsReport | null = aclsRes.ok ? await aclsRes.json() : null;
+  return { user, acls };
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +232,7 @@ function initials(name: string): string | null {
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
-  const { user } = useLoaderData<typeof clientLoader>();
+  const { user, acls } = useLoaderData<typeof clientLoader>();
   const revalidator = useRevalidator();
 
   return (
@@ -197,6 +249,7 @@ export default function SettingsPage() {
           <Tabs.List data-testid="settings-tabs">
             <Tabs.Trigger value="profile" data-testid="tab-profile">Profile</Tabs.Trigger>
             <Tabs.Trigger value="avatar" data-testid="tab-avatar">Avatar</Tabs.Trigger>
+            <Tabs.Trigger value="access" data-testid="tab-access">Access</Tabs.Trigger>
           </Tabs.List>
 
           <div className="mt-6">
@@ -206,6 +259,10 @@ export default function SettingsPage() {
 
             <Tabs.Content value="avatar">
               <AvatarTab user={user} onUploaded={() => revalidator.revalidate()} />
+            </Tabs.Content>
+
+            <Tabs.Content value="access">
+              <AccessTab acls={acls} onRefresh={() => revalidator.revalidate()} />
             </Tabs.Content>
           </div>
         </Tabs.Root>
@@ -670,6 +727,296 @@ function AvatarTab({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Access tab
+// ---------------------------------------------------------------------------
+
+const SUPER_PERMISSION_INFO: Record<string, { label: string; description: string }> = {
+  adm_godmode: {
+    label: "Godmode",
+    description: "Full bypass of every ACL check — unrestricted access to everything.",
+  },
+  adm_user_manager: {
+    label: "User manager",
+    description: "Full control over all users, groups, and memberships.",
+  },
+  adm_config_editor: {
+    label: "Config editor",
+    description: "Edit global configuration and any project.",
+  },
+  usr_create_groups: {
+    label: "Create groups",
+    description: "Allowed to create new groups.",
+  },
+  usr_create_projects: {
+    label: "Create projects",
+    description: "Allowed to create new projects.",
+  },
+};
+
+function AccessTab({
+  acls,
+  onRefresh,
+}: {
+  acls: MyAclsReport | null;
+  onRefresh: () => void;
+}) {
+  const principalIds = useMemo(() => {
+    if (!acls) return [];
+    const ids = new Set<string>();
+    acls.principals.forEach((p) => ids.add(p));
+    acls.direct_memberships.forEach((p) => ids.add(p));
+    acls.groups.forEach((g) => {
+      ids.add(g.id);
+      g.via_principals.forEach((p) => ids.add(p));
+    });
+    acls.projects.forEach((p) => {
+      p.via_principals.forEach((v) => ids.add(v));
+      p.scoped_grants.forEach((sg) => sg.via_principals.forEach((v) => ids.add(v)));
+    });
+    return Array.from(ids);
+  }, [acls]);
+
+  const principals = usePrincipals(principalIds);
+
+  if (!acls) {
+    return (
+      <Card className="w-full" data-testid="access-tab">
+        <CardContent className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          Couldn't load your access report.
+          <Button variant="ghost" size="sm" onClick={onRefresh} data-testid="access-retry">
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6" data-testid="access-tab">
+      {/* Super-permissions */}
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-primary-500" />
+            Super-permissions
+          </CardTitle>
+          <CardDescription>
+            Global, coarse-grained capabilities that apply everywhere — independent of
+            any single resource's ACL.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {acls.is_godmode && (
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-(--radius-component) bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 text-amber-800 dark:text-amber-300 text-sm"
+              data-testid="access-godmode-banner"
+            >
+              <Crown className="w-4 h-4 shrink-0" />
+              You have godmode — full access to every resource, bypassing all ACLs below.
+            </div>
+          )}
+          {acls.super_permissions.length === 0 ? (
+            <Paragraph variant="muted" className="text-sm">
+              No super-permissions granted.
+            </Paragraph>
+          ) : (
+            <ul className="flex flex-col gap-3" data-testid="access-super-permissions">
+              {acls.super_permissions.map((perm) => {
+                const info = SUPER_PERMISSION_INFO[perm];
+                return (
+                  <li
+                    key={perm}
+                    className="flex items-start gap-2 text-sm"
+                    data-testid={`access-super-permission-${perm}`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 mt-0.5 shrink-0 text-primary-500" />
+                    <div>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">
+                        {info?.label ?? perm}
+                      </span>
+                      <span className="ml-1.5 font-mono text-xs text-gray-400 dark:text-gray-500">
+                        {perm}
+                      </span>
+                      {info && (
+                        <Paragraph variant="muted" className="text-xs mt-0.5">
+                          {info.description}
+                        </Paragraph>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Principals */}
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-primary-500" />
+            Your principals
+          </CardTitle>
+          <CardDescription>
+            Any ACL entry naming one of these grants you access — your own ID, plus every
+            group you belong to directly or transitively (up to 10 levels of nesting).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+              Direct memberships
+            </p>
+            {acls.direct_memberships.length === 0 ? (
+              <Paragraph variant="muted" className="text-sm">
+                Not a direct member of any group.
+              </Paragraph>
+            ) : (
+              <div className="flex flex-wrap gap-2" data-testid="access-direct-memberships">
+                {acls.direct_memberships.map((id) => (
+                  <PrincipalChip key={id} id={id} info={principals[id]} />
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">
+              All effective principals
+            </p>
+            <div className="flex flex-wrap gap-2" data-testid="access-all-principals">
+              {acls.principals.map((id) => (
+                <PrincipalChip key={id} id={id} info={principals[id]} />
+              ))}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <AclGrantsCard
+        title="Groups"
+        description="Groups whose ACL grants you access, and via which principal."
+        icon={<Users className="w-4 h-4 text-primary-500" />}
+        grants={acls.groups}
+        principals={principals}
+        emptyLabel="No group grants you direct access via its ACL."
+        testId="access-groups"
+      />
+
+      <AclGrantsCard
+        title="Projects"
+        description="Projects whose ACL grants you access, and via which principal. Scope-restricted entries apply only to a specific resource kind within the project."
+        icon={<FolderKanban className="w-4 h-4 text-primary-500" />}
+        grants={acls.projects}
+        principals={principals}
+        emptyLabel="No project grants you direct access via its ACL."
+        testId="access-projects"
+      />
+
+      <div className="flex items-start gap-2 text-xs text-gray-400 dark:text-gray-500">
+        <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        This report reflects document-level ACL entries only. Super-permissions above
+        (e.g. godmode) can grant additional access that isn't listed here.
+      </div>
+    </div>
+  );
+}
+
+function AclGrantsCard({
+  title,
+  description,
+  icon,
+  grants,
+  principals,
+  emptyLabel,
+  testId,
+}: {
+  title: string;
+  description: string;
+  icon: ReactNode;
+  grants: AclGrant[];
+  principals: PrincipalMap;
+  emptyLabel: string;
+  testId: string;
+}) {
+  return (
+    <Card className="w-full" data-testid={testId}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {grants.length === 0 ? (
+          <Paragraph variant="muted" className="text-sm">
+            {emptyLabel}
+          </Paragraph>
+        ) : (
+          <Table.Root>
+            <Table.Header>
+              <Table.Row>
+                <Table.Head>Name</Table.Head>
+                <Table.Head>Permission</Table.Head>
+                <Table.Head>Via</Table.Head>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {grants.map((grant) => (
+                <Fragment key={grant.id}>
+                  <Table.Row data-testid={`${testId}-row-${grant.id}`}>
+                    <Table.Cell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{grant.name ?? grant.id}</span>
+                        <span className="font-mono text-xs text-gray-400 dark:text-gray-500">
+                          {grant.id}
+                        </span>
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <PermissionBadge permissions={grant.permission.bits} />
+                    </Table.Cell>
+                    <Table.Cell>
+                      <div className="flex flex-wrap gap-1.5">
+                        {grant.via_principals.map((id) => (
+                          <PrincipalChip key={id} id={id} info={principals[id]} size="xs" />
+                        ))}
+                      </div>
+                    </Table.Cell>
+                  </Table.Row>
+                  {grant.scoped_grants.map((sg) => (
+                    <Table.Row
+                      key={`${grant.id}::${sg.scope}`}
+                      data-testid={`${testId}-row-${grant.id}-scope-${sg.scope}`}
+                    >
+                      <Table.Cell className="pl-8 text-xs text-gray-500 dark:text-gray-400">
+                        scope: <span className="font-mono">{sg.scope}</span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <PermissionBadge permissions={sg.permission.bits} />
+                      </Table.Cell>
+                      <Table.Cell>
+                        <div className="flex flex-wrap gap-1.5">
+                          {sg.via_principals.map((id) => (
+                            <PrincipalChip key={id} id={id} info={principals[id]} size="xs" />
+                          ))}
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Fragment>
+              ))}
+            </Table.Body>
+          </Table.Root>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

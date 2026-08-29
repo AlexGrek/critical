@@ -107,6 +107,10 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                     get(api::v1::access_check::get_my_permissions),
                 )
                 .route(
+                    "/accesscheck/me/acls",
+                    get(api::v1::access_check::get_my_acls),
+                )
+                .route(
                     "/accesscheck/global/{kind}/{id}",
                     get(api::v1::access_check::check_global_access),
                 )

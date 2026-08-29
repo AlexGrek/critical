@@ -215,6 +215,7 @@ JWT required.
 | Method | Path                                             | Description                          |
 | ------ | ------------------------------------------------ | ------------------------------------ |
 | `GET`  | `/v1/accesscheck/me/permissions`                 | Get caller's super-permissions       |
+| `GET`  | `/v1/accesscheck/me/acls`                        | Get caller's detailed ACL report (groups/projects + why) |
 | `GET`  | `/v1/accesscheck/global/{kind}/{id}`             | Check permissions on global resource |
 | `GET`  | `/v1/accesscheck/projects/{project}/{kind}/{id}` | Check permissions on scoped resource |
 
@@ -222,6 +223,43 @@ JWT required.
 ```json
 { "super_permissions": ["adm_godmode", "usr_create_groups"] }
 ```
+
+**My ACLs response** — everything the caller can see about their own access. Reports
+document-level ACL grants only; does not fold in super-permission bypasses (a godmode
+user may still see empty `groups`/`projects` here despite `is_godmode: true`):
+```json
+{
+  "user_id": "u_alice",
+  "is_godmode": false,
+  "super_permissions": ["usr_create_groups"],
+  "principals": ["u_alice", "g_engineering", "g_leads"],
+  "direct_memberships": ["g_engineering"],
+  "groups": [
+    {
+      "id": "g_engineering",
+      "name": "Engineering",
+      "permission": { "bits": 127, "can_fetch": true, "can_list": true, "can_notify": true, "can_create": true, "can_modify": true },
+      "via_principals": ["u_alice"],
+      "scoped_grants": []
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj1",
+      "name": "Proj One",
+      "permission": { "bits": 7, "can_fetch": true, "can_list": true, "can_notify": true, "can_create": false, "can_modify": false },
+      "via_principals": ["g_leads"],
+      "scoped_grants": [
+        { "scope": "tasks", "permission": { "bits": 31, "can_fetch": true, "can_list": true, "can_notify": true, "can_create": true, "can_modify": true }, "via_principals": ["g_leads"] }
+      ]
+    }
+  ]
+}
+```
+`principals` is the full transitive chain (self + nested group memberships, up to 10 levels).
+`direct_memberships` is one hop only. `groups`/`projects` only list resources with at least
+one matching ACL entry — `permission` covers unscoped entries (or `scope: "*"`); `scoped_grants`
+lists any entries restricted to a specific resource kind (project ACLs only).
 
 **Resource access check response:**
 ```json
