@@ -180,7 +180,11 @@ export default function UserDetailPage() {
             )}
 
             <div className="text-center w-full">
-              <H1 className="text-xl wrap-break-word" data-testid="user-detail-name">
+              <H1
+                align="center"
+                className="text-base font-sans wrap-break-word"
+                data-testid="user-detail-name"
+              >
                 {name || user.id}
               </H1>
               {user.personal?.job_title && (

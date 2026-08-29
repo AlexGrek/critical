@@ -10,18 +10,20 @@ import { cn } from "~/lib/utils";
  */
 
 const headerVariants = cva(
-  "font-sans font-bold text-gray-900 dark:text-gray-50 tracking-tight",
+  "font-mono text-gray-900 dark:text-gray-50 tracking-normal",
   {
     variants: {
       level: {
-        h1: "text-4xl sm:text-5xl lg:text-6xl leading-tight",
-        h2: "text-3xl sm:text-4xl lg:text-5xl leading-tight",
-        h3: "text-2xl sm:text-3xl lg:text-4xl leading-snug",
-        h4: "text-xl sm:text-2xl lg:text-3xl leading-snug",
-        h5: "text-lg sm:text-xl lg:text-2xl leading-normal",
-        h6: "text-base sm:text-lg lg:text-xl leading-normal",
+        h1: "text-xl sm:text-2xl lg:text-2xl leading-tight",
+        h2: "text-lg sm:text-xl lg:text-xl leading-tight",
+        h3: "text-base sm:text-lg lg:text-lg leading-snug",
+        h4: "text-sm sm:text-base lg:text-base leading-snug",
+        h5: "text-sm sm:text-sm lg:text-base leading-normal",
+        h6: "text-xs sm:text-sm lg:text-sm leading-normal",
       },
       weight: {
+        thin: "font-thin",
+        light: "font-light",
         normal: "font-normal",
         medium: "font-medium",
         semibold: "font-semibold",
@@ -36,7 +38,7 @@ const headerVariants = cva(
     },
     defaultVariants: {
       level: "h1",
-      weight: "bold",
+      weight: "light",
       align: "left",
     },
   }

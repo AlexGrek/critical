@@ -105,6 +105,7 @@ def test_me_permissions_root_has_godmode(root_token):
     body = resp.json()
     assert "super_permissions" in body
     assert "adm_godmode" in body["super_permissions"]
+    assert body["user_id"] == "u_root"
 
 
 def test_me_permissions_plain_user_no_godmode(reader_user):
@@ -113,7 +114,9 @@ def test_me_permissions_plain_user_no_godmode(reader_user):
         f"{URL_AC}/me/permissions", headers=auth_headers(reader_user["token"])
     )
     assert resp.status_code == 200, resp.text
-    assert "adm_godmode" not in resp.json()["super_permissions"]
+    body = resp.json()
+    assert "adm_godmode" not in body["super_permissions"]
+    assert body["user_id"] == reader_user["id"]
 
 
 def test_me_permissions_unauthenticated():

@@ -528,7 +528,7 @@ function AvatarTab({
   }, [state]);
 
   return (
-    <div className="flex flex-col lg:flex-row gap-6 max-w-3xl">
+    <div className="flex flex-col lg:flex-row gap-6 w-full">
       {/* Current avatar */}
       <Card className="lg:w-56 shrink-0 flex flex-col items-center gap-4 p-6">
         <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 self-start">
