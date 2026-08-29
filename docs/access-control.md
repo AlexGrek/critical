@@ -117,6 +117,22 @@ Projects are global resources that act as namespaces. They have a per-document A
 
 **On creation**: the creator is automatically added to the project ACL with ROOT permissions.
 
+### Repository Credentials
+
+`repo_credentials` are global resources holding a reusable SSH key or access token, referenced by a project's `RepoLink.credential`. Same ACL model as projects.
+
+| Operation             | Who Can Do It                                  |
+| ---------------------- | ----------------------------------------------- |
+| List all credentials   | `adm_config_editor`, OR ACL grants READ         |
+| Read a credential      | `adm_config_editor`, OR ACL grants READ         |
+| Create a credential    | `adm_config_editor`, OR `usr_create_projects`   |
+| Update a credential    | `adm_config_editor`, OR ACL grants MODIFY       |
+| Delete a credential    | `adm_config_editor`, OR ACL grants MODIFY       |
+
+**On creation**: the creator is automatically added to the credential's ACL with ROOT permissions. `secret`/`passphrase` are write-only and never returned by the API regardless of the caller's permissions.
+
+`POST /v1/global/projects/{id}/repocheck` additionally requires the caller to have READ on any `repo_credentials` document referenced by the request — this is enforced separately from (and in addition to) requiring MODIFY on the project, so a project editor cannot probe a repository using a credential they don't have access to.
+
 ### Scoped Resources (Project-Namespaced)
 
 Resources belonging to a project (e.g. tasks, pipelines) are accessed via `/v1/projects/{project}/{kind}`. These use **Hybrid ACL** resolution:

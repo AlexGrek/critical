@@ -3,6 +3,7 @@ import { useLoaderData, useRevalidator, Link } from "react-router";
 import {
   Button,
   Input,
+  Textarea,
   Card,
   CardContent,
   CardDescription,
@@ -17,10 +18,24 @@ import {
   YamlEditorDrawer,
   Modal,
   PrincipalChip,
+  ResourcePicker,
 } from "~/components";
 import type { AccessControlStore } from "~/components";
-import { AlertCircle, Lock, Settings, Plus, Github, GitBranch, Trash2, ExternalLink } from "lucide-react";
-import { formatDate, cn } from "~/lib/utils";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Lock,
+  Settings,
+  Plus,
+  Github,
+  GitBranch,
+  Trash2,
+  ExternalLink,
+  Pencil,
+  Loader2,
+  ShieldCheck,
+} from "lucide-react";
+import { formatDate, cn, nameToId } from "~/lib/utils";
 import { useState, useMemo, useCallback, useRef } from "react";
 import { resolvePrincipalsClient } from "~/lib/principals";
 import type { PrincipalMap } from "~/lib/principals";
@@ -42,12 +57,38 @@ interface DeletionInfo {
 }
 
 type RepoProvider = "git" | "github" | "gitlab" | "bitbucket" | "svn" | "mercurial" | "custom";
+type RepoAuthMethod = "none" | "ssh" | "github_token";
 
 interface RepoLink {
   url: string;
   provider: RepoProvider;
   name?: string;
   default_branch?: string;
+  auth_method?: RepoAuthMethod;
+  credential?: string;
+}
+
+interface ProbeOutcome {
+  status: "found" | "missing" | "error";
+  branch?: string;
+  size?: number;
+  message: string;
+}
+
+function CheckResultLine({ result }: { result: ProbeOutcome }) {
+  const Icon = result.status === "found" ? CheckCircle2 : AlertCircle;
+  const colorClass =
+    result.status === "found"
+      ? "text-green-600 dark:text-green-400"
+      : result.status === "missing"
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-red-600 dark:text-red-400";
+  return (
+    <div className={cn("flex items-center gap-1.5 text-xs", colorClass)}>
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <span>{result.message}</span>
+    </div>
+  );
 }
 
 interface Project {
@@ -223,23 +264,76 @@ export default function ProjectPage() {
   const repositories = project.repositories || [];
 
   // ── Repositories ──────────────────────────────────────────────────────────
-  const [isAddingRepo, setIsAddingRepo] = useState(false);
-  const [repoForm, setRepoForm] = useState<{
-    url: string;
-    provider: RepoProvider;
-    name: string;
-    default_branch: string;
-  }>({ url: "", provider: "github", name: "", default_branch: "" });
+  // formMode: "closed" (no form), "add" (appending), or the index of the row being edited.
+  const [formMode, setFormMode] = useState<"closed" | "add" | number>("closed");
+  const emptyRepoForm = {
+    url: "",
+    provider: "github" as RepoProvider,
+    name: "",
+    default_branch: "",
+    auth_method: "none" as RepoAuthMethod,
+    credential: "",
+  };
+  const [repoForm, setRepoForm] = useState(emptyRepoForm);
   const [repoSaving, setRepoSaving] = useState(false);
   const [repoError, setRepoError] = useState("");
   const [removingIdx, setRemovingIdx] = useState<number | null>(null);
   const urlInputRef = useRef<HTMLInputElement>(null);
+
+  const [checkResults, setCheckResults] = useState<Record<number, ProbeOutcome | null>>({});
+  const [checkingIdx, setCheckingIdx] = useState<number | null>(null);
+  const [formCheckResult, setFormCheckResult] = useState<ProbeOutcome | null>(null);
+  const [formChecking, setFormChecking] = useState(false);
+
+  const emptyNewCredForm = {
+    id: "",
+    name: "",
+    method: "ssh" as RepoAuthMethod,
+    username: "",
+    secret: "",
+    passphrase: "",
+  };
+  const [isNewCredModalOpen, setIsNewCredModalOpen] = useState(false);
+  const [newCredForm, setNewCredForm] = useState(emptyNewCredForm);
+  const [newCredIdLocked, setNewCredIdLocked] = useState(false);
+  const [newCredSaving, setNewCredSaving] = useState(false);
+  const [newCredError, setNewCredError] = useState("");
 
   function detectProvider(url: string): RepoProvider {
     if (url.includes("github.com")) return "github";
     if (url.includes("gitlab.com")) return "gitlab";
     if (url.includes("bitbucket.org")) return "bitbucket";
     return "git";
+  }
+
+  function openAddForm() {
+    setRepoForm(emptyRepoForm);
+    setFormCheckResult(null);
+    setRepoError("");
+    setFormMode("add");
+    setTimeout(() => urlInputRef.current?.focus(), 50);
+  }
+
+  function openEditForm(idx: number) {
+    const repo = repositories[idx];
+    setRepoForm({
+      url: repo.url,
+      provider: repo.provider,
+      name: repo.name || "",
+      default_branch: repo.default_branch || "",
+      auth_method: repo.auth_method || "none",
+      credential: repo.credential || "",
+    });
+    setFormCheckResult(null);
+    setRepoError("");
+    setFormMode(idx);
+  }
+
+  function closeForm() {
+    setFormMode("closed");
+    setRepoForm(emptyRepoForm);
+    setFormCheckResult(null);
+    setRepoError("");
   }
 
   const saveRepositories = useCallback(
@@ -259,29 +353,36 @@ export default function ProjectPage() {
     [project, revalidator]
   );
 
-  const handleAddRepo = useCallback(
+  const buildRepoLink = useCallback((): RepoLink => ({
+    url: repoForm.url.trim(),
+    provider: repoForm.provider,
+    ...(repoForm.name.trim() ? { name: repoForm.name.trim() } : {}),
+    ...(repoForm.default_branch.trim() ? { default_branch: repoForm.default_branch.trim() } : {}),
+    auth_method: repoForm.auth_method,
+    ...(repoForm.auth_method !== "none" && repoForm.credential ? { credential: repoForm.credential } : {}),
+  }), [repoForm]);
+
+  const handleSaveRepo = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
       setRepoError("");
       if (!repoForm.url.trim()) return;
       setRepoSaving(true);
       try {
-        const newRepo: RepoLink = {
-          url: repoForm.url.trim(),
-          provider: repoForm.provider,
-          ...(repoForm.name.trim() ? { name: repoForm.name.trim() } : {}),
-          ...(repoForm.default_branch.trim() ? { default_branch: repoForm.default_branch.trim() } : {}),
-        };
-        await saveRepositories([...repositories, newRepo]);
-        setIsAddingRepo(false);
-        setRepoForm({ url: "", provider: "github", name: "", default_branch: "" });
+        const entry = buildRepoLink();
+        const next =
+          typeof formMode === "number"
+            ? repositories.map((r, i) => (i === formMode ? entry : r))
+            : [...repositories, entry];
+        await saveRepositories(next);
+        closeForm();
       } catch (err) {
-        setRepoError(err instanceof Error ? err.message : "Failed to add repository");
+        setRepoError(err instanceof Error ? err.message : "Failed to save repository");
       } finally {
         setRepoSaving(false);
       }
     },
-    [repoForm, repositories, saveRepositories]
+    [repoForm, repositories, saveRepositories, formMode, buildRepoLink]
   );
 
   const handleRemoveRepo = useCallback(
@@ -289,11 +390,106 @@ export default function ProjectPage() {
       setRemovingIdx(idx);
       try {
         await saveRepositories(repositories.filter((_, i) => i !== idx));
+        if (formMode === idx) closeForm();
+        setCheckResults((prev) => {
+          const next = { ...prev };
+          delete next[idx];
+          return next;
+        });
       } finally {
         setRemovingIdx(null);
       }
     },
-    [repositories, saveRepositories]
+    [repositories, saveRepositories, formMode]
+  );
+
+  const runCheck = useCallback(
+    async (link: RepoLink): Promise<ProbeOutcome> => {
+      const res = await fetch(`/api/v1/global/projects/${project.id}/repocheck`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(link),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg = (data as { message?: string; error?: string }).message ?? (data as { message?: string; error?: string }).error ?? `HTTP ${res.status}`;
+        throw new Error(msg);
+      }
+      return data as ProbeOutcome;
+    },
+    [project.id]
+  );
+
+  const handleCheckForm = useCallback(async () => {
+    if (!repoForm.url.trim()) return;
+    setFormChecking(true);
+    setFormCheckResult(null);
+    try {
+      setFormCheckResult(await runCheck(buildRepoLink()));
+    } catch (err) {
+      setFormCheckResult({ status: "error", message: err instanceof Error ? err.message : "Check failed" });
+    } finally {
+      setFormChecking(false);
+    }
+  }, [repoForm, runCheck, buildRepoLink]);
+
+  const handleCheckSavedRepo = useCallback(
+    async (idx: number) => {
+      setCheckingIdx(idx);
+      setCheckResults((prev) => ({ ...prev, [idx]: null }));
+      try {
+        const outcome = await runCheck(repositories[idx]);
+        setCheckResults((prev) => ({ ...prev, [idx]: outcome }));
+      } catch (err) {
+        setCheckResults((prev) => ({
+          ...prev,
+          [idx]: { status: "error", message: err instanceof Error ? err.message : "Check failed" },
+        }));
+      } finally {
+        setCheckingIdx(null);
+      }
+    },
+    [repositories, runCheck]
+  );
+
+  const handleCreateCredential = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newCredForm.id.trim() || !newCredForm.name.trim() || !newCredForm.secret.trim()) return;
+      setNewCredSaving(true);
+      setNewCredError("");
+      try {
+        const res = await fetch("/api/v1/global/repo_credentials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            id: newCredForm.id.trim(),
+            name: newCredForm.name.trim(),
+            method: newCredForm.method,
+            ...(newCredForm.username.trim() ? { username: newCredForm.username.trim() } : {}),
+            secret: newCredForm.secret,
+            ...(newCredForm.passphrase ? { passphrase: newCredForm.passphrase } : {}),
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = (data as { message?: string; error?: string }).message ?? (data as { message?: string; error?: string }).error ?? `HTTP ${res.status}`;
+          throw new Error(msg);
+        }
+        const created = data as { id: string };
+        setRepoForm((f) => ({ ...f, credential: created.id }));
+        setIsNewCredModalOpen(false);
+        setNewCredForm(emptyNewCredForm);
+        setNewCredIdLocked(false);
+      } catch (err) {
+        setNewCredError(err instanceof Error ? err.message : "Failed to create credential");
+      } finally {
+        setNewCredSaving(false);
+      }
+    },
+    [newCredForm, emptyNewCredForm]
   );
 
   return (
@@ -457,14 +653,11 @@ export default function ProjectPage() {
                     <CardTitle>Repositories</CardTitle>
                     <CardDescription>Source code repositories linked to this project</CardDescription>
                   </div>
-                  {!isAddingRepo && (
+                  {formMode === "closed" && (
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => {
-                        setIsAddingRepo(true);
-                        setTimeout(() => urlInputRef.current?.focus(), 50);
-                      }}
+                      onClick={openAddForm}
                       data-testid="add-repo-button"
                       title="Add repository"
                     >
@@ -474,7 +667,7 @@ export default function ProjectPage() {
                 </div>
               </CardHeader>
               <CardContent>
-                {repositories.length === 0 && !isAddingRepo && (
+                {repositories.length === 0 && formMode === "closed" && (
                   <Paragraph variant="muted" size="sm" data-testid="no-repos-message">
                     No repositories linked yet.
                   </Paragraph>
@@ -486,64 +679,106 @@ export default function ProjectPage() {
                     {repositories.map((repo, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-3 px-3 py-2 bg-gray-50 dark:bg-gray-800/60 rounded-(--radius-component) border border-gray-100 dark:border-gray-800"
+                        className="px-3 py-2 bg-gray-50 dark:bg-gray-800/60 rounded-(--radius-component) border border-gray-100 dark:border-gray-800"
                         data-testid={`repo-entry-${idx}`}
                       >
-                        <span className="shrink-0 text-gray-400 dark:text-gray-500">
-                          {repo.provider === "github" ? (
-                            <Github className="w-4 h-4" />
-                          ) : (
-                            <GitBranch className="w-4 h-4" />
-                          )}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <a
-                              href={repo.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-sm font-mono text-primary-600 dark:text-primary-400 hover:underline truncate"
-                              data-testid={`repo-url-${idx}`}
-                            >
-                              {repo.name || repo.url}
-                            </a>
-                            <ExternalLink className="w-3 h-3 shrink-0 text-gray-400" />
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-xs text-gray-400 dark:text-gray-500 capitalize">{repo.provider}</span>
-                            {repo.name && (
-                              <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate">{repo.url}</span>
+                        <div className="flex items-center gap-3">
+                          <span className="shrink-0 text-gray-400 dark:text-gray-500">
+                            {repo.provider === "github" ? (
+                              <Github className="w-4 h-4" />
+                            ) : (
+                              <GitBranch className="w-4 h-4" />
                             )}
-                            {repo.default_branch && (
-                              <span className="text-xs text-gray-400 dark:text-gray-500">
-                                branch: <code className="font-mono">{repo.default_branch}</code>
-                              </span>
-                            )}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <a
+                                href={repo.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-mono text-primary-600 dark:text-primary-400 hover:underline truncate"
+                                data-testid={`repo-url-${idx}`}
+                              >
+                                {repo.name || repo.url}
+                              </a>
+                              <ExternalLink className="w-3 h-3 shrink-0 text-gray-400" />
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-xs text-gray-400 dark:text-gray-500 capitalize">{repo.provider}</span>
+                              {repo.name && (
+                                <span className="text-xs font-mono text-gray-500 dark:text-gray-400 truncate">{repo.url}</span>
+                              )}
+                              {repo.default_branch && (
+                                <span className="text-xs text-gray-400 dark:text-gray-500">
+                                  branch: <code className="font-mono">{repo.default_branch}</code>
+                                </span>
+                              )}
+                              {repo.auth_method && repo.auth_method !== "none" && (
+                                <span className="inline-flex items-center gap-1 text-xs text-gray-400 dark:text-gray-500">
+                                  <ShieldCheck className="w-3 h-3" />
+                                  {repo.auth_method === "ssh" ? "SSH" : "GitHub token"}
+                                </span>
+                              )}
+                            </div>
                           </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleCheckSavedRepo(idx)}
+                            disabled={checkingIdx === idx}
+                            data-testid={`repo-check-${idx}`}
+                            title="Check connectivity"
+                            className="shrink-0 text-gray-400 hover:text-primary-500"
+                          >
+                            {checkingIdx === idx ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <ShieldCheck className="w-3.5 h-3.5" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditForm(idx)}
+                            disabled={formMode !== "closed"}
+                            data-testid={`edit-repo-${idx}`}
+                            title="Edit repository"
+                            className="shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleRemoveRepo(idx)}
+                            disabled={removingIdx === idx}
+                            data-testid={`remove-repo-${idx}`}
+                            title="Remove repository"
+                            className="shrink-0 text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveRepo(idx)}
-                          disabled={removingIdx === idx}
-                          data-testid={`remove-repo-${idx}`}
-                          title="Remove repository"
-                          className="shrink-0 text-gray-400 hover:text-red-500"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
+                        {checkResults[idx] !== undefined && checkResults[idx] !== null && (
+                          <div className="mt-2 pl-7" data-testid={`repo-check-result-${idx}`}>
+                            <CheckResultLine result={checkResults[idx]!} />
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
 
-                {/* Add repo form */}
-                {isAddingRepo && (
+                {/* Add / edit repo form */}
+                {formMode !== "closed" && (
                   <form
-                    onSubmit={handleAddRepo}
+                    onSubmit={handleSaveRepo}
                     className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-800 mt-2"
                     data-testid="add-repo-form"
                   >
+                    <Paragraph size="sm" weight="medium">
+                      {typeof formMode === "number" ? "Edit repository" : "Add repository"}
+                    </Paragraph>
                     {repoError && (
                       <p className="text-xs text-red-600 dark:text-red-400" data-testid="repo-error">{repoError}</p>
                     )}
@@ -610,7 +845,64 @@ export default function ProjectPage() {
                         />
                       </div>
                     </div>
-                    <div className="flex gap-2 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Authentication</label>
+                        <select
+                          value={repoForm.auth_method}
+                          onChange={(e) =>
+                            setRepoForm((f) => ({ ...f, auth_method: e.target.value as RepoAuthMethod, credential: "" }))
+                          }
+                          data-testid="repo-auth-method-select"
+                          className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-(--radius-component) text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        >
+                          <option value="none">None (public repo)</option>
+                          <option value="ssh">SSH key</option>
+                          <option value="github_token">GitHub token</option>
+                        </select>
+                      </div>
+                      {repoForm.auth_method !== "none" && (
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Credential <span className="text-red-500">*</span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            {repoForm.credential ? (
+                              <div className="flex-1 flex items-center justify-between gap-2 px-3 py-2 text-sm font-mono bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-(--radius-component)">
+                                <span className="truncate">{repoForm.credential}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setRepoForm((f) => ({ ...f, credential: "" }))}
+                                  className="shrink-0 text-gray-400 hover:text-red-500"
+                                  data-testid="clear-repo-credential"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <ResourcePicker
+                                kind="repo_credentials"
+                                prefix="rc_"
+                                placeholder="Search credentials…"
+                                onSelect={(id) => setRepoForm((f) => ({ ...f, credential: id }))}
+                                className="flex-1"
+                                data-testid="repo-credential-picker"
+                              />
+                            )}
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setIsNewCredModalOpen(true)}
+                              data-testid="new-repo-credential-button"
+                            >
+                              New
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 pt-1">
                       <Button
                         type="submit"
                         variant="primary"
@@ -618,26 +910,193 @@ export default function ProjectPage() {
                         disabled={repoSaving || !repoForm.url.trim()}
                         data-testid="save-repo-button"
                       >
-                        {repoSaving ? "Saving…" : "Add repository"}
+                        {repoSaving ? "Saving…" : typeof formMode === "number" ? "Save changes" : "Add repository"}
                       </Button>
                       <Button
                         type="button"
                         variant="secondary"
                         size="sm"
-                        onClick={() => {
-                          setIsAddingRepo(false);
-                          setRepoError("");
-                          setRepoForm({ url: "", provider: "github", name: "", default_branch: "" });
-                        }}
+                        onClick={closeForm}
                         data-testid="cancel-add-repo"
                       >
                         Cancel
                       </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleCheckForm}
+                        disabled={formChecking || !repoForm.url.trim()}
+                        data-testid="repo-check-form"
+                      >
+                        {formChecking ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                            Checking…
+                          </>
+                        ) : (
+                          <>
+                            <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+                            Check
+                          </>
+                        )}
+                      </Button>
                     </div>
+                    {formCheckResult && (
+                      <div data-testid="repo-check-result-form">
+                        <CheckResultLine result={formCheckResult} />
+                      </div>
+                    )}
                   </form>
                 )}
               </CardContent>
             </Card>
+
+            {/* New repo credential modal */}
+            <Modal.Root open={isNewCredModalOpen} onOpenChange={setIsNewCredModalOpen}>
+              <Modal.Content>
+                <Modal.Header>
+                  <Modal.Title>New repository credential</Modal.Title>
+                  <Modal.Description>
+                    Stored once, reusable across repositories. The secret is never shown again after saving.
+                  </Modal.Description>
+                </Modal.Header>
+                <form
+                  id="new-credential-form"
+                  onSubmit={handleCreateCredential}
+                  className="space-y-3 p-4"
+                  data-testid="new-credential-form"
+                >
+                  {newCredError && (
+                    <p className="text-xs text-red-600 dark:text-red-400" data-testid="new-credential-error">{newCredError}</p>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Name <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      data-testid="new-credential-name"
+                      value={newCredForm.name}
+                      onChange={(e) => {
+                        const name = e.target.value;
+                        setNewCredForm((f) => ({
+                          ...f,
+                          name,
+                          id: newCredIdLocked ? f.id : nameToId(name),
+                        }));
+                      }}
+                      placeholder="deploy-key"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      ID <span className="text-red-500">*</span>
+                    </label>
+                    <Input
+                      monospace
+                      data-testid="new-credential-id"
+                      value={newCredForm.id}
+                      onFocus={() => setNewCredIdLocked(true)}
+                      onChange={(e) => setNewCredForm((f) => ({ ...f, id: e.target.value.toLowerCase() }))}
+                      placeholder="deploy_key"
+                      required
+                    />
+                    <p className="mt-1 text-xs text-gray-600 dark:text-gray-400" data-testid="new-credential-id-hint">
+                      2–63 chars, lowercase + underscores/hyphens. The <span className="font-mono">rc_</span> prefix is added automatically.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Method</label>
+                    <select
+                      value={newCredForm.method}
+                      onChange={(e) => setNewCredForm((f) => ({ ...f, method: e.target.value as RepoAuthMethod }))}
+                      data-testid="new-credential-method-select"
+                      className="w-full px-3 py-2 text-sm bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-(--radius-component) text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    >
+                      <option value="ssh">SSH key</option>
+                      <option value="github_token">GitHub token</option>
+                    </select>
+                  </div>
+                  {newCredForm.method === "ssh" && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        SSH username <span className="text-gray-400">(optional, defaults to "git")</span>
+                      </label>
+                      <Input
+                        data-testid="new-credential-username"
+                        value={newCredForm.username}
+                        onChange={(e) => setNewCredForm((f) => ({ ...f, username: e.target.value }))}
+                        placeholder="git"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {newCredForm.method === "ssh" ? "Private key" : "Token"} <span className="text-red-500">*</span>
+                    </label>
+                    {newCredForm.method === "ssh" ? (
+                      <Textarea
+                        data-testid="new-credential-secret"
+                        monospace
+                        rows={6}
+                        value={newCredForm.secret}
+                        onChange={(e) => setNewCredForm((f) => ({ ...f, secret: e.target.value }))}
+                        placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
+                        required
+                      />
+                    ) : (
+                      <Input
+                        data-testid="new-credential-secret"
+                        monospace
+                        type="password"
+                        value={newCredForm.secret}
+                        onChange={(e) => setNewCredForm((f) => ({ ...f, secret: e.target.value }))}
+                        placeholder="ghp_…"
+                        required
+                      />
+                    )}
+                  </div>
+                  {newCredForm.method === "ssh" && (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Passphrase <span className="text-gray-400">(optional)</span>
+                      </label>
+                      <Input
+                        data-testid="new-credential-passphrase"
+                        type="password"
+                        value={newCredForm.passphrase}
+                        onChange={(e) => setNewCredForm((f) => ({ ...f, passphrase: e.target.value }))}
+                      />
+                    </div>
+                  )}
+                </form>
+                <Modal.Footer>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      setIsNewCredModalOpen(false);
+                      setNewCredForm(emptyNewCredForm);
+                      setNewCredIdLocked(false);
+                      setNewCredError("");
+                    }}
+                    data-testid="cancel-new-credential"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    form="new-credential-form"
+                    variant="primary"
+                    disabled={newCredSaving || !newCredForm.id.trim() || !newCredForm.name.trim() || !newCredForm.secret.trim()}
+                    data-testid="save-new-credential"
+                  >
+                    {newCredSaving ? "Saving…" : "Save credential"}
+                  </Button>
+                </Modal.Footer>
+              </Modal.Content>
+            </Modal.Root>
 
             {/* Labels & Annotations */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

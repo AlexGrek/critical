@@ -93,6 +93,10 @@ pub fn create_app(shared_state: Arc<AppState>) -> IntoMakeService<Router> {
                     post(api::v1::upload::upload_media),
                 )
                 .route(
+                    "/global/{kind}/{id}/repocheck",
+                    post(api::v1::repo_check::check_project_repository),
+                )
+                .route(
                     "/global/permissions/{key}/grant",
                     post(api::v1::permissions::grant_permission),
                 )

@@ -30,7 +30,7 @@ RUN cargo build --release --bin axum-api
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libssl3 ca-certificates curl \
+    libssl3 ca-certificates curl openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/target/release/axum-api /usr/local/bin/axum-api

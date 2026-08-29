@@ -156,6 +156,19 @@ pub enum RepoProvider {
     Custom,
 }
 
+/// How the server should authenticate when connecting to a linked repository.
+#[derive(Debug, Serialize, Deserialize, Clone, Default, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum RepoAuthMethod {
+    /// Anonymous access (plain HTTPS, public repos only).
+    #[default]
+    None,
+    /// SSH key authentication, using the referenced `RepoCredential`.
+    Ssh,
+    /// GitHub personal access token, using the referenced `RepoCredential`.
+    GithubToken,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct RepoLink {
     pub url: String,
@@ -166,6 +179,37 @@ pub struct RepoLink {
     /// Primary branch (git-based providers only).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_branch: Option<String>,
+    #[serde(default)]
+    pub auth_method: RepoAuthMethod,
+    /// ID of the `RepoCredential` supplying the secret for `auth_method`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub credential: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// Repository credentials
+// ---------------------------------------------------------------------------
+
+/// A stored credential (SSH key or access token) usable by a project's `RepoLink`s.
+/// `secret`/`passphrase` are write-only: accepted on create/update, never returned by the API.
+#[crit_derive::crit_resource(collection = "repo_credentials", prefix = "rc_")]
+pub struct RepoCredential {
+    #[brief]
+    pub name: String,
+    #[brief]
+    #[serde(default)]
+    pub method: RepoAuthMethod,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// SSH user; defaults to "git" when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    /// Write-only. SSH private key PEM or GitHub token.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret: Option<String>,
+    /// Write-only. Passphrase for an encrypted SSH key.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub passphrase: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

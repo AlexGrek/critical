@@ -20,6 +20,7 @@ const VERTEX_COLLECTIONS: &[&str] = &[
     "service_accounts",
     "pipeline_accounts",
     "projects",
+    "repo_credentials",
     "permissions",
     "resource_history",
     "resource_events",
@@ -40,6 +41,7 @@ pub const WRITE_COLLECTIONS: &[&str] = &[
     "service_accounts",
     "pipeline_accounts",
     "projects",
+    "repo_credentials",
     "memberships",
     "permissions",
     "resource_history",
@@ -55,6 +57,7 @@ pub struct CollectionHandles {
     pub service_accounts: Collection<ReqwestClient>,
     pub pipeline_accounts: Collection<ReqwestClient>,
     pub projects: Collection<ReqwestClient>,
+    pub repo_credentials: Collection<ReqwestClient>,
     pub memberships: Collection<ReqwestClient>,
     pub permissions: Collection<ReqwestClient>,
     pub resource_history: Collection<ReqwestClient>,
@@ -105,6 +108,10 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         .await
         .map_err(|e| anyhow!(e.to_string()))?;
     let projects = db.collection("projects").await.map_err(|e| anyhow!(e.to_string()))?;
+    let repo_credentials = db
+        .collection("repo_credentials")
+        .await
+        .map_err(|e| anyhow!(e.to_string()))?;
     let memberships = db.collection("memberships").await.map_err(|e| anyhow!(e.to_string()))?;
     let permissions = db.collection("permissions").await.map_err(|e| anyhow!(e.to_string()))?;
     let resource_history = db
@@ -142,6 +149,7 @@ pub async fn open_collections(db: &Database<ReqwestClient>) -> Result<Collection
         service_accounts,
         pipeline_accounts,
         projects,
+        repo_credentials,
         memberships,
         permissions,
         resource_history,

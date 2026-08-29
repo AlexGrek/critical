@@ -11,6 +11,7 @@
 - [Principal Resolution](#principal-resolution)
 - [Permissions Management](#permissions-management)
 - [Media Upload](#media-upload)
+- [Repository Check](#repository-check)
 - [Static File Serving](#static-file-serving)
 - [Access Check](#access-check)
 - [Debug Endpoints](#debug-endpoints)
@@ -184,6 +185,36 @@ Unauthorized → `404` (to avoid leaking entity existence).
 4. Write `persistent_files` record; delete raw upload
 
 Only one conversion runs at a time (global `Semaphore(1)`).
+
+---
+
+## Repository Check
+
+JWT required. Probes a project repository link for connectivity/auth, without saving anything — used by the frontend to validate a `RepoLink` before or after adding it.
+
+```
+POST /v1/global/projects/{id}/repocheck
+Content-Type: application/json
+
+{ "url": "...", "provider": "github", "default_branch": "main",
+  "auth_method": "none", "credential": "rc_..." }
+```
+
+Body is a full `RepoLink` (not an index into the project's saved list), so the same endpoint validates both an unsaved form entry and an already-saved repo row.
+
+Fetches exactly one hardcoded file, `pipelines.js`, from the resolved default (or explicit) branch:
+- GitHub provider → GitHub Contents API (via `octocrab`), authenticated with the referenced credential's token when `auth_method: "github_token"`
+- Everything else → a shallow (depth-1) bare git clone (via `gix`), over plain HTTPS (anonymous) or SSH (using the referenced credential's private key)
+
+**Response** `200 OK` for any outcome the probe actually reaches — the file being missing or the connection failing are not HTTP errors:
+```json
+{ "status": "found", "branch": "main", "size": 1234, "message": "pipelines.js found on branch main" }
+```
+`status` is one of `found` / `missing` / `error`. `branch` and `size` are omitted when not applicable.
+
+`4xx` is reserved for request-shape problems: unknown project (`404`), caller lacks `MODIFY` on the project (`404`), `credential` references a `repo_credentials` document the caller lacks `READ` on (`404`), or an unparseable/unsupported repository URL (`400`).
+
+Bounded by a 30s timeout per probe.
 
 ---
 
@@ -400,12 +431,30 @@ repositories: Vec<RepoLink>
   provider: RepoProvider       # git | github | gitlab | bitbucket | svn | mercurial | custom
   name: Option<String>
   default_branch: Option<String>
+  auth_method: RepoAuthMethod  # none (default) | ssh | github_token
+  credential: Option<String>   # id of a repo_credentials document
 enabled_services: Vec<ProjectService>
   # integrations | pipelines | deployments | secrets | wikis | apps
   # tasks | talks | releases | environments | insights
 ```
 
 **Brief fields:** `id`, `labels`, `annotations`, `name`
+
+### `repo_credentials` (collection: `repo_credentials`, prefix: `rc_`)
+
+Reusable SSH keys / access tokens referenced by a project's `RepoLink.credential`. `secret` and `passphrase` are write-only — accepted on create/update, never returned; `to_external` adds a computed `has_secret: bool` instead.
+
+```
+id: String
+name: String
+method: RepoAuthMethod         # ssh | github_token
+description: Option<String>
+username: Option<String>       # SSH user, defaults to "git"
+secret: Option<String>         # write-only — SSH private key PEM or GitHub token
+passphrase: Option<String>     # write-only — passphrase for an encrypted SSH key
+```
+
+**Brief fields:** `id`, `labels`, `name`, `method`
 
 ### `ticketgroups` (collection: `ticketgroups`, prefix: `tg_`, **project-scoped**)
 
@@ -493,6 +542,7 @@ Pages may contain fewer items than `limit` — ACL filtering removes some result
 | `service_accounts`  | `id`, `labels`, `annotations`, `name`, `avatar_ulid`     |
 | `pipeline_accounts` | `id`, `labels`, `annotations`, `name`, `avatar_ulid`     |
 | `projects`          | `id`, `labels`, `annotations`, `name`                    |
+| `repo_credentials`  | `id`, `labels`, `name`, `method`                         |
 | `ticketgroups`      | `id`, `labels`, `annotations`, `name`                    |
 
 ### Single resource (GET `/{id}`, POST create, PUT update)
@@ -626,6 +676,7 @@ JWT middleware applied to all `/v1/*` routes.
 | `service_accounts`   | `sa_`    |                           |
 | `pipeline_accounts`  | `pa_`    |                           |
 | `projects`           | *(none)* |                           |
+| `repo_credentials`   | `rc_`    |                           |
 | `crds`               | *(none)* | No ACL                    |
 | `ticketgroups`       | `tg_`    | Project-scoped            |
 | `permissions`        | *(none)* | Super-permissions store   |

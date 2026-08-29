@@ -4,6 +4,7 @@ pub mod debug;
 pub mod gitops;
 pub mod permissions;
 pub mod principals;
+pub mod repo_check;
 pub mod scoped_gitops;
 pub mod static_files;
 pub mod upload;

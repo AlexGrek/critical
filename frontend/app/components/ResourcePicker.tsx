@@ -78,6 +78,7 @@ const KIND_PREFIX: Record<string, string> = {
   groups: "g_",
   service_accounts: "sa_",
   pipeline_accounts: "pa_",
+  repo_credentials: "rc_",
 };
 
 function buildStartwith(input: string, prefix: string): string {

@@ -10,6 +10,12 @@ description: The Critical platform itself
 labels:
   priority: high
   status: active
+repositories:
+  - url: https://github.com/octocat/Hello-World
+    provider: github
+    name: hello-world
+    default_branch: master
+    auth_method: none
 acl:
   list:
     - permissions: 127
