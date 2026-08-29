@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde::Serialize;
 
-use crit_shared::data_models::{RepoAuthMethod, RepoCredential, RepoLink, RepoProvider};
+use crit_shared::data_models::{RepoAuthMethod, RepoLink, RepoProvider};
 
 use crate::error::AppError;
 
@@ -57,35 +57,41 @@ impl ProbeOutcome {
 }
 
 /// Probe a repository link for `pipelines.js` on its configured (or default)
-/// branch. `cred` must be `Some` when `link.auth_method` requires one.
+/// branch. `secret` is the referenced credential's secret (SSH private key or
+/// GitHub token) — must be `Some` when `link.auth_method` requires one. Only
+/// the secret is needed here; the caller is responsible for the ACL check on
+/// the full `RepoCredential` document before extracting it (see
+/// `api/v1/repo_check.rs::fetch_readable_credential` — deliberately not
+/// deserialized into the typed `RepoCredential` struct here, since raw DB
+/// documents store `acl.list[].permissions` as an integer bitmask, not the
+/// `|`-separated string form `AccessControlStore`'s derive expects).
 ///
 /// Returns `Err` only for request-shape problems (unparseable URL, missing
 /// required credential) — anything that happens while actually talking to
 /// the repository (auth failure, timeout, file missing) is reported as an
 /// `Ok(ProbeOutcome)` so callers can render it uniformly.
-pub async fn probe_repo(link: &RepoLink, cred: Option<&RepoCredential>) -> Result<ProbeOutcome, AppError> {
+pub async fn probe_repo(link: &RepoLink, secret: Option<&str>) -> Result<ProbeOutcome, AppError> {
     // Validate the URL up front regardless of transport, so malformed input
     // is rejected the same way for every provider.
     parse_repo_url(&link.url)?;
 
     if link.provider == RepoProvider::Github {
-        return probe_github(link, cred).await;
+        return probe_github(link, secret).await;
     }
-    probe_git(link.clone(), cred.cloned()).await
+    probe_git(link.clone(), secret.map(str::to_string)).await
 }
 
 // ---------------------------------------------------------------------------
 // GitHub API path (octocrab)
 // ---------------------------------------------------------------------------
 
-async fn probe_github(link: &RepoLink, cred: Option<&RepoCredential>) -> Result<ProbeOutcome, AppError> {
+async fn probe_github(link: &RepoLink, secret: Option<&str>) -> Result<ProbeOutcome, AppError> {
     let url = parse_repo_url(&link.url)?;
     let (owner, repo) =
         owner_repo(&url).ok_or_else(|| AppError::bad_request("could not determine owner/repo from repository URL"))?;
 
     let token = if link.auth_method == RepoAuthMethod::GithubToken {
-        let token = cred
-            .and_then(|c| c.secret.as_deref())
+        let token = secret
             .filter(|s| !s.is_empty())
             .ok_or_else(|| AppError::validation("github_token auth requires a credential with a token set"))?;
         Some(token.to_string())
@@ -136,9 +142,9 @@ async fn probe_github(link: &RepoLink, cred: Option<&RepoCredential>) -> Result<
 // Generic git path (gix) — SSH and anonymous HTTPS
 // ---------------------------------------------------------------------------
 
-async fn probe_git(link: RepoLink, cred: Option<RepoCredential>) -> Result<ProbeOutcome, AppError> {
+async fn probe_git(link: RepoLink, secret: Option<String>) -> Result<ProbeOutcome, AppError> {
     if link.auth_method == RepoAuthMethod::Ssh {
-        let has_secret = cred.as_ref().and_then(|c| c.secret.as_deref()).is_some_and(|s| !s.is_empty());
+        let has_secret = secret.as_deref().is_some_and(|s| !s.is_empty());
         if !has_secret {
             return Err(AppError::validation(
                 "ssh auth requires a credential with a private key set",
@@ -148,7 +154,7 @@ async fn probe_git(link: RepoLink, cred: Option<RepoCredential>) -> Result<Probe
 
     let should_interrupt = Arc::new(AtomicBool::new(false));
     let interrupt_for_task = should_interrupt.clone();
-    let handle = tokio::task::spawn_blocking(move || run_git_probe(&link, cred.as_ref(), &interrupt_for_task));
+    let handle = tokio::task::spawn_blocking(move || run_git_probe(&link, secret.as_deref(), &interrupt_for_task));
 
     match tokio::time::timeout(PROBE_TIMEOUT, handle).await {
         Ok(Ok(outcome)) => Ok(outcome),
@@ -166,7 +172,7 @@ async fn probe_git(link: RepoLink, cred: Option<RepoCredential>) -> Result<Probe
 /// Blocking: shallow bare-clones the repo into a temp dir, then reads
 /// `pipelines.js` out of the resulting tree. Runs on a `spawn_blocking`
 /// thread — gix's network client is synchronous.
-fn run_git_probe(link: &RepoLink, cred: Option<&RepoCredential>, should_interrupt: &AtomicBool) -> ProbeOutcome {
+fn run_git_probe(link: &RepoLink, secret: Option<&str>, should_interrupt: &AtomicBool) -> ProbeOutcome {
     let tmp = match tempfile::tempdir() {
         Ok(t) => t,
         Err(e) => return ProbeOutcome::error(format!("failed to create temp dir: {e}")),
@@ -185,8 +191,7 @@ fn run_git_probe(link: &RepoLink, cred: Option<&RepoCredential>, should_interrup
     // (via TempDir/NamedTempFile drop) as soon as we leave this function.
     let mut _key_file_guard = None;
     if link.auth_method == RepoAuthMethod::Ssh {
-        let secret = cred.and_then(|c| c.secret.as_deref()).unwrap_or_default();
-        let key_file = match write_ssh_key(secret) {
+        let key_file = match write_ssh_key(secret.unwrap_or_default()) {
             Ok(f) => f,
             Err(e) => return ProbeOutcome::error(format!("failed to stage SSH key: {e}")),
         };

@@ -5,7 +5,6 @@ use axum::{
     extract::{Path, State},
 };
 
-use crit_shared::data_models::RepoCredential;
 use crit_shared::event_models::{EventKind, EventPriority};
 use serde_json::json;
 
@@ -47,12 +46,12 @@ pub async fn check_project_repository(
 
     check_project_write_access(&state, &user_id, &project_id).await?;
 
-    let credential = match &link.credential {
-        Some(cred_id) => Some(fetch_readable_credential(&state, &user_id, cred_id).await?),
+    let secret = match &link.credential {
+        Some(cred_id) => fetch_readable_credential_secret(&state, &user_id, cred_id).await?,
         None => None,
     };
 
-    let outcome = probe_repo(&link, credential.as_ref()).await?;
+    let outcome = probe_repo(&link, secret.as_deref()).await?;
 
     state
         .events
@@ -88,15 +87,23 @@ async fn check_project_write_access(state: &AppState, user_id: &str, project_id:
     Ok(())
 }
 
-/// Fetch a `repo_credentials` document the caller may read. 404 if it
-/// doesn't exist or the caller lacks READ — this is load-bearing: without it,
-/// anyone who can edit a project could attach a credential ID they don't own
-/// and have the server use its secret against a URL of their choosing.
-async fn fetch_readable_credential(
+/// Fetch a `repo_credentials` document's `secret` field, checking that the
+/// caller may read it. 404 if the document doesn't exist or the caller lacks
+/// READ — this is load-bearing: without it, anyone who can edit a project
+/// could attach a credential ID they don't own and have the server use its
+/// secret against a URL of their choosing.
+///
+/// Deliberately works on the raw `Value` rather than deserializing into the
+/// typed `RepoCredential` struct: raw DB documents store `acl.list[].permissions`
+/// as an integer bitmask, not the `|`-separated string form `AccessControlStore`'s
+/// derive expects, so a blind `serde_json::from_value` on a doc with an ACL
+/// fails. The rest of the controller layer avoids this by never deserializing
+/// full documents into typed structs — this follows the same rule.
+async fn fetch_readable_credential_secret(
     state: &AppState,
     user_id: &str,
     credential_id: &str,
-) -> Result<RepoCredential, AppError> {
+) -> Result<Option<String>, AppError> {
     let doc = state
         .db
         .generic_get("repo_credentials", credential_id)
@@ -108,6 +115,5 @@ async fn fetch_readable_credential(
         return Err(AppError::not_found(format!("repo_credentials/{credential_id}")));
     }
 
-    serde_json::from_value(doc)
-        .map_err(|e| AppError::Internal(anyhow::anyhow!("corrupt repo_credentials document: {e}")))
+    Ok(doc.get("secret").and_then(|v| v.as_str()).map(str::to_string))
 }
