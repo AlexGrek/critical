@@ -186,7 +186,14 @@ def test_update_without_secret_preserves_stored_secret(test_credential, project_
         headers=headers,
     )
     assert put_resp.status_code == STATUS_OK, put_resp.text
-    assert put_resp.json()["has_secret"] is True
+    # NOTE: the PUT response is the doc_snapshot of what the caller sent (see
+    # docs/gitops-controller.md), not a fresh DB read — since `secret` wasn't
+    # in the request body, `has_secret` is correctly False *in this response*
+    # even though the DB still has it. A follow-up GET (like the frontend's
+    # revalidate) is what proves the secret actually survived.
+    refetch_resp = requests.get(url_credential(test_credential), headers=headers)
+    assert refetch_resp.status_code == STATUS_OK
+    assert refetch_resp.json()["has_secret"] is True
 
     raw = debug.assert_exists(
         "repo_credentials",
